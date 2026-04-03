@@ -12,9 +12,7 @@ import Cases from "./pages/Cases";
 import Outcomes from "./pages/Outcomes";
 import Reports from "./pages/Reports";
 import NotFound from "./pages/NotFound";
-
 const queryClient = new QueryClient();
-
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -37,5 +35,4 @@ const App = () => (
     </TooltipProvider>
   </QueryClientProvider>
 );
-
 export default App;
