@@ -1,5 +1,6 @@
+import { useQuery } from "@tanstack/react-query";
 import { StatCard } from "@/components/StatCard";
-import { dashboardStats, youth } from "@/data/mockData";
+import { getDashboardStats, getYouth } from "@/api";
 import { Building2, Users, UserCheck, GraduationCap, Briefcase, TrendingUp, FileText, Target } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from "recharts";
@@ -7,20 +8,57 @@ import { Badge } from "@/components/ui/badge";
 
 const CHART_COLORS = ['hsl(152, 55%, 33%)', 'hsl(38, 90%, 55%)', 'hsl(210, 80%, 52%)', 'hsl(0, 72%, 51%)'];
 
-const genderData = [
-  { name: 'Female', value: dashboardStats.youthByGender.female },
-  { name: 'Male', value: dashboardStats.youthByGender.male },
-];
-
-const outputData = [
-  { name: 'Business Plan', completed: dashboardStats.outputProgress.businessPlan },
-  { name: 'CV', completed: dashboardStats.outputProgress.cv },
-  { name: 'Application Letter', completed: dashboardStats.outputProgress.applicationLetter },
-];
-
-const atRiskYouth = youth.filter(y => y.riskFlag).slice(0, 5);
-
 export default function Dashboard() {
+  const { data: stats, isLoading: statsLoading } = useQuery({
+    queryKey: ['dashboard'],
+    queryFn: getDashboardStats,
+  });
+
+  const { data: youthData, isLoading: youthLoading } = useQuery({
+    queryKey: ['youth'],
+    queryFn: getYouth,
+  });
+
+  if (statsLoading || youthLoading) return <div>Loading...</div>;
+
+  const dashboardStats = stats || { totalYouth: 0, totalPartners: 0, totalSessions: 0, totalCases: 0 };
+  const youth = youthData || [];
+
+  // Mock data for charts since API doesn't provide yet
+  const mockStats = {
+    enrollmentByMonth: [
+      { month: 'Jan', count: 12 },
+      { month: 'Feb', count: 18 },
+      { month: 'Mar', count: 25 },
+      { month: 'Apr', count: 32 },
+      { month: 'May', count: 28 },
+      { month: 'Jun', count: 35 },
+    ],
+    attendanceByTerm: [
+      { term: 'Term 1', attendance: 85 },
+      { term: 'Term 2', attendance: 78 },
+      { term: 'Term 3', attendance: 92 },
+    ],
+    outcomeProgress: {
+      inWork: 65,
+      avgIncomeChange: 40,
+      aboveIPL: 55,
+      businessesStarted: 12,
+    },
+  };
+
+  const genderData = [
+    { name: 'Female', value: 25 },
+    { name: 'Male', value: 30 },
+  ];
+
+  const outputData = [
+    { name: 'Business Plan', completed: 15 },
+    { name: 'CV', completed: 20 },
+    { name: 'Application Letter', completed: 18 },
+  ];
+
+  const atRiskYouth = youth.filter((y: any) => y.risk_flag).slice(0, 5);
   return (
     <div className="space-y-6">
       <div className="page-header">
@@ -31,33 +69,27 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Total Partners"
-          value={dashboardStats.totalPartners.tvet + dashboardStats.totalPartners.cbo}
-          subtitle={`${dashboardStats.totalPartners.tvet} TVETs · ${dashboardStats.totalPartners.cbo} CBOs`}
+          value={dashboardStats.totalPartners}
           icon={Building2}
           variant="primary"
         />
         <StatCard
           title="Youth Enrolled"
           value={dashboardStats.totalYouth}
-          subtitle={`${dashboardStats.youthByGender.female} Female · ${dashboardStats.youthByGender.male} Male`}
           icon={Users}
-          trend={{ value: 12, label: 'this quarter' }}
           variant="success"
         />
         <StatCard
-          title="Attendance Rate"
-          value={`${dashboardStats.overallAttendance}%`}
-          subtitle="Above 80% threshold"
-          icon={UserCheck}
-          variant="primary"
+          title="Total Sessions"
+          value={dashboardStats.totalSessions}
+          icon={GraduationCap}
+          variant="warning"
         />
         <StatCard
-          title="In Work"
-          value={`${dashboardStats.outcomeProgress.inWork}%`}
-          subtitle="Employed or self-employed"
-          icon={Briefcase}
-          trend={{ value: 8, label: 'from baseline' }}
-          variant="warning"
+          title="Active Cases"
+          value={dashboardStats.totalCases}
+          icon={FileText}
+          variant="destructive"
         />
       </div>
 
@@ -68,7 +100,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={dashboardStats.enrollmentByMonth}>
+              <BarChart data={mockStats.enrollmentByMonth}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(40, 15%, 89%)" />
                 <XAxis dataKey="month" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} />
@@ -105,7 +137,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={dashboardStats.attendanceByTerm}>
+              <LineChart data={mockStats.attendanceByTerm}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(40, 15%, 89%)" />
                 <XAxis dataKey="term" tick={{ fontSize: 11 }} />
                 <YAxis domain={[60, 100]} tick={{ fontSize: 11 }} />
@@ -144,10 +176,10 @@ export default function Dashboard() {
           <CardContent>
             <div className="space-y-4">
               {[
-                { label: 'Youth in Work', value: dashboardStats.outcomeProgress.inWork },
-                { label: 'Avg Income Change', value: dashboardStats.outcomeProgress.avgIncomeChange },
-                { label: 'Above Poverty Line', value: dashboardStats.outcomeProgress.aboveIPL },
-                { label: 'Businesses Started', value: dashboardStats.outcomeProgress.businessesStarted },
+                { label: 'Youth in Work', value: mockStats.outcomeProgress.inWork },
+                { label: 'Avg Income Change', value: mockStats.outcomeProgress.avgIncomeChange },
+                { label: 'Above Poverty Line', value: mockStats.outcomeProgress.aboveIPL },
+                { label: 'Businesses Started', value: mockStats.outcomeProgress.businessesStarted },
               ].map(item => (
                 <div key={item.label}>
                   <div className="flex justify-between text-sm mb-1">

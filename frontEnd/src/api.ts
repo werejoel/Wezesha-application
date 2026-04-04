@@ -1,15 +1,55 @@
 // frontEnd/src/api.ts
 const BASE_URL = 'http://localhost:5000/api';
 
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('token');
+  return token ? { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
+};
+
 const get = (path: string) =>
-  fetch(`${BASE_URL}${path}`).then(res => res.json());
+  fetch(`${BASE_URL}${path}`, { headers: getAuthHeaders() }).then(res => {
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    return res.json();
+  });
 
 const post = (path: string, body: object) =>
   fetch(`${BASE_URL}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     body: JSON.stringify(body),
-  }).then(res => res.json());
+  }).then(res => {
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    return res.json();
+  });
+
+// Auth
+export const login = (email: string, password: string) =>
+  post('/auth/login', { email, password }).then(data => {
+    if (data.token) {
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+    }
+    return data;
+  });
+
+export const register = (name: string, email: string, password: string, role?: string) =>
+  post('/auth/register', { name, email, password, role }).then(data => {
+    if (data.token) {
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+    }
+    return data;
+  });
+
+export const logout = () => {
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+};
+
+export const getCurrentUser = () => {
+  const user = localStorage.getItem('user');
+  return user ? JSON.parse(user) : null;
+};
 
 // Dashboard
 export const getDashboardStats = () => get('/dashboard');
@@ -17,22 +57,97 @@ export const getDashboardStats = () => get('/dashboard');
 // Partners
 export const getPartners = () => get('/partners');
 export const createPartner = (data: object) => post('/partners', data);
+export const updatePartner = (id: string, data: object) => fetch(`${BASE_URL}/partners/${id}`, {
+  method: 'PUT',
+  headers: getAuthHeaders(),
+  body: JSON.stringify(data),
+}).then(res => {
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+  return res.json();
+});
+export const deletePartner = (id: string) => fetch(`${BASE_URL}/partners/${id}`, {
+  method: 'DELETE',
+  headers: getAuthHeaders(),
+}).then(res => {
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+  return res.json();
+});
 
 // Youth
 export const getYouth = () => get('/youth');
 export const createYouth = (data: object) => post('/youth', data);
+export const updateYouth = (id: string, data: object) => fetch(`${BASE_URL}/youth/${id}`, {
+  method: 'PUT',
+  headers: getAuthHeaders(),
+  body: JSON.stringify(data),
+}).then(res => {
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+  return res.json();
+});
+export const deleteYouth = (id: string) => fetch(`${BASE_URL}/youth/${id}`, {
+  method: 'DELETE',
+  headers: getAuthHeaders(),
+}).then(res => {
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+  return res.json();
+});
 
 // Sessions
 export const getSessions = () => get('/sessions');
 export const createSession = (data: object) => post('/sessions', data);
+export const updateSession = (id: string, data: object) => fetch(`${BASE_URL}/sessions/${id}`, {
+  method: 'PUT',
+  headers: getAuthHeaders(),
+  body: JSON.stringify(data),
+}).then(res => {
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+  return res.json();
+});
+export const deleteSession = (id: string) => fetch(`${BASE_URL}/sessions/${id}`, {
+  method: 'DELETE',
+  headers: getAuthHeaders(),
+}).then(res => {
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+  return res.json();
+});
 
 // Cases
 export const getCases = () => get('/cases');
 export const createCase = (data: object) => post('/cases', data);
+export const updateCase = (id: string, data: object) => fetch(`${BASE_URL}/cases/${id}`, {
+  method: 'PUT',
+  headers: getAuthHeaders(),
+  body: JSON.stringify(data),
+}).then(res => {
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+  return res.json();
+});
+export const deleteCase = (id: string) => fetch(`${BASE_URL}/cases/${id}`, {
+  method: 'DELETE',
+  headers: getAuthHeaders(),
+}).then(res => {
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+  return res.json();
+});
 
 // Outcomes
 export const getOutcomes = () => get('/outcomes');
 export const createOutcome = (data: object) => post('/outcomes', data);
+export const updateOutcome = (id: string, data: object) => fetch(`${BASE_URL}/outcomes/${id}`, {
+  method: 'PUT',
+  headers: getAuthHeaders(),
+  body: JSON.stringify(data),
+}).then(res => {
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+  return res.json();
+});
+export const deleteOutcome = (id: string) => fetch(`${BASE_URL}/outcomes/${id}`, {
+  method: 'DELETE',
+  headers: getAuthHeaders(),
+}).then(res => {
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+  return res.json();
+});
 
 // Reports
 export const getReports = () => get('/reports');

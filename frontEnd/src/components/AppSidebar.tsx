@@ -7,9 +7,11 @@ import {
   TrendingUp,
   BarChart3,
   Leaf,
+  LogOut,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
+import { logout, getCurrentUser } from "@/api";
 import {
   Sidebar,
   SidebarContent,
@@ -37,6 +39,13 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
+  const navigate = useNavigate();
+  const user = getCurrentUser();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   return (
     <Sidebar collapsible="icon">
@@ -53,6 +62,11 @@ export function AppSidebar() {
               <span className="text-[10px] text-sidebar-foreground/60">
                 Data & Case Management
               </span>
+              {user && (
+                <span className="text-[10px] text-sidebar-foreground/80 mt-1">
+                  Logged in as {user.name}
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -77,6 +91,18 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup className="mt-auto">
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton onClick={handleLogout} className="hover:bg-sidebar-accent/50">
+                  <LogOut className="mr-2 h-4 w-4" />
+                  {!collapsed && <span>Logout</span>}
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
