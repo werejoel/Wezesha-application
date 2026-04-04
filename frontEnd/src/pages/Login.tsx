@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { login, getCurrentUser } from '../api';
+import { login } from '../api';
+import { useUser } from '../hooks/use-user';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -12,10 +13,11 @@ const Login = () => {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
+    const { user, refreshUser } = useUser();
 
     useEffect(() => {
-        if (getCurrentUser()) navigate('/dashboard');
-    }, [navigate]);
+        if (user) navigate('/dashboard');
+    }, [user, navigate]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -23,6 +25,7 @@ const Login = () => {
         setError('');
         try {
             await login(email, password);
+            refreshUser(); // Refresh the user context after login
             navigate('/dashboard');
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Login failed');
