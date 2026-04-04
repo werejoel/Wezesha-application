@@ -1,4 +1,5 @@
 const pool = require('./db');
+const bcrypt = require('bcryptjs');
 require('dotenv').config();
 
 async function seed() {
@@ -7,6 +8,13 @@ async function seed() {
   try {
     await client.query('BEGIN');
     console.log('🌱 Starting seed...');
+
+    // Ensure users table has role column
+    await client.query(`
+      ALTER TABLE users 
+      ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'enumerator'
+    `);
+    console.log('✅ Users table updated with role column');
 
     // 1. Partners
     console.log('Adding partners...');
@@ -156,17 +164,31 @@ for (const s of sessionDefs) {
   );
 }
 console.log(`✅ ${sessionDefs.length} sessions added`);
-// 6. Create a system user first
-console.log('Adding system user...');
-const userRes = await client.query(
-  `INSERT INTO users (name, email, password_hash)
-   VALUES ($1, $2, $3)
-   ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
-   RETURNING id`,
-  ['System Admin', 'admin@wezesha.org', 'placeholder_hash']
+// 6. Create system users
+console.log('Adding system users...');
+const users = [
+  { name: 'System Admin', email: 'admin@wezesha.org', password: 'admin123', role: 'admin' },
+  { name: 'Youth Business Fellow', email: 'ybf@wezesha.org', password: 'ybf123', role: 'ybf' },
+  { name: 'Enumerator', email: 'enumerator@wezesha.org', password: 'enum123', role: 'enumerator' },
+];
+
+for (const user of users) {
+  const hashedPassword = await bcrypt.hash(user.password, 10);
+  await client.query(
+    `INSERT INTO users (name, email, password_hash, role)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email`,
+    [user.name, user.email, hashedPassword, user.role]
+  );
+}
+console.log(`✅ ${users.length} users added`);
+
+// Get admin user id for case notes
+const adminUserRes = await client.query(
+  `SELECT id FROM users WHERE email = $1`,
+  ['admin@wezesha.org']
 );
-const systemUserId = userRes.rows[0].id;
-console.log(`✅ System user added`);
+const adminUserId = adminUserRes.rows[0].id;
 
 
 
@@ -190,10 +212,11 @@ for (const cn of caseNotes) {
     `INSERT INTO case_note (youth_id, author_id, category, note_text, follow_up_due, follow_up_required)
      VALUES ($1, $2, $3, $4, $5, $6)
      ON CONFLICT DO NOTHING`,
-    [youthId, systemUserId, cn.category, cn.note, cn.followUp || null, !!cn.followUp]
+    [youthId, adminUserId, cn.category, cn.note, cn.followUp || null, !!cn.followUp]
   );
 }
 console.log(`✅ ${caseNotes.length} case notes added`);
+
 
 
     await client.query('COMMIT');
