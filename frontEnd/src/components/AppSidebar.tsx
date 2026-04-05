@@ -38,6 +38,28 @@ const mainItems = [
   { title: "Reports", url: "/reports", icon: BarChart3 },
 ];
 
+const roleSidebarItems: Record<string, typeof mainItems> = {
+  admin: mainItems,
+  program_manager: mainItems,
+  ybf: [
+    mainItems[0],
+    mainItems[2],
+    mainItems[3],
+    mainItems[5],
+  ],
+  instructor: [
+    mainItems[0],
+    mainItems[3],
+    mainItems[2],
+    mainItems[5],
+  ],
+  enumerator: [
+    mainItems[0],
+    mainItems[3],
+    mainItems[4],
+  ],
+};
+
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
@@ -50,6 +72,8 @@ export function AppSidebar() {
     refreshUser();
     navigate('/login');
   };
+
+  const menuItems = user ? roleSidebarItems[user.role] ?? roleSidebarItems.enumerator : [mainItems[0]];
 
   return (
     <Sidebar collapsible="icon">
@@ -109,7 +133,7 @@ export function AppSidebar() {
           )}
           <SidebarGroupContent>
             <SidebarMenu className="space-y-0.5 px-1.5">
-              {mainItems.map((item) => {
+              {menuItems.map((item) => {
                 const isActive =
                   item.url === "/"
                     ? location.pathname === "/"

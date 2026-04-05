@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { register, getCurrentUser } from '../api';
-import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
+import { register, getCurrentUser } from '@/api';
+import { useUser } from '@/hooks/use-user';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 const ROLES = [
     { value: 'YBF', label: 'Youth Business Fellow', desc: 'Build your business with mentorship & resources' },
@@ -11,7 +12,7 @@ const ROLES = [
     { value: 'Enumerator', label: 'Enumerator', desc: 'Collect data and support field operations' },
 ];
 
-const Register=()=> {
+const Register = () => {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -19,6 +20,7 @@ const Register=()=> {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
+    const { refreshUser } = useUser();
 
     useEffect(() => {
         if (getCurrentUser()) navigate('/dashboard');
@@ -30,6 +32,7 @@ const Register=()=> {
         setError('');
         try {
             await register(name, email, password, role);
+            refreshUser();
             navigate('/dashboard');
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Registration failed');

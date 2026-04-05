@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { login } from '../api';
-import { useUser } from '../hooks/use-user';
-import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
+import { login } from '@/api';
+import { useUser } from '@/hooks/use-user';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 
 const Login = () => {
@@ -171,7 +171,9 @@ const Login = () => {
                     <div className="rounded-xl border border-gray-100 bg-gray-50 divide-y divide-gray-100 text-xs overflow-hidden">
                         {[
                             { role: 'Admin', email: 'admin@wezesha.org', pass: 'admin123', color: '#7c3aed' },
+                            { role: 'Program Manager', email: 'manager@wezesha.org', pass: 'manager123', color: '#059669' },
                             { role: 'YBF', email: 'ybf@wezesha.org', pass: 'ybf123', color: '#0f4c3a' },
+                            { role: 'Instructor', email: 'instructor@wezesha.org', pass: 'instructor123', color: '#dc2626' },
                             { role: 'Enumerator', email: 'enumerator@wezesha.org', pass: 'enum123', color: '#b45309' },
                         ].map(({ role, email: demoEmail, pass, color }) => (
                             <button

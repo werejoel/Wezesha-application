@@ -13,17 +13,28 @@ import Cases from "./pages/Cases";
 import Outcomes from "./pages/Outcomes";
 import Reports from "./pages/Reports";
 import NotFound from "./pages/NotFound";
-import Login from "./pages/Login";
-import Register from "./pages/Register";
+import Login from "./pages/auth/Login";
+import Register from "./pages/auth/Register";
 
 const queryClient = new QueryClient();
 
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+const RoleProtectedRoute = ({
+  children,
+  allowedRoles,
+}: {
+  children: React.ReactNode;
+  allowedRoles: string[];
+}) => {
   const { user, loading } = useUser();
 
   if (loading) return <div>Loading...</div>;
+  if (!user) return <Navigate to="/login" replace />;
 
-  return user ? children : <Navigate to="/login" replace />;
+  if (!allowedRoles.includes(user.role)) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <>{children}</>;
 };
 
 const App = () => (
@@ -36,26 +47,71 @@ const App = () => (
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
-            <Route path="/*" element={
-              <ProtectedRoute>
-                <AppLayout>
-                  <Routes>
-                    <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                    <Route path="/dashboard" element={<Dashboard />} />
-                    <Route path="/partners" element={<Partners />} />
-                    <Route path="/youth" element={<Youth />} />
-                    <Route path="/sessions" element={<Sessions />} />
-                    <Route path="/cases" element={<Cases />} />
-                    <Route path="/outcomes" element={<Outcomes />} />
-                    <Route path="/reports" element={<Reports />} />
-                    <Route path="*" element={<NotFound />} />
-                  </Routes>
-                </AppLayout>
-              </ProtectedRoute>
-          } />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
+            <Route
+              path="/*"
+              element={
+                <RoleProtectedRoute allowedRoles={['admin', 'program_manager', 'ybf', 'instructor', 'enumerator']}>
+                  <AppLayout>
+                    <Routes>
+                      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                      <Route path="/dashboard" element={<Dashboard />} />
+                      <Route
+                        path="/partners"
+                        element={
+                          <RoleProtectedRoute allowedRoles={['admin', 'program_manager']}>
+                            <Partners />
+                          </RoleProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/youth"
+                        element={
+                          <RoleProtectedRoute allowedRoles={['admin', 'program_manager', 'ybf', 'instructor']}>
+                            <Youth />
+                          </RoleProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/sessions"
+                        element={
+                          <RoleProtectedRoute allowedRoles={['admin', 'program_manager', 'ybf', 'instructor', 'enumerator']}>
+                            <Sessions />
+                          </RoleProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/cases"
+                        element={
+                          <RoleProtectedRoute allowedRoles={['admin', 'program_manager', 'enumerator']}>
+                            <Cases />
+                          </RoleProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/outcomes"
+                        element={
+                          <RoleProtectedRoute allowedRoles={['admin', 'program_manager', 'ybf', 'instructor']}>
+                            <Outcomes />
+                          </RoleProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/reports"
+                        element={
+                          <RoleProtectedRoute allowedRoles={['admin', 'program_manager']}>
+                            <Reports />
+                          </RoleProtectedRoute>
+                        }
+                      />
+                      <Route path="*" element={<NotFound />} />
+                    </Routes>
+                  </AppLayout>
+                </RoleProtectedRoute>
+              }
+            />
+          </Routes>
+        </BrowserRouter>
+      </TooltipProvider>
     </UserProvider>
   </QueryClientProvider>
 );

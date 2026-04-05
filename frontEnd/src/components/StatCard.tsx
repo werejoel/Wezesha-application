@@ -5,6 +5,7 @@ interface StatCardProps {
   title: string;
   value: string | number;
   subtitle?: string;
+  description?: string;
   icon: LucideIcon;
   trend?: { value: number; label: string };
   variant?: 'default' | 'primary' | 'warning' | 'success';
@@ -17,7 +18,7 @@ const variantStyles = {
   success: 'border-l-4 border-l-success',
 };
 
-export function StatCard({ title, value, subtitle, icon: Icon, trend, variant = 'default' }: StatCardProps) {
+export function StatCard({ title, value, subtitle, description, icon: Icon, trend, variant = 'default' }: StatCardProps) {
   return (
     <div className={cn("stat-card animate-fade-in", variantStyles[variant])}>
       <div className="flex items-start justify-between">
@@ -25,6 +26,7 @@ export function StatCard({ title, value, subtitle, icon: Icon, trend, variant = 
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{title}</p>
           <p className="text-2xl font-bold mt-1 font-heading">{value}</p>
           {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
+          {description && <p className="text-xs text-muted-foreground mt-0.5">{description}</p>}
           {trend && (
             <p className={cn("text-xs mt-1 font-medium", trend.value >= 0 ? "text-success" : "text-destructive")}>
               {trend.value >= 0 ? '↑' : '↓'} {Math.abs(trend.value)}% {trend.label}

@@ -1,10 +1,12 @@
 import { useUser } from "@/hooks/use-user";
-import AdminDashboard from "./AdminDashboard";
-import YBFDashboard from "./YBFDashboard";
-import InstructorDashboard from "./InstructorDashboard";
-import EnumeratorDashboard from "./EnumeratorDashboard";
+import AdminDashboard from "@/pages/admin/AdminDashboard";
+import ProgramManagerDashboard from "@/pages/program-manager/ProgramManagerDashboard";
+import YBFDashboard from "@/pages/ybf/YBFDashboard";
+import InstructorDashboard from "@/pages/instructor/InstructorDashboard";
+import EnumeratorDashboard from "@/pages/enumerator/EnumeratorDashboard";
 
-export default function Dashboard() {
+// Main dashboard component that renders different views based on user role
+const Dashboard = () => {
   const { user, loading } = useUser();
 
   if (loading) return <div>Loading...</div>;
@@ -14,6 +16,8 @@ export default function Dashboard() {
   switch (user.role) {
     case 'admin':
       return <AdminDashboard />;
+    case 'program_manager':
+      return <ProgramManagerDashboard />;
     case 'ybf':
       return <YBFDashboard />;
     case 'instructor':
@@ -21,6 +25,7 @@ export default function Dashboard() {
     case 'enumerator':
       return <EnumeratorDashboard />;
     default:
-      return <AdminDashboard />; // fallback to admin dashboard
+      return <EnumeratorDashboard />; // Fallback to enumerator dashboard if role is unrecognized
   }
 }
+export default Dashboard;

@@ -6,6 +6,25 @@ const getAuthHeaders = () => {
   return token ? { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
 };
 
+const normalizeRole = (role: string | undefined | null) => {
+  if (!role) return role;
+  const normalized = role.toString().trim().toLowerCase();
+  if (normalized === 'program manager' || normalized === 'program_manager') return 'program_manager';
+  if (normalized === 'ybf') return 'ybf';
+  if (normalized === 'instructor') return 'instructor';
+  if (normalized === 'enumerator') return 'enumerator';
+  if (normalized === 'admin') return 'admin';
+  return normalized;
+};
+
+const normalizeUser = (user: any) => {
+  if (!user || typeof user !== 'object') return user;
+  return {
+    ...user,
+    role: normalizeRole(user.role),
+  };
+};
+
 const get = (path: string) =>
   fetch(`${BASE_URL}${path}`, { headers: getAuthHeaders() }).then(res => {
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
@@ -26,8 +45,9 @@ const post = (path: string, body: object) =>
 export const login = (email: string, password: string) =>
   post('/auth/login', { email, password }).then(data => {
     if (data.token) {
+      const normalizedUser = normalizeUser(data.user);
       localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
+      localStorage.setItem('user', JSON.stringify(normalizedUser));
     }
     return data;
   });
@@ -35,8 +55,9 @@ export const login = (email: string, password: string) =>
 export const register = (name: string, email: string, password: string, role?: string) =>
   post('/auth/register', { name, email, password, role }).then(data => {
     if (data.token) {
+      const normalizedUser = normalizeUser(data.user);
       localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
+      localStorage.setItem('user', JSON.stringify(normalizedUser));
     }
     return data;
   });
@@ -48,7 +69,7 @@ export const logout = () => {
 
 export const getCurrentUser = () => {
   const user = localStorage.getItem('user');
-  return user ? JSON.parse(user) : null;
+  return user ? normalizeUser(JSON.parse(user)) : null;
 };
 
 // Dashboard
@@ -151,3 +172,33 @@ export const deleteOutcome = (id: string) => fetch(`${BASE_URL}/outcomes/${id}`,
 
 // Reports
 export const getReports = () => get('/reports');
+
+// Users (admin only)
+export const getUsers = () => get('/users');
+export const updateUser = (id: string, data: object) => fetch(`${BASE_URL}/users/${id}`, {
+  method: 'PUT',
+  headers: getAuthHeaders(),
+  body: JSON.stringify(data),
+}).then(res => {
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+  return res.json();
+});
+export const deleteUser = (id: string) => fetch(`${BASE_URL}/users/${id}`, {
+  method: 'DELETE',
+  headers: getAuthHeaders(),
+}).then(res => {
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+  return res.json();
+});
+
+// Attendance
+export const getAttendance = () => get('/attendance');
+export const createAttendance = (data: object) => post('/attendance', data);
+export const updateAttendance = (id: string, data: object) => fetch(`${BASE_URL}/attendance/${id}`, {
+  method: 'PUT',
+  headers: getAuthHeaders(),
+  body: JSON.stringify(data),
+}).then(res => {
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+  return res.json();
+});
