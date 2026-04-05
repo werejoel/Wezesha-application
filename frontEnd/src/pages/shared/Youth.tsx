@@ -1,7 +1,9 @@
-import { youth } from "@/data/mockData";
+import { youth as initialYouth } from "@/data/mockData";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Users, AlertTriangle, Briefcase } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
@@ -16,7 +18,7 @@ function MilestoneIndicator({ status }: { status: string }) {
   );
 }
 
-function YouthDetailDialog({ y }: { y: typeof youth[0] }) {
+function YouthDetailDialog({ y }: { y: typeof initialYouth[0] }) {
   return (
     <Dialog>
       <DialogTrigger asChild>
@@ -96,16 +98,66 @@ function YouthDetailDialog({ y }: { y: typeof youth[0] }) {
 }
 
 export default function Youth() {
-  const { isProgramManager } = useUser();
+  const { isProgramManager, isYBF, user } = useUser();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'at-risk'>('all');
+  const [youthList, setYouthList] = useState(initialYouth);
+  const [addOpen, setAddOpen] = useState(false);
+  const [form, setForm] = useState({
+    fullName: '',
+    gender: 'Female',
+    partner: '',
+    programType: 'In-School',
+    cohort: 'Cohort 2024-1',
+    enrollmentDate: new Date().toISOString().slice(0, 10),
+  });
 
-  const filtered = youth
+  const canEnroll = isProgramManager() || isYBF();
+
+  const filtered = youthList
     .filter(y => filter === 'at-risk' ? y.riskFlag : true)
     .filter(y => y.fullName.toLowerCase().includes(search.toLowerCase()) || y.partner.toLowerCase().includes(search.toLowerCase()));
 
-  const atRisk = youth.filter(y => y.riskFlag).length;
-  const inWork = youth.filter(y => !y.employmentStatus.includes('Unemployed')).length;
+  const atRisk = youthList.filter(y => y.riskFlag).length;
+  const inWork = youthList.filter(y => !y.employmentStatus.includes('Unemployed')).length;
+
+  const handleEnroll = () => {
+    const newYouth = {
+      id: `Y${String(youthList.length + 1).padStart(3, '0')}`,
+      fullName: form.fullName || `New Youth ${youthList.length + 1}`,
+      dob: '2003-01-01',
+      gender: form.gender as 'Male' | 'Female',
+      nationality: 'Kenyan',
+      region: 'Nairobi',
+      district: 'Nairobi',
+      partner: form.partner || 'Unknown Partner',
+      programType: form.programType as 'In-School' | 'Out-of-School',
+      cohort: form.cohort,
+      enrollmentDate: form.enrollmentDate,
+      employmentStatus: 'Unemployed' as const,
+      baselineIncome: 0,
+      currentIncome: 0,
+      aboveIPL: false,
+      educationLevel: 'Secondary',
+      hasBusiness: false,
+      businessPlan: 'Not Started' as const,
+      cv: 'Not Started' as const,
+      applicationLetter: 'Not Started' as const,
+      attendanceRate: 0,
+      mentorshipStatus: 'Active' as const,
+      riskFlag: false,
+    };
+    setYouthList([newYouth, ...youthList]);
+    setAddOpen(false);
+    setForm({
+      fullName: '',
+      gender: 'Female',
+      partner: '',
+      programType: 'In-School',
+      cohort: 'Cohort 2024-1',
+      enrollmentDate: new Date().toISOString().slice(0, 10),
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -114,15 +166,96 @@ export default function Youth() {
           <h1 className="page-title">Youth Enrollment & Profiling</h1>
           <p className="page-description">Manage youth registration and baseline data</p>
         </div>
-        {isProgramManager() && (
-          <Button><Plus className="h-4 w-4 mr-1" /> Enroll Youth</Button>
+        {canEnroll && (
+          <Dialog open={addOpen} onOpenChange={setAddOpen}>
+            <DialogTrigger asChild>
+              <Button><Plus className="h-4 w-4 mr-1" /> Enroll Youth</Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-lg">
+              <DialogHeader>
+                <DialogTitle>Enroll New Youth</DialogTitle>
+              </DialogHeader>
+              <div className="grid gap-4">
+                <div>
+                  <Label htmlFor="youth-name">Full Name</Label>
+                  <Input
+                    id="youth-name"
+                    value={form.fullName}
+                    onChange={e => setForm({ ...form, fullName: e.target.value })}
+                    placeholder="Alice Wanjiru"
+                  />
+                </div>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="youth-gender">Gender</Label>
+                    <select
+                      id="youth-gender"
+                      value={form.gender}
+                      onChange={e => setForm({ ...form, gender: e.target.value as 'Male' | 'Female' })}
+                      className="w-full rounded-lg border bg-card px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="Female">Female</option>
+                      <option value="Male">Male</option>
+                    </select>
+                  </div>
+                  <div>
+                    <Label htmlFor="youth-partner">Partner Institution</Label>
+                    <Input
+                      id="youth-partner"
+                      value={form.partner}
+                      onChange={e => setForm({ ...form, partner: e.target.value })}
+                      placeholder="Nairobi Technical Institute"
+                    />
+                  </div>
+                </div>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="youth-program">Program Type</Label>
+                    <select
+                      id="youth-program"
+                      value={form.programType}
+                      onChange={e => setForm({ ...form, programType: e.target.value as 'In-School' | 'Out-of-School' })}
+                      className="w-full rounded-lg border bg-card px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="In-School">In-School</option>
+                      <option value="Out-of-School">Out-of-School</option>
+                    </select>
+                  </div>
+                  <div>
+                    <Label htmlFor="youth-cohort">Cohort</Label>
+                    <Input
+                      id="youth-cohort"
+                      value={form.cohort}
+                      onChange={e => setForm({ ...form, cohort: e.target.value })}
+                      placeholder="Cohort 2024-1"
+                    />
+                  </div>
+                </div>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="youth-enroll-date">Enrollment Date</Label>
+                    <Input
+                      id="youth-enroll-date"
+                      type="date"
+                      value={form.enrollmentDate}
+                      onChange={e => setForm({ ...form, enrollmentDate: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
+                  <Button onClick={handleEnroll}>Enroll Youth</Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
         )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard title="Total Youth" value={youth.length} icon={Users} variant="primary" />
+        <StatCard title="Total Youth" value={youthList.length} icon={Users} variant="primary" />
         <StatCard title="At Risk (<80%)" value={atRisk} icon={AlertTriangle} variant="warning" />
-        <StatCard title="In Work" value={inWork} subtitle={`${Math.round(inWork / youth.length * 100)}% of total`} icon={Briefcase} variant="success" />
+        <StatCard title="In Work" value={inWork} subtitle={`${Math.round(inWork / Math.max(youthList.length, 1))}% of total`} icon={Briefcase} variant="success" />
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3">

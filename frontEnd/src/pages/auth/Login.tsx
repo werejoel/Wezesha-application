@@ -49,28 +49,43 @@ const Login = () => {
                 <div className="absolute top-1/2 -right-12 w-40 h-40 rounded-full opacity-5"
                     style={{ background: 'radial-gradient(circle, #fff 0%, transparent 70%)' }} />
 
-                {/* Logo */}
-                <div className="relative z-10">
-                    <span className="text-white text-2xl font-bold tracking-tight"
-                        style={{ fontFamily: "'Georgia', serif", letterSpacing: '-0.02em' }}>
-                        Wezesha
-                    </span>
-                </div>
-
-                {/* Headline */}
+                {/* Logo and system title */}
                 <div className="relative z-10 space-y-4">
-                    <h1 className="text-white text-4xl xl:text-5xl font-bold leading-tight"
-                        style={{ fontFamily: "'Georgia', serif" }}>
-                        Empowering<br />Youth to<br />Build Tomorrow
-                    </h1>
-                    <p className="text-emerald-100 text-base leading-relaxed max-w-xs">
-                        A platform connecting fellows, instructors, and administrators to drive real impact.
-                    </p>
+                    <div className="flex flex-col gap-2">
+                        <div className="inline-flex items-center gap-3 rounded-full border border-white/20 bg-white/10 px-4 py-2">
+                            <span className="text-white text-base font-semibold tracking-wide">
+                                WEZESHA IMPACT
+                            </span>
+                        </div>
+                        <p className="text-emerald-100/80 text-sm uppercase tracking-[0.3em]">
+                            Data Management & Case Management System
+                        </p>
+                    </div>
+
+                    {/* Illustration immediately after logo */}
+                    <div className="relative z-10 pt-4">
+                        <img
+                            src="https://images.pexels.com/photos/5212354/pexels-photo-5212354.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
+                            alt="African youth students studying together"
+                            className="w-full rounded-3xl border border-white/10 shadow-2xl object-cover h-64"
+                        />
+                    </div>
+
+                    <div className="space-y-4">
+                        <h1 className="text-white text-4xl xl:text-5xl font-bold leading-tight"
+                            style={{ fontFamily: "'Georgia', serif" }}>
+                            Empowering<br />Youth to<br />Build Tomorrow
+                        </h1>
+                        <p className="text-emerald-100 text-base leading-relaxed max-w-xs">
+                            Wezesha Impact equips youth with entrepreneurship and job readiness skills through two complementary programs.
+                            Our in-school stream supports TVET finalists, while the out-of-school program serves youth through CBO partners.
+                        </p>
+                    </div>
                 </div>
 
                 {/* Tagline footer */}
                 <p className="relative z-10 text-emerald-300 text-sm">
-                    © {new Date().getFullYear()} Wezesha
+                    © {new Date().getFullYear()} Wezesha Impact
                 </p>
             </div>
 
@@ -80,8 +95,11 @@ const Login = () => {
                 <div className="lg:hidden mb-8 text-center">
                     <span className="text-2xl font-bold text-emerald-700"
                         style={{ fontFamily: "'Georgia', serif" }}>
-                        Wezesha
+                        WEZESHA IMPACT
                     </span>
+                    <p className="mt-2 text-sm text-gray-500">
+                        Data Management & Case Management System
+                    </p>
                 </div>
 
                 <div className="w-full max-w-sm space-y-8">

@@ -43,6 +43,7 @@ const roleSidebarItems: Record<string, typeof mainItems> = {
   program_manager: mainItems,
   ybf: [
     mainItems[0],
+    mainItems[1],
     mainItems[2],
     mainItems[3],
     mainItems[5],
@@ -51,7 +52,6 @@ const roleSidebarItems: Record<string, typeof mainItems> = {
     mainItems[0],
     mainItems[3],
     mainItems[2],
-    mainItems[5],
   ],
   enumerator: [
     mainItems[0],
