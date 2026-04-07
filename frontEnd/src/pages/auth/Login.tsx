@@ -81,7 +81,7 @@ const Login = () => {
           {/* Illustration immediately after logo */}
           <div className="relative z-10 pt-4">
             <img
-              src="/images/image1.jpg"
+              src="https://images.pexels.com/photos/5212354/pexels-photo-5212354.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
               alt="African youth students studying together"
               className="w-full rounded-3xl border border-white/10 shadow-2xl object-cover h-64"
             />
@@ -92,11 +92,11 @@ const Login = () => {
               className="text-white text-4xl xl:text-5xl font-bold leading-tight"
               style={{ fontFamily: "'Georgia', serif" }}
             >
-              Improving
+              Empowering
               <br />
-              the employment outcomes of
+              Youth to
               <br />
-              Youth in Africa
+              Build Tomorrow
             </h1>
             <p className="text-emerald-100 text-base leading-relaxed max-w-xs">
               Wezesha Impact equips youth with entrepreneurship and job
