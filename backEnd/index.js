@@ -39,6 +39,25 @@ const authenticateToken = (req, res, next) => {
   );
 };
 
+// Role-based authorization middleware
+const authorizeRoles = (...allowedRoles) => {
+  return (req, res, next) => {
+    if (!req.user || !allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({ error: "Insufficient permissions" });
+    }
+    next();
+  };
+};
+
+// Define role permissions
+const PERMISSIONS = {
+  admin: ['read', 'write', 'delete', 'manage_users', 'system_config'],
+  program_manager: ['read', 'write', 'approve_records'],
+  ybf: ['read_youth', 'write_sessions', 'write_case_notes'],
+  instructor: ['read_sessions', 'write_attendance'],
+  enumerator: ['read_outcomes', 'write_outcomes', 'read_limited']
+};
+
 // Auth routes
 app.post(
   "/api/auth/register",
@@ -131,7 +150,7 @@ app.get("/api/dashboard", authenticateToken, async (req, res) => {
 });
 
 // Partners
-app.get("/api/partners", authenticateToken, async (req, res) => {
+app.get("/api/partners", authenticateToken, authorizeRoles('admin', 'program_manager', 'ybf', 'instructor', 'enumerator'), async (req, res) => {
   try {
     const result = await pool.query(
       "SELECT * FROM partner_institution WHERE deleted_by IS NULL ORDER BY created_at DESC",
@@ -145,6 +164,7 @@ app.get("/api/partners", authenticateToken, async (req, res) => {
 app.post(
   "/api/partners",
   authenticateToken,
+  authorizeRoles('admin', 'program_manager'),
   validateRequired(["name", "district", "institution_type"]),
   async (req, res) => {
     const {
@@ -175,7 +195,7 @@ app.post(
   },
 );
 
-app.put("/api/partners/:id", authenticateToken, async (req, res) => {
+app.put("/api/partners/:id", authenticateToken, authorizeRoles('admin', 'program_manager'), async (req, res) => {
   const { id } = req.params;
   const {
     name,
@@ -210,7 +230,7 @@ app.put("/api/partners/:id", authenticateToken, async (req, res) => {
   }
 });
 
-app.delete("/api/partners/:id", authenticateToken, async (req, res) => {
+app.delete("/api/partners/:id", authenticateToken, authorizeRoles('admin'), async (req, res) => {
   const { id } = req.params;
   try {
     const result = await pool.query(
@@ -226,7 +246,7 @@ app.delete("/api/partners/:id", authenticateToken, async (req, res) => {
 });
 
 // Youth
-app.get("/api/youth", async (req, res) => {
+app.get("/api/youth", authenticateToken, authorizeRoles('admin', 'program_manager', 'ybf'), async (req, res) => {
   try {
     const result = await pool.query(
       "SELECT * FROM youth WHERE deleted_by IS NULL ORDER BY created_at DESC",
@@ -240,6 +260,7 @@ app.get("/api/youth", async (req, res) => {
 app.post(
   "/api/youth",
   authenticateToken,
+  authorizeRoles('admin', 'program_manager'),
   validateRequired(["full_name", "date_of_birth", "gender", "district"]),
   async (req, res) => {
     const {
@@ -269,7 +290,7 @@ app.post(
     }
   },
 );
-app.put("/api/youth/:id", authenticateToken, async (req, res) => {
+app.put("/api/youth/:id", authenticateToken, authorizeRoles('admin', 'program_manager'), async (req, res) => {
   const { id } = req.params;
   const {
     full_name,
@@ -308,7 +329,7 @@ app.put("/api/youth/:id", authenticateToken, async (req, res) => {
   }
 });
 
-app.delete("/api/youth/:id", authenticateToken, async (req, res) => {
+app.delete("/api/youth/:id", authenticateToken, authorizeRoles('admin'), async (req, res) => {
   const { id } = req.params;
   try {
     const result = await pool.query(
@@ -323,7 +344,7 @@ app.delete("/api/youth/:id", authenticateToken, async (req, res) => {
   }
 });
 // Sessions
-app.get("/api/sessions", authenticateToken, async (req, res) => {
+app.get("/api/sessions", authenticateToken, authorizeRoles('admin', 'program_manager', 'ybf', 'instructor'), async (req, res) => {
   try {
     const result = await pool.query(
       "SELECT * FROM session ORDER BY session_date DESC",
@@ -336,8 +357,7 @@ app.get("/api/sessions", authenticateToken, async (req, res) => {
 
 app.post(
   "/api/sessions",
-  authenticateToken,
-  validateRequired(["cohort_id", "topic", "session_date"]),
+  authenticateToken,  authorizeRoles('admin', 'program_manager', 'ybf'),  validateRequired(["cohort_id", "topic", "session_date"]),
   async (req, res) => {
     const {
       cohort_id,
@@ -369,7 +389,7 @@ app.post(
   },
 );
 
-app.put("/api/sessions/:id", authenticateToken, async (req, res) => {
+app.put("/api/sessions/:id", authenticateToken, authorizeRoles('admin', 'program_manager', 'ybf'), async (req, res) => {
   const { id } = req.params;
   const {
     cohort_id,
@@ -404,7 +424,7 @@ app.put("/api/sessions/:id", authenticateToken, async (req, res) => {
   }
 });
 
-app.delete("/api/sessions/:id", authenticateToken, async (req, res) => {
+app.delete("/api/sessions/:id", authenticateToken, authorizeRoles('admin'), async (req, res) => {
   const { id } = req.params;
   try {
     const result = await pool.query(
@@ -420,7 +440,7 @@ app.delete("/api/sessions/:id", authenticateToken, async (req, res) => {
 });
 
 // Cases (case_note)
-app.get("/api/cases", authenticateToken, async (req, res) => {
+app.get("/api/cases", authenticateToken, authorizeRoles('admin', 'program_manager', 'ybf'), async (req, res) => {
   try {
     const result = await pool.query(
       "SELECT * FROM case_note ORDER BY created_at DESC",
@@ -433,8 +453,7 @@ app.get("/api/cases", authenticateToken, async (req, res) => {
 
 app.post(
   "/api/cases",
-  authenticateToken,
-  validateRequired(["youth_id", "category", "note_text"]),
+  authenticateToken,  authorizeRoles('admin', 'program_manager', 'ybf'),  validateRequired(["youth_id", "category", "note_text"]),
   async (req, res) => {
     const { youth_id, category, note_text, follow_up_due, follow_up_required } =
       req.body;
@@ -458,7 +477,7 @@ app.post(
   },
 );
 
-app.put("/api/cases/:id", authenticateToken, async (req, res) => {
+app.put("/api/cases/:id", authenticateToken, authorizeRoles('admin', 'program_manager', 'ybf'), async (req, res) => {
   const { id } = req.params;
   const { category, note_text, follow_up_due, follow_up_required } = req.body;
   try {
@@ -476,7 +495,7 @@ app.put("/api/cases/:id", authenticateToken, async (req, res) => {
   }
 });
 
-app.delete("/api/cases/:id", authenticateToken, async (req, res) => {
+app.delete("/api/cases/:id", authenticateToken, authorizeRoles('admin'), async (req, res) => {
   const { id } = req.params;
   try {
     const result = await pool.query(
@@ -492,7 +511,7 @@ app.delete("/api/cases/:id", authenticateToken, async (req, res) => {
 });
 
 // Outcomes (output_milestone)
-app.get("/api/outcomes", authenticateToken, async (req, res) => {
+app.get("/api/outcomes", authenticateToken, authorizeRoles('admin', 'program_manager', 'enumerator'), async (req, res) => {
   try {
     const result = await pool.query(
       "SELECT * FROM output_milestone ORDER BY created_at DESC",
@@ -506,6 +525,7 @@ app.get("/api/outcomes", authenticateToken, async (req, res) => {
 app.post(
   "/api/outcomes",
   authenticateToken,
+  authorizeRoles('admin', 'program_manager', 'enumerator'),
   validateRequired(["youth_id", "milestone_type", "status"]),
   async (req, res) => {
     const { youth_id, milestone_type, status } = req.body;
@@ -522,7 +542,7 @@ app.post(
   },
 );
 
-app.put("/api/outcomes/:id", authenticateToken, async (req, res) => {
+app.put("/api/outcomes/:id", authenticateToken, authorizeRoles('admin', 'program_manager', 'enumerator'), async (req, res) => {
   const { id } = req.params;
   const { milestone_type, status } = req.body;
   try {
@@ -540,7 +560,7 @@ app.put("/api/outcomes/:id", authenticateToken, async (req, res) => {
   }
 });
 
-app.delete("/api/outcomes/:id", authenticateToken, async (req, res) => {
+app.delete("/api/outcomes/:id", authenticateToken, authorizeRoles('admin'), async (req, res) => {
   const { id } = req.params;
   try {
     const result = await pool.query(
@@ -572,6 +592,98 @@ app.get("/api/reports", authenticateToken, async (req, res) => {
       ORDER BY s.session_date DESC
     `);
     res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Attendance
+app.get("/api/attendance", authenticateToken, authorizeRoles('admin', 'program_manager', 'ybf', 'instructor'), async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT a.*, s.topic, s.session_date, y.full_name as youth_name
+      FROM attendance_record a
+      JOIN session s ON a.session_id = s.id
+      JOIN youth y ON a.youth_id = y.id
+      ORDER BY s.session_date DESC, y.full_name
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post(
+  "/api/attendance",
+  authenticateToken,
+  authorizeRoles('admin', 'program_manager', 'ybf', 'instructor'),
+  validateRequired(["session_id", "youth_id", "status"]),
+  async (req, res) => {
+    const { session_id, youth_id, status } = req.body;
+    try {
+      const result = await pool.query(
+        `INSERT INTO attendance_record (session_id, youth_id, status)
+         VALUES ($1, $2, $3) RETURNING *`,
+        [session_id, youth_id, status],
+      );
+      res.status(201).json(result.rows[0]);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  },
+);
+
+app.put("/api/attendance/:id", authenticateToken, authorizeRoles('admin', 'program_manager', 'ybf', 'instructor'), async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+  try {
+    const result = await pool.query(
+      "UPDATE attendance_record SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *",
+      [status, id],
+    );
+    if (result.rows.length === 0)
+      return res.status(404).json({ error: "Attendance record not found" });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// User management (admin only)
+app.get("/api/users", authenticateToken, authorizeRoles('admin'), async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC",
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put("/api/users/:id", authenticateToken, authorizeRoles('admin'), async (req, res) => {
+  const { id } = req.params;
+  const { name, email, role } = req.body;
+  try {
+    const result = await pool.query(
+      "UPDATE users SET name = $1, email = $2, role = $3, updated_at = NOW() WHERE id = $4 RETURNING id, name, email, role",
+      [name, email, role, id],
+    );
+    if (result.rows.length === 0)
+      return res.status(404).json({ error: "User not found" });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/api/users/:id", authenticateToken, authorizeRoles('admin'), async (req, res) => {
+  const { id } = req.params;
+  try {
+    const result = await pool.query("DELETE FROM users WHERE id = $1 RETURNING *", [id]);
+    if (result.rows.length === 0)
+      return res.status(404).json({ error: "User not found" });
+    res.json({ message: "User deleted successfully" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

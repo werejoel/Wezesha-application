@@ -1,14 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
 import { StatCard } from "@/components/StatCard";
 import { getDashboardStats, getYouth, getPartners, getSessions } from "@/api";
-import { Users, Target, TrendingUp, Calendar, Award, BookOpen } from "lucide-react";
+import { Users, Target, TrendingUp, Calendar, Award, BookOpen, Plus, Building } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { useUser } from "@/hooks/use-user";
+import { useNavigate } from "react-router-dom";
 
 export default function YBFDashboard() {
   const { user } = useUser();
+  const navigate = useNavigate();
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['dashboard'],
     queryFn: getDashboardStats,
@@ -102,6 +105,35 @@ export default function YBFDashboard() {
           icon={Target}
           variant="default"
         />
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">Quick actions</h2>
+            <p className="text-sm text-muted-foreground">Create new youth profiles or partner records from your dashboard.</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Button
+            onClick={() => navigate('/youth')}
+            className="h-20 flex flex-col items-center justify-center gap-2"
+            variant="outline"
+          >
+            <Plus className="h-6 w-6" />
+            <span className="font-semibold">Add Youth</span>
+            <span className="text-xs text-muted-foreground">Register new participants</span>
+          </Button>
+          <Button
+            onClick={() => navigate('/partners')}
+            className="h-20 flex flex-col items-center justify-center gap-2"
+            variant="outline"
+          >
+            <Building className="h-6 w-6" />
+            <span className="font-semibold">Add Partner</span>
+            <span className="text-xs text-muted-foreground">Add partner institutions</span>
+          </Button>
+        </div>
       </div>
 
       {/* Personal Progress */}

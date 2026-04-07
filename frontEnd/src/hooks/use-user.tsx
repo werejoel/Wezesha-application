@@ -5,7 +5,7 @@ interface User {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'ybf' | 'instructor' | 'enumerator';
+  role: 'admin' | 'program_manager' | 'ybf' | 'instructor' | 'enumerator';
 }
 
 interface UserContextType {
@@ -42,5 +42,24 @@ export const useUser = () => {
   if (context === undefined) {
     throw new Error('useUser must be used within a UserProvider');
   }
-  return context;
+
+  const hasRole = (roles: string[]) => {
+    return context.user?.role && roles.includes(context.user.role);
+  };
+
+  const isAdmin = () => hasRole(['admin']);
+  const isProgramManager = () => hasRole(['admin', 'program_manager']);
+  const isYBF = () => hasRole(['ybf']);
+  const isInstructor = () => hasRole(['instructor']);
+  const isEnumerator = () => hasRole(['enumerator']);
+
+  return {
+    ...context,
+    hasRole,
+    isAdmin,
+    isProgramManager,
+    isYBF,
+    isInstructor,
+    isEnumerator,
+  };
 };
