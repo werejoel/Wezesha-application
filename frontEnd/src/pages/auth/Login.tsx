@@ -117,13 +117,17 @@ const Login = () => {
       <div className="flex-1 flex flex-col justify-center items-center px-6 py-12 bg-gray-50 lg:bg-white">
         {/* Mobile logo */}
         <div className="lg:hidden mb-8 text-center">
-          <span
-            className="text-2xl font-bold text-emerald-700"
+          <div className="flex items-center justify-center rounded-full border border-white/20 bg-white/10 px-4 py-2">
+            <img
+              src="/images/wezesha-impact-logo.png"
+              alt="Wezesha Impact Logo"
+              className="h-20 w-auto object-contain"
+            />
+          </div>
+          <p
+            className="mt-1 font-medium text-emerald-700"
             style={{ fontFamily: "'Georgia', serif" }}
           >
-            WEZESHA IMPACT
-          </span>
-          <p className="mt-2 text-sm text-gray-500">
             Data Management & Case Management System
           </p>
         </div>
