@@ -168,10 +168,8 @@ console.log(`✅ ${sessionDefs.length} sessions added`);
 console.log('Adding system users...');
 const users = [
   { name: 'System Admin', email: 'admin@wezesha.org', password: 'admin123', role: 'admin' },
-  { name: 'Program Manager', email: 'manager@wezesha.org', password: 'manager123', role: 'program_manager' },
   { name: 'Youth Business Fellow', email: 'ybf@wezesha.org', password: 'ybf123', role: 'ybf' },
-  { name: 'Institution Instructor', email: 'instructor@wezesha.org', password: 'instructor123', role: 'instructor' },
-  { name: 'Field Enumerator', email: 'enumerator@wezesha.org', password: 'enum123', role: 'enumerator' },
+  { name: 'Enumerator', email: 'enumerator@wezesha.org', password: 'enum123', role: 'enumerator' },
 ];
 
 for (const user of users) {
