@@ -40,7 +40,19 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 export const useUser = () => {
   const context = useContext(UserContext);
   if (context === undefined) {
-    throw new Error('useUser must be used within a UserProvider');
+    console.warn('useUser called outside UserProvider; returning fallback values.');
+    const fallback = {
+      user: null,
+      loading: false,
+      refreshUser: () => {},
+      hasRole: () => false,
+      isAdmin: () => false,
+      isProgramManager: () => false,
+      isYBF: () => false,
+      isInstructor: () => false,
+      isEnumerator: () => false,
+    };
+    return fallback;
   }
 
   const hasRole = (roles: string[]) => {

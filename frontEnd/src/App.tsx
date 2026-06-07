@@ -39,11 +39,11 @@ const RoleProtectedRoute = ({
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <UserProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
+    <BrowserRouter>
+      <UserProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
@@ -110,9 +110,9 @@ const App = () => (
               }
             />
           </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
-    </UserProvider>
+        </TooltipProvider>
+      </UserProvider>
+    </BrowserRouter>
   </QueryClientProvider>
 );
 export default App;
