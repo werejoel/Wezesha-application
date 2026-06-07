@@ -280,25 +280,25 @@ export default function Reports() {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="reports-metric-card">
+                  <div className="reports-metric-card accent-green">
                     <p className="reports-metric-title">Sessions</p>
                     <p className="reports-metric-value">
                       {attendanceSummary.totalSessions}
                     </p>
                   </div>
-                  <div className="reports-metric-card">
+                  <div className="reports-metric-card accent-blue">
                     <p className="reports-metric-title">Total Present</p>
                     <p className="reports-metric-value">
                       {attendanceSummary.totalPresent}
                     </p>
                   </div>
-                  <div className="reports-metric-card">
+                  <div className="reports-metric-card accent-rose">
                     <p className="reports-metric-title">Total Absent</p>
                     <p className="reports-metric-value">
                       {attendanceSummary.totalAbsent}
                     </p>
                   </div>
-                  <div className="reports-metric-card">
+                  <div className="reports-metric-card accent-yellow">
                     <p className="reports-metric-title">Total Excused</p>
                     <p className="reports-metric-value">
                       {attendanceSummary.totalExcused}
@@ -313,23 +313,23 @@ export default function Reports() {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="reports-metric-card">
+                  <div className="reports-metric-card accent-green">
                     <p className="reports-metric-title">Total Youth</p>
                     <p className="reports-metric-value">{youthData.length}</p>
                   </div>
-                  <div className="reports-metric-card">
+                  <div className="reports-metric-card accent-blue">
                     <p className="reports-metric-title">Program Types</p>
                     <p className="reports-metric-value">
                       {Object.keys(youthByProgram).length}
                     </p>
                   </div>
-                  <div className="reports-metric-card">
+                  <div className="reports-metric-card accent-yellow">
                     <p className="reports-metric-title">Regions</p>
                     <p className="reports-metric-value">
                       {Object.keys(youthByRegion).length}
                     </p>
                   </div>
-                  <div className="reports-metric-card">
+                  <div className="reports-metric-card accent-rose">
                     <p className="reports-metric-title">Milestones Tracked</p>
                     <p className="reports-metric-value">
                       {milestoneSummary.length}
@@ -347,7 +347,7 @@ export default function Reports() {
                 <button
                   key={report.id}
                   type="button"
-                  className={`reports-category-card rounded-2xl p-4 text-left transition-all ${isActive ? "active border-primary bg-primary/10 shadow-sm" : "border-border bg-background hover:border-primary/80"}`}
+                  className={`reports-category-card reports-category-${report.id} rounded-2xl p-4 text-left transition-all ${isActive ? "active border-primary bg-primary/10 shadow-sm" : "border-border bg-background hover:border-primary/80"}`}
                   onClick={() => {
                     setSelectedReport(report.id as any);
                     setSelectedFilter("all");
