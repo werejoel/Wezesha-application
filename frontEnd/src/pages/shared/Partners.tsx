@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Building2, Plus, Users, UserCheck } from "lucide-react";
+import { Building2, Plus, Users, UserCheck, Phone, Mail } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -74,6 +74,16 @@ const defaultPartnerForm = {
   startDate: new Date().toISOString().slice(0, 10),
 };
 
+const PHONE_RE = /^\+?[0-9 \-]{7,20}$/;
+const MAX = {
+  name: 100,
+  district: 100,
+  location: 150,
+  contactName: 100,
+  contactPhone: 20,
+  contactEmail: 150,
+};
+
 const normalizeRole = (role: string | undefined | null) => {
   if (!role) return 'Staff';
   const normalized = role.toString().trim().toLowerCase();
@@ -111,6 +121,10 @@ const normalizePersonnel = (person: any): Personnel => ({
 export default function Partners() {
   const { isProgramManager, isYBF, user } = useUser();
   const [search, setSearch] = useState('');
+  const [partnerFormError, setPartnerFormError] = useState<string | null>(null);
+  const [personnelFormError, setPersonnelFormError] = useState<string | null>(null);
+  const [partnerFieldErrors, setPartnerFieldErrors] = useState<Record<string,string>>({});
+  const [personnelFieldErrors, setPersonnelFieldErrors] = useState<Record<string,string>>({});
   const [partners, setPartners] = useState<Partner[]>([]);
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
   const [partnerAddOpen, setPartnerAddOpen] = useState(false);
@@ -140,6 +154,43 @@ export default function Partners() {
     loadBackendData();
   }, []);
 
+  useEffect(() => {
+    if (!partnerAddOpen) setPartnerFormError(null);
+    if (!personnelAddOpen) setPersonnelFormError(null);
+    if (!partnerAddOpen) setPartnerFieldErrors({});
+    if (!personnelAddOpen) setPersonnelFieldErrors({});
+  }, [partnerAddOpen, personnelAddOpen]);
+
+  const validatePartnerForm = () => {
+    const errs: Record<string,string> = {};
+    if (!partnerForm.name || !partnerForm.name.trim()) errs.name = 'Institution name is required';
+    if (partnerForm.name && partnerForm.name.length > MAX.name) errs.name = `Institution name must be ≤ ${MAX.name} chars`;
+    if (!partnerForm.district || !partnerForm.district.trim()) errs.district = 'District is required';
+    if (partnerForm.district && partnerForm.district.length > MAX.district) errs.district = `District must be ≤ ${MAX.district} chars`;
+    if (!partnerForm.type) errs.type = 'Partner type is required';
+    if (partnerForm.location && partnerForm.location.length > MAX.location) errs.location = `Location must be ≤ ${MAX.location} chars`;
+    if (partnerForm.contactName && partnerForm.contactName.length > MAX.contactName) errs.contactName = `Contact name must be ≤ ${MAX.contactName} chars`;
+    if (partnerForm.contactPhone && partnerForm.contactPhone.length > MAX.contactPhone) errs.contactPhone = `Phone must be ≤ ${MAX.contactPhone} chars`;
+    if (partnerForm.contactPhone && !PHONE_RE.test(partnerForm.contactPhone)) errs.contactPhone = 'Contact phone is invalid';
+    if (partnerForm.contactEmail && !/^\S+@\S+\.\S+$/.test(partnerForm.contactEmail)) errs.contactEmail = 'Contact email is invalid';
+    return errs;
+  };
+
+  const validatePersonnelForm = () => {
+    const errs: Record<string,string> = {};
+    if (!personnelForm.name || !personnelForm.name.trim()) errs.name = 'Name is required';
+    if (personnelForm.name && personnelForm.name.length > MAX.name) errs.name = `Name must be ≤ ${MAX.name} chars`;
+    if (!personnelForm.email || !personnelForm.email.trim()) errs.email = 'Email is required';
+    if (personnelForm.email && !/^\S+@\S+\.\S+$/.test(personnelForm.email)) errs.email = 'Email is invalid';
+    if (personnelForm.contact && personnelForm.contact.length > MAX.contactPhone) errs.contact = `Phone must be ≤ ${MAX.contactPhone} chars`;
+    if (personnelForm.contact && !PHONE_RE.test(personnelForm.contact)) errs.contact = 'Phone is invalid';
+    if (!personnelForm.role) errs.role = 'Role is required';
+    return errs;
+  };
+
+  const partnerFormValid = Object.keys(validatePartnerForm()).length === 0;
+  const personnelFormValid = Object.keys(validatePersonnelForm()).length === 0;
+
   const filteredPartners = useMemo(
     () => partners.filter((p) =>
       [p.name, p.district, p.location, p.contactName, p.contactEmail]
@@ -162,6 +213,12 @@ export default function Partners() {
 
   const handleAddPartner = async () => {
     try {
+      const validation = validatePartnerForm();
+      if (Object.keys(validation).length > 0) {
+        setPartnerFieldErrors(validation);
+        return;
+      }
+
       const created = await createPartner({
         name: partnerForm.name,
         district: partnerForm.district,
@@ -183,6 +240,12 @@ export default function Partners() {
 
   const handleAddPersonnel = async () => {
     try {
+      const validation = validatePersonnelForm();
+      if (Object.keys(validation).length > 0) {
+        setPersonnelFieldErrors(validation);
+        return;
+      }
+
       const created = await createPersonnel({
         name: personnelForm.name,
         email: personnelForm.email,
@@ -227,15 +290,22 @@ export default function Partners() {
                 <DialogHeader>
                   <DialogTitle>Add Personnel Record</DialogTitle>
                 </DialogHeader>
+                {personnelFormError ? (
+                  <div className="rounded-lg border border-destructive/10 bg-destructive/5 p-3 text-sm text-destructive">
+                    {personnelFormError}
+                  </div>
+                ) : null}
                 <div className="grid gap-4">
                   <div>
                     <Label htmlFor="personnel-name">Name</Label>
                     <Input
                       id="personnel-name"
                       value={personnelForm.name}
-                      onChange={(e) => setPersonnelForm({ ...personnelForm, name: e.target.value })}
+                      onChange={(e) => { setPersonnelForm({ ...personnelForm, name: e.target.value }); setPersonnelFieldErrors({ ...personnelFieldErrors, name: '' }); }}
+                      maxLength={MAX.name}
                       placeholder="Jane Doe"
                     />
+                    {personnelFieldErrors.name && <p className="text-sm text-destructive mt-1">{personnelFieldErrors.name}</p>}
                   </div>
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div>
@@ -243,7 +313,7 @@ export default function Partners() {
                       <select
                         id="personnel-role"
                         value={personnelForm.role}
-                        onChange={(e) => setPersonnelForm({ ...personnelForm, role: e.target.value as PersonnelForm['role'] })}
+                        onChange={(e) => { setPersonnelForm({ ...personnelForm, role: e.target.value as PersonnelForm['role'] }); setPersonnelFieldErrors({ ...personnelFieldErrors, role: '' }); }}
                         className="w-full rounded-lg border bg-card px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
                       >
                         <option value="YBF">Youth Business Fellow</option>
@@ -257,9 +327,15 @@ export default function Partners() {
                         id="personnel-email"
                         type="email"
                         value={personnelForm.email}
-                        onChange={(e) => setPersonnelForm({ ...personnelForm, email: e.target.value })}
+                        onChange={(e) => { setPersonnelForm({ ...personnelForm, email: e.target.value }); setPersonnelFieldErrors({ ...personnelFieldErrors, email: '' }); }}
+                        maxLength={MAX.contactEmail}
                         placeholder="staff@wezesha.org"
                       />
+                      <div className="flex items-center text-sm text-muted-foreground mt-1">
+                        <Mail className="h-4 w-4 mr-2" />
+                        <span>Use a work or institutional email when available.</span>
+                      </div>
+                      {personnelFieldErrors.email && <p className="text-sm text-destructive mt-1">{personnelFieldErrors.email}</p>}
                     </div>
                   </div>
                   <div className="grid sm:grid-cols-2 gap-4">
@@ -268,9 +344,15 @@ export default function Partners() {
                       <Input
                         id="personnel-contact"
                         value={personnelForm.contact}
-                        onChange={(e) => setPersonnelForm({ ...personnelForm, contact: e.target.value })}
+                        onChange={(e) => { setPersonnelForm({ ...personnelForm, contact: e.target.value }); setPersonnelFieldErrors({ ...personnelFieldErrors, contact: '' }); }}
+                        maxLength={MAX.contactPhone}
                         placeholder="+254700000000"
                       />
+                      <div className="flex items-center text-sm text-muted-foreground mt-1">
+                        <Phone className="h-4 w-4 mr-2" />
+                        <span>International format, e.g. +254712345678</span>
+                      </div>
+                      {personnelFieldErrors.contact && <p className="text-sm text-destructive mt-1">{personnelFieldErrors.contact}</p>}
                     </div>
                     <div>
                       <Label htmlFor="personnel-assigned">Assigned To</Label>
@@ -329,8 +411,8 @@ export default function Partners() {
                       </select>
                     </div>
                     <div className="flex items-end justify-end gap-2">
-                      <Button variant="outline" onClick={() => setPersonnelAddOpen(false)}>Cancel</Button>
-                      <Button onClick={handleAddPersonnel}>Save</Button>
+                      <Button variant="outline" onClick={() => { setPersonnelAddOpen(false); setPersonnelFieldErrors({}); }}>Cancel</Button>
+                      <Button onClick={handleAddPersonnel} disabled={!personnelFormValid}>Save</Button>
                     </div>
                   </div>
                 </div>
@@ -346,6 +428,11 @@ export default function Partners() {
                 <DialogHeader>
                   <DialogTitle>Add New Partner</DialogTitle>
                 </DialogHeader>
+                {partnerFormError ? (
+                  <div className="rounded-lg border border-destructive/10 bg-destructive/5 p-3 text-sm text-destructive">
+                    {partnerFormError}
+                  </div>
+                ) : null}
                 <div className="grid gap-4">
                   <div>
                     <Label htmlFor="partner-name">Institution Name</Label>
@@ -353,6 +440,7 @@ export default function Partners() {
                       id="partner-name"
                       value={partnerForm.name}
                       onChange={(e) => setPartnerForm({ ...partnerForm, name: e.target.value })}
+                      maxLength={MAX.name}
                       placeholder="E.g. City Youth Centre"
                     />
                   </div>
@@ -363,6 +451,7 @@ export default function Partners() {
                         id="partner-location"
                         value={partnerForm.location}
                         onChange={(e) => setPartnerForm({ ...partnerForm, location: e.target.value })}
+                        maxLength={MAX.location}
                         placeholder="Nairobi CBD"
                       />
                     </div>
@@ -372,6 +461,7 @@ export default function Partners() {
                         id="partner-district"
                         value={partnerForm.district}
                         onChange={(e) => setPartnerForm({ ...partnerForm, district: e.target.value })}
+                        maxLength={MAX.district}
                         placeholder="Nairobi"
                       />
                     </div>
@@ -408,18 +498,26 @@ export default function Partners() {
                       <Input
                         id="partner-contact"
                         value={partnerForm.contactName}
-                        onChange={(e) => setPartnerForm({ ...partnerForm, contactName: e.target.value })}
+                        onChange={(e) => { setPartnerForm({ ...partnerForm, contactName: e.target.value }); setPartnerFieldErrors({ ...partnerFieldErrors, contactName: '' }); }}
+                        maxLength={MAX.contactName}
                         placeholder="James Mwangi"
                       />
+                      {partnerFieldErrors.contactName && <p className="text-sm text-destructive mt-1">{partnerFieldErrors.contactName}</p>}
                     </div>
                     <div>
                       <Label htmlFor="partner-phone">Contact Phone</Label>
                       <Input
                         id="partner-phone"
                         value={partnerForm.contactPhone}
-                        onChange={(e) => setPartnerForm({ ...partnerForm, contactPhone: e.target.value })}
+                        onChange={(e) => { setPartnerForm({ ...partnerForm, contactPhone: e.target.value }); setPartnerFieldErrors({ ...partnerFieldErrors, contactPhone: '' }); }}
+                        maxLength={MAX.contactPhone}
                         placeholder="+254712345678"
                       />
+                      <div className="flex items-center text-sm text-muted-foreground mt-1">
+                        <Phone className="h-4 w-4 mr-2" />
+                        <span>International format, e.g. +254712345678</span>
+                      </div>
+                      {partnerFieldErrors.contactPhone && <p className="text-sm text-destructive mt-1">{partnerFieldErrors.contactPhone}</p>}
                     </div>
                   </div>
                   <div>
@@ -427,9 +525,15 @@ export default function Partners() {
                     <Input
                       id="partner-email"
                       value={partnerForm.contactEmail}
-                      onChange={(e) => setPartnerForm({ ...partnerForm, contactEmail: e.target.value })}
+                        onChange={(e) => { setPartnerForm({ ...partnerForm, contactEmail: e.target.value }); setPartnerFieldErrors({ ...partnerFieldErrors, contactEmail: '' }); }}
+                        maxLength={MAX.contactEmail}
                       placeholder="partner@domain.com"
                     />
+                    <div className="flex items-center text-sm text-muted-foreground mt-1">
+                      <Mail className="h-4 w-4 mr-2" />
+                      <span>Use an institutional email where possible.</span>
+                    </div>
+                    {partnerFieldErrors.contactEmail && <p className="text-sm text-destructive mt-1">{partnerFieldErrors.contactEmail}</p>}
                   </div>
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div>
@@ -442,8 +546,8 @@ export default function Partners() {
                       />
                     </div>
                     <div className="flex items-end justify-end gap-2">
-                      <Button variant="outline" onClick={() => setPartnerAddOpen(false)}>Cancel</Button>
-                      <Button onClick={handleAddPartner}>Save Partner</Button>
+                      <Button variant="outline" onClick={() => { setPartnerAddOpen(false); setPartnerFieldErrors({}); }}>Cancel</Button>
+                      <Button onClick={handleAddPartner} disabled={!partnerFormValid}>Save Partner</Button>
                     </div>
                   </div>
                 </div>
@@ -465,16 +569,7 @@ export default function Partners() {
         <StatCard title="Total Personnel" value={personnel.length} icon={Users} variant="success" />
       </div>
 
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <Input
-          type="text"
-          placeholder="Search partners or personnel..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="max-w-lg"
-        />
-        <div className="text-xs text-muted-foreground">Search by institution, region, staff name, email, or role.</div>
-      </div>
+      {/* search removed as requested */}
 
       <Tabs defaultValue="partners">
         <TabsList>

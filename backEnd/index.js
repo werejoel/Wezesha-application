@@ -887,11 +887,31 @@ app.put("/api/attendance/:id", authenticateToken, authorizeRoles('admin', 'progr
 
 // User management (admin only)
 app.get("/api/users", authenticateToken, authorizeRoles('admin'), async (req, res) => {
+  const { page = 1, limit = 10, q } = req.query;
+  const pageNum = parseInt(page, 10) || 1;
+  const lim = parseInt(limit, 10) || 10;
+  const offset = (pageNum - 1) * lim;
   try {
-    const result = await pool.query(
-      "SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC",
-    );
-    res.json(result.rows);
+    let where = '';
+    const params = [];
+    if (q) {
+      params.push(`%${q}%`);
+      params.push(`%${q}%`);
+      where = `WHERE name ILIKE $${params.length - 1} OR email ILIKE $${params.length}`;
+    }
+
+    const dataQuery = `SELECT id, name, email, role, created_at FROM users ${where} ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+    params.push(lim, offset);
+
+    const result = await pool.query(dataQuery, params);
+
+    // total count
+    let countQuery = 'SELECT COUNT(*) FROM users';
+    if (q) countQuery += ` WHERE name ILIKE $1 OR email ILIKE $2`;
+    const countResult = q ? await pool.query(countQuery, [ `%${q}%`, `%${q}%` ]) : await pool.query(countQuery);
+    const total = parseInt(countResult.rows[0].count, 10) || 0;
+
+    res.json({ rows: result.rows, total, page: pageNum, limit: lim });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

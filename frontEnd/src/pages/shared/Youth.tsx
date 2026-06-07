@@ -9,6 +9,7 @@ import { Plus, Users, AlertTriangle, Briefcase } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { createYouth } from "@/api";
 import { useUser } from "@/hooks/use-user";
 
 function MilestoneIndicator({ status }: { status: string }) {
@@ -110,7 +111,27 @@ export default function Youth() {
     programType: 'In-School',
     cohort: 'Cohort 2024-1',
     enrollmentDate: new Date().toISOString().slice(0, 10),
+    dateOfBirth: '',
+    district: '',
   });
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const MAX = { name: 100, cohort: 60, partner: 150 };
+
+  const validateYouthForm = () => {
+    const errs: Record<string, string> = {};
+    if (!form.fullName || !form.fullName.trim()) errs.fullName = 'Full name is required';
+    if (form.fullName && form.fullName.length > MAX.name) errs.fullName = `Full name must be ≤ ${MAX.name} chars`;
+    if (!form.partner || !form.partner.trim()) errs.partner = 'Partner is required';
+    if (form.partner && form.partner.length > MAX.partner) errs.partner = `Partner must be ≤ ${MAX.partner} chars`;
+    if (!form.cohort || !form.cohort.trim()) errs.cohort = 'Cohort is required';
+    if (form.cohort && form.cohort.length > MAX.cohort) errs.cohort = `Cohort must be ≤ ${MAX.cohort} chars`;
+    if (!form.dateOfBirth) errs.dateOfBirth = 'Date of birth is required';
+    if (!form.district || !form.district.trim()) errs.district = 'District is required';
+    return errs;
+  };
+
+  const formValid = Object.keys(validateYouthForm()).length === 0;
 
   const canEnroll = isProgramManager() || isYBF();
 
@@ -122,41 +143,58 @@ export default function Youth() {
   const inWork = youthList.filter(y => !y.employmentStatus.includes('Unemployed')).length;
 
   const handleEnroll = () => {
-    const newYouth = {
-      id: `Y${String(youthList.length + 1).padStart(3, '0')}`,
-      fullName: form.fullName || `New Youth ${youthList.length + 1}`,
-      dob: '2003-01-01',
-      gender: form.gender as 'Male' | 'Female',
-      nationality: 'Kenyan',
-      region: 'Nairobi',
-      district: 'Nairobi',
-      partner: form.partner || 'Unknown Partner',
-      programType: form.programType as 'In-School' | 'Out-of-School',
-      cohort: form.cohort,
-      enrollmentDate: form.enrollmentDate,
-      employmentStatus: 'Unemployed' as const,
-      baselineIncome: 0,
-      currentIncome: 0,
-      aboveIPL: false,
-      educationLevel: 'Secondary',
-      hasBusiness: false,
-      businessPlan: 'Not Started' as const,
-      cv: 'Not Started' as const,
-      applicationLetter: 'Not Started' as const,
-      attendanceRate: 0,
-      mentorshipStatus: 'Active' as const,
-      riskFlag: false,
-    };
-    setYouthList([newYouth, ...youthList]);
-    setAddOpen(false);
-    setForm({
-      fullName: '',
-      gender: 'Female',
-      partner: '',
-      programType: 'In-School',
-      cohort: 'Cohort 2024-1',
-      enrollmentDate: new Date().toISOString().slice(0, 10),
-    });
+    const errs = validateYouthForm();
+    if (Object.keys(errs).length > 0) { setFieldErrors(errs); return; }
+    (async () => {
+      try {
+        const payload: any = {
+          full_name: form.fullName,
+          date_of_birth: form.dateOfBirth,
+          gender: form.gender,
+          district: form.district,
+        };
+        const created = await createYouth(payload);
+        const newYouth = {
+          id: created.id,
+          fullName: created.full_name || created.fullName || form.fullName,
+          dob: created.date_of_birth || form.dateOfBirth,
+          gender: created.gender || form.gender,
+          nationality: created.nationality || 'Kenyan',
+          region: created.region || 'Nairobi',
+          district: created.district || form.district,
+          partner: created.partner_name || form.partner,
+          programType: created.program_type || form.programType,
+          cohort: created.cohort || form.cohort,
+          enrollmentDate: created.enrolment_date || form.enrollmentDate,
+          employmentStatus: created.employment_status || 'Unemployed',
+          baselineIncome: created.baseline_income || 0,
+          currentIncome: created.current_income || 0,
+          aboveIPL: created.above_ipl || false,
+          educationLevel: created.education_level || 'Secondary',
+          hasBusiness: created.has_business || false,
+          businessPlan: 'Not Started',
+          cv: 'Not Started',
+          applicationLetter: 'Not Started',
+          attendanceRate: 0,
+          mentorshipStatus: 'Active',
+          riskFlag: false,
+        };
+        setYouthList([newYouth, ...youthList]);
+        setAddOpen(false);
+        setForm({
+          fullName: '',
+          gender: 'Female',
+          partner: '',
+          programType: 'In-School',
+          cohort: 'Cohort 2024-1',
+          enrollmentDate: new Date().toISOString().slice(0, 10),
+          dateOfBirth: '',
+          district: '',
+        });
+      } catch (err: any) {
+        setFieldErrors({ ...fieldErrors, fullName: err?.message || 'Failed to create youth' });
+      }
+    })();
   };
 
   return (
@@ -181,9 +219,22 @@ export default function Youth() {
                   <Input
                     id="youth-name"
                     value={form.fullName}
-                    onChange={e => setForm({ ...form, fullName: e.target.value })}
+                    onChange={e => { setForm({ ...form, fullName: e.target.value }); setFieldErrors({ ...fieldErrors, fullName: '' }); }}
                     placeholder="Alice Wanjiru"
                   />
+                  {fieldErrors.fullName && <p className="text-sm text-destructive mt-1">{fieldErrors.fullName}</p>}
+                </div>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="youth-dob">Date of Birth</Label>
+                    <Input id="youth-dob" type="date" value={form.dateOfBirth} onChange={e => { setForm({ ...form, dateOfBirth: e.target.value }); setFieldErrors({ ...fieldErrors, dateOfBirth: '' }); }} />
+                    {fieldErrors.dateOfBirth && <p className="text-sm text-destructive mt-1">{fieldErrors.dateOfBirth}</p>}
+                  </div>
+                  <div>
+                    <Label htmlFor="youth-district">District</Label>
+                    <Input id="youth-district" value={form.district} onChange={e => { setForm({ ...form, district: e.target.value }); setFieldErrors({ ...fieldErrors, district: '' }); }} placeholder="Nairobi" />
+                    {fieldErrors.district && <p className="text-sm text-destructive mt-1">{fieldErrors.district}</p>}
+                  </div>
                 </div>
                 <div className="grid sm:grid-cols-2 gap-4">
                   <div>
@@ -203,9 +254,10 @@ export default function Youth() {
                     <Input
                       id="youth-partner"
                       value={form.partner}
-                      onChange={e => setForm({ ...form, partner: e.target.value })}
+                      onChange={e => { setForm({ ...form, partner: e.target.value }); setFieldErrors({ ...fieldErrors, partner: '' }); }}
                       placeholder="Nairobi Technical Institute"
                     />
+                    {fieldErrors.partner && <p className="text-sm text-destructive mt-1">{fieldErrors.partner}</p>}
                   </div>
                 </div>
                 <div className="grid sm:grid-cols-2 gap-4">
@@ -226,9 +278,10 @@ export default function Youth() {
                     <Input
                       id="youth-cohort"
                       value={form.cohort}
-                      onChange={e => setForm({ ...form, cohort: e.target.value })}
+                      onChange={e => { setForm({ ...form, cohort: e.target.value }); setFieldErrors({ ...fieldErrors, cohort: '' }); }}
                       placeholder="Cohort 2024-1"
                     />
+                    {fieldErrors.cohort && <p className="text-sm text-destructive mt-1">{fieldErrors.cohort}</p>}
                   </div>
                 </div>
                 <div className="grid sm:grid-cols-2 gap-4">
@@ -243,8 +296,12 @@ export default function Youth() {
                   </div>
                 </div>
                 <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
-                  <Button onClick={handleEnroll}>Enroll Youth</Button>
+                  <Button variant="outline" onClick={() => { setAddOpen(false); setFieldErrors({}); }}>Cancel</Button>
+                  <Button onClick={() => {
+                    const errs = validateYouthForm();
+                    if (Object.keys(errs).length > 0) { setFieldErrors(errs); return; }
+                    handleEnroll();
+                  }} disabled={!formValid}>Enroll Youth</Button>
                 </div>
               </div>
             </DialogContent>

@@ -31,6 +31,7 @@ import { cn } from "@/lib/utils";
 const mainItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Partners", url: "/partners", icon: Building2 },
+  { title: "Users", url: "/users", icon: Users },
   { title: "Youth", url: "/youth", icon: Users },
   { title: "Sessions", url: "/sessions", icon: CalendarCheck },
   { title: "Case Management", url: "/cases", icon: FolderOpen },

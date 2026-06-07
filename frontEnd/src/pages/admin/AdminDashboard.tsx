@@ -95,6 +95,9 @@ export default function AdminDashboard() {
         queryKey: ['dashboard'],
         queryFn: getDashboardStats,
     });
+    const [usersPage, setUsersPage] = useState(1);
+    const [usersPageSize, setUsersPageSize] = useState(10);
+    const [usersSearch, setUsersSearch] = useState('');
     const { data: youthData, isLoading: youthLoading } = useQuery({
         queryKey: ['youth'],
         queryFn: getYouth,
@@ -107,9 +110,9 @@ export default function AdminDashboard() {
         queryKey: ['sessions'],
         queryFn: getSessions,
     });
-    const { data: usersData, isLoading: usersLoading } = useQuery({
-        queryKey: ['users'],
-        queryFn: getUsers,
+    const { data: usersData, isLoading: usersLoading } = useQuery<any, Error, any>({
+        queryKey: ['users', usersPage, usersPageSize, usersSearch],
+        queryFn: async () => await getUsers({ page: usersPage, limit: usersPageSize, q: usersSearch }),
     });
     const { data: atRiskListData, isLoading: atRiskListLoading } = useQuery({
         queryKey: ['youth', 'atRisk'],
@@ -139,6 +142,7 @@ export default function AdminDashboard() {
 
     const [selectedAction, setSelectedAction] = useState<string | null>(null);
     const [userForm, setUserForm] = useState({ name: '', email: '', password: '', role: 'enumerator' });
+    const [userFormErrors, setUserFormErrors] = useState<Record<string, string>>({});
     const [selectedRoleUser, setSelectedRoleUser] = useState<string>('');
     const [selectedUserRole, setSelectedUserRole] = useState<string>('enumerator');
     const [syncStatus, setSyncStatus] = useState<'idle' | 'running' | 'completed'>('idle');
@@ -159,10 +163,24 @@ export default function AdminDashboard() {
 
     const handleCreateUser = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
+
+        const fieldErrors: Record<string, string> = {};
+        if (!userForm.name.trim()) fieldErrors.name = 'Name is required';
+        if (!userForm.email.trim()) fieldErrors.email = 'Email is required';
+        else if (!/^\S+@\S+\.\S+$/.test(userForm.email)) fieldErrors.email = 'Invalid email format';
+        if (!userForm.password || userForm.password.length < 8 || userForm.password.length > 128) fieldErrors.password = 'Password must be 8-128 characters';
+
+        setUserFormErrors(fieldErrors);
+        if (Object.keys(fieldErrors).length > 0) {
+            setActionFeedback('Please fix the highlighted fields.');
+            return;
+        }
+
         try {
-            await createUser(userForm.name, userForm.email, userForm.password, userForm.role);
+            await createUser(userForm.name.trim(), userForm.email.trim(), userForm.password, userForm.role);
             setActionFeedback('User created successfully.');
             setUserForm({ name: '', email: '', password: '', role: 'enumerator' });
+            setUserFormErrors({});
         } catch (error: any) {
             setActionFeedback(error?.message || 'Unable to create user.');
         }
@@ -255,13 +273,14 @@ export default function AdminDashboard() {
     const youth = youthData || [];
     const partners = partnersData || [];
     const sessions = sessionsData || [];
-    const users = usersData || [];
+    const users = (usersData as any)?.rows || [];
+    const usersTotal = (usersData as any)?.total ?? undefined;
     const lowAttendanceList = lowAttendanceData?.rows || [];
 
     // Prefer backend aggregates when available, fall back to defaults.
     const pendingSyncs = typeof dashboardStats.pendingSyncs === 'number' ? dashboardStats.pendingSyncs : 0;
     const atRiskCount = typeof atRiskListData?.total === 'number' ? atRiskListData.total : (typeof dashboardStats.atRiskCount === 'number' ? dashboardStats.atRiskCount : filteredAtRiskYouth.length);
-    const systemUsers = typeof dashboardStats.totalUsers === 'number' ? dashboardStats.totalUsers : users.length;
+    const systemUsers = typeof usersTotal === 'number' ? usersTotal : (typeof dashboardStats.totalUsers === 'number' ? dashboardStats.totalUsers : users.length);
     const systemHealthScore = Math.max(45, 100 - Math.min(60, pendingSyncs * 10 + atRiskCount * 4));
 
     const genderData = [
@@ -717,6 +736,59 @@ export default function AdminDashboard() {
                 </Card>
             </div>
 
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-sm font-heading text-muted-foreground flex items-center gap-2">
+                        <Users className="h-4 w-4" /> Users
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="flex items-center justify-between mb-3">
+                        <Input placeholder="Search users..." value={usersSearch} onChange={(e) => { setUsersSearch(e.target.value); setUsersPage(1); }} className="w-64" />
+                        <div className="flex items-center gap-2">
+                            <Button variant="outline" size="sm" onClick={() => exportCsv('users.csv', (usersData as any)?.rows || users)}>Export</Button>
+                            <select value={usersPageSize} onChange={(e) => { setUsersPageSize(Number(e.target.value)); setUsersPage(1); }} className="rounded-lg border bg-card px-2 py-1 text-sm">
+                                <option value={5}>5</option>
+                                <option value={10}>10</option>
+                                <option value={25}>25</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <table className="w-full table-auto border-collapse">
+                            <thead>
+                                <tr className="text-left text-xs text-muted-foreground">
+                                    <th className="px-3 py-2">Name</th>
+                                    <th className="px-3 py-2">Email</th>
+                                    <th className="px-3 py-2">Role</th>
+                                    <th className="px-3 py-2">Created</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {((usersData as any)?.rows || users).map((u: any) => (
+                                    <tr key={u.id} className="border-t">
+                                        <td className="px-3 py-2">{u.name || u.full_name || u.email}</td>
+                                        <td className="px-3 py-2 text-xs text-muted-foreground">{u.email}</td>
+                                        <td className="px-3 py-2">{u.role}</td>
+                                        <td className="px-3 py-2 text-xs text-muted-foreground">{u.created_at ? new Date(u.created_at).toLocaleDateString() : '-'}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div className="flex items-center justify-between mt-3">
+                        <div className="text-sm text-muted-foreground">Showing {(usersData as any)?.rows?.length || users.length} of {(usersData as any)?.total ?? users.length}</div>
+                        <div className="flex items-center gap-2">
+                            <Button variant="ghost" size="sm" onClick={() => setUsersPage(Math.max(1, usersPage - 1))} disabled={usersPage <= 1}>Prev</Button>
+                            <span className="text-sm">Page {usersPage} / {Math.max(1, Math.ceil(((usersData as any)?.total || users.length) / usersPageSize))}</span>
+                            <Button variant="ghost" size="sm" onClick={() => setUsersPage(usersPage + 1)} disabled={usersData && ((usersData as any).total ? usersPage >= Math.ceil(((usersData as any).total) / usersPageSize) : users.length < usersPageSize)}>Next</Button>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
             {/* ── Quick Actions ── */}
             <Card className="border-dashed">
                 <CardHeader className="pb-2">
@@ -756,23 +828,44 @@ export default function AdminDashboard() {
                             {selectedAction === 'Create User' && (
                                 <form className="space-y-3" onSubmit={handleCreateUser}>
                                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                        <Input
-                                            placeholder="Full name"
-                                            value={userForm.name}
-                                            onChange={(e) => setUserForm({ ...userForm, name: e.target.value })}
-                                        />
-                                        <Input
-                                            placeholder="Email"
-                                            type="email"
-                                            value={userForm.email}
-                                            onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
-                                        />
-                                        <Input
-                                            placeholder="Password"
-                                            type="password"
-                                            value={userForm.password}
-                                            onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
-                                        />
+                                        <div>
+                                            <Input
+                                                placeholder="Full name"
+                                                value={userForm.name}
+                                                className={userFormErrors.name ? 'border-destructive' : ''}
+                                                onChange={(e) => {
+                                                    setUserForm({ ...userForm, name: e.target.value });
+                                                    if (userFormErrors.name) setUserFormErrors({ ...userFormErrors, name: '' });
+                                                }}
+                                            />
+                                            {userFormErrors.name && <p className="mt-1 text-xs text-destructive">{userFormErrors.name}</p>}
+                                        </div>
+                                        <div>
+                                            <Input
+                                                placeholder="Email"
+                                                type="email"
+                                                value={userForm.email}
+                                                className={userFormErrors.email ? 'border-destructive' : ''}
+                                                onChange={(e) => {
+                                                    setUserForm({ ...userForm, email: e.target.value });
+                                                    if (userFormErrors.email) setUserFormErrors({ ...userFormErrors, email: '' });
+                                                }}
+                                            />
+                                            {userFormErrors.email && <p className="mt-1 text-xs text-destructive">{userFormErrors.email}</p>}
+                                        </div>
+                                        <div>
+                                            <Input
+                                                placeholder="Password"
+                                                type="password"
+                                                value={userForm.password}
+                                                className={userFormErrors.password ? 'border-destructive' : ''}
+                                                onChange={(e) => {
+                                                    setUserForm({ ...userForm, password: e.target.value });
+                                                    if (userFormErrors.password) setUserFormErrors({ ...userFormErrors, password: '' });
+                                                }}
+                                            />
+                                            {userFormErrors.password && <p className="mt-1 text-xs text-destructive">{userFormErrors.password}</p>}
+                                        </div>
                                     </div>
                                     <div className="flex flex-col sm:flex-row items-center gap-3">
                                         <select
@@ -786,7 +879,13 @@ export default function AdminDashboard() {
                                             <option value="instructor">Instructor</option>
                                             <option value="enumerator">Enumerator</option>
                                         </select>
-                                        <Button type="submit" className="h-10">Create User</Button>
+                                        <Button
+                                            type="submit"
+                                            className="h-10"
+                                            disabled={!userForm.name.trim() || !userForm.email.trim() || !userForm.password}
+                                        >
+                                            Create User
+                                        </Button>
                                     </div>
                                     {actionFeedback && <p className="text-sm text-muted-foreground">{actionFeedback}</p>}
                                 </form>
@@ -814,6 +913,16 @@ export default function AdminDashboard() {
                                             <option value="ybf">YBF</option>
                                             <option value="instructor">Instructor</option>
                                             <option value="enumerator">Enumerator</option>
+                                        </select>
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-3">
+                                        <Button variant="ghost" size="sm" onClick={() => setUsersPage(Math.max(1, usersPage - 1))} disabled={usersPage <= 1}>Prev</Button>
+                                        <span className="text-sm">Page {usersPage} / {Math.max(1, Math.ceil(((usersData as any)?.total || users.length) / usersPageSize))}</span>
+                                        <Button variant="ghost" size="sm" onClick={() => setUsersPage(usersPage + 1)} disabled={usersData && ((usersData as any).total ? usersPage >= Math.ceil(((usersData as any).total) / usersPageSize) : users.length < usersPageSize)}>Next</Button>
+                                        <select value={usersPageSize} onChange={(e) => { setUsersPageSize(Number(e.target.value)); setUsersPage(1); }} className="ml-2 rounded-lg border bg-card px-2 py-1 text-sm">
+                                            <option value={5}>5</option>
+                                            <option value={10}>10</option>
+                                            <option value={25}>25</option>
                                         </select>
                                     </div>
                                     <Button onClick={handleChangeUserRole} className="h-10">Save Role</Button>

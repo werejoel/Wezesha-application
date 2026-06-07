@@ -12,6 +12,7 @@ import Sessions from "./pages/Sessions";
 import Cases from "./pages/Cases";
 import Outcomes from "./pages/Outcomes";
 import Reports from "./pages/Reports";
+import AdminUsers from "./pages/admin/Users";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
@@ -55,6 +56,14 @@ const App = () => (
                     <Routes>
                       <Route path="/" element={<Navigate to="/dashboard" replace />} />
                       <Route path="/dashboard" element={<Dashboard />} />
+                      <Route
+                        path="/users"
+                        element={
+                          <RoleProtectedRoute allowedRoles={["admin"]}>
+                            <AdminUsers />
+                          </RoleProtectedRoute>
+                        }
+                      />
                       <Route
                         path="/partners"
                         element={

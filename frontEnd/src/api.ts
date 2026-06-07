@@ -155,7 +155,12 @@ export const deleteOutcome = (id: string) => fetch(`${BASE_URL}/outcomes/${id}`,
 export const getReports = () => get('/reports');
 
 // Users (admin only)
-export const getUsers = () => get('/users');
+export const getUsers = (opts?: { page?: number; limit?: number; q?: string }) => {
+  const page = opts?.page || 1;
+  const limit = opts?.limit || 10;
+  const q = opts?.q ? `&q=${encodeURIComponent(opts.q)}` : '';
+  return get(`/users?limit=${limit}&page=${page}${q}`);
+};
 export const createUser = (name: string, email: string, password: string, role: string) => post('/auth/register', { name, email, password, role });
 export const updateUser = (id: string, data: object) => fetch(`${BASE_URL}/users/${id}`, {
   method: 'PUT',
