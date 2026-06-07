@@ -264,7 +264,7 @@ app.get('/api/youth/at-risk', authenticateToken, authorizeRoles('admin', 'progra
   }
 });
 
-app.get('/api/export', authenticateToken, authorizeRoles('admin'), async (req, res) => {
+app.get('/api/export', authenticateToken, authorizeRoles('admin', 'program_manager'), async (req, res) => {
   try {
     const resource = (req.query.resource || 'all').toString().toLowerCase();
     const workbook = new ExcelJS.Workbook();
@@ -294,6 +294,27 @@ app.get('/api/export', authenticateToken, authorizeRoles('admin'), async (req, r
     if (resource === 'all' || resource === 'sessions') {
       const sessionsRes = await pool.query("SELECT * FROM session ORDER BY session_date DESC");
       datasets.push({ name: 'Sessions', rows: sessionsRes.rows });
+    }
+    if (resource === 'all' || resource === 'reports') {
+      const reportRes = await pool.query(`
+        SELECT 
+          s.id,
+          s.session_date,
+          s.topic,
+          s.term_number,
+          p.name AS partner_name,
+          c.program_year AS cohort_year,
+          COUNT(a.id) FILTER (WHERE a.status = 'Present') AS present,
+          COUNT(a.id) FILTER (WHERE a.status = 'Absent') AS absent,
+          COUNT(a.id) FILTER (WHERE a.status = 'Excused') AS excused
+        FROM session s
+        LEFT JOIN cohort c ON c.id = s.cohort_id
+        LEFT JOIN partner_institution p ON p.id = c.partner_institution_id
+        LEFT JOIN attendance_record a ON a.session_id = s.id
+        GROUP BY s.id, s.session_date, s.topic, s.term_number, p.name, c.program_year
+        ORDER BY s.session_date DESC
+      `);
+      datasets.push({ name: 'Reports', rows: reportRes.rows });
     }
     if (resource === 'all' || resource === 'users') {
       const usersRes = await pool.query("SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC");
@@ -871,12 +892,17 @@ app.get("/api/reports", authenticateToken, async (req, res) => {
         s.id,
         s.session_date,
         s.topic,
+        s.term_number,
+        p.name AS partner_name,
+        c.program_year AS cohort_year,
         COUNT(a.id) FILTER (WHERE a.status = 'Present') AS present,
         COUNT(a.id) FILTER (WHERE a.status = 'Absent') AS absent,
         COUNT(a.id) FILTER (WHERE a.status = 'Excused') AS excused
       FROM session s
+      LEFT JOIN cohort c ON c.id = s.cohort_id
+      LEFT JOIN partner_institution p ON p.id = c.partner_institution_id
       LEFT JOIN attendance_record a ON a.session_id = s.id
-      GROUP BY s.id, s.session_date, s.topic
+      GROUP BY s.id, s.session_date, s.topic, s.term_number, p.name, c.program_year
       ORDER BY s.session_date DESC
     `);
     res.json(result.rows);

@@ -1,70 +1,393 @@
+import { useMemo, useState } from "react";
+import { useQuery, type UseQueryResult } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Download, FileText, Users, CalendarCheck, TrendingUp } from "lucide-react";
+import { downloadExport, getOutcomes, getReports, getYouth } from "@/api";
 
-const reports = [
+const reportCategories = [
   {
+    id: 'attendance',
     title: 'Session Attendance Report',
-    description: 'Attendance data by cohort, term, or individual youth with rates and flags.',
+    description: 'Attendance data by cohort, term, and session with present/absent/excused counts.',
     icon: CalendarCheck,
-    filters: ['By Cohort', 'By Term', 'By Youth'],
+    filters: ['all', 'cohort', 'term'],
   },
   {
+    id: 'output',
     title: 'Output Completion Report',
-    description: 'Business plan, CV, and application letter completion rates across cohorts.',
+    description: 'Track business plan, CV, and cover letter progress across output milestones.',
     icon: FileText,
-    filters: ['By Cohort', 'By Program Type'],
+    filters: ['all', 'Business Plan', 'CV', 'Application Letter'],
   },
   {
+    id: 'enrollment',
     title: 'Youth Enrollment Summary',
-    description: 'Complete enrollment data with demographics, baseline profiling, and partner distribution.',
+    description: 'Demographics, program types, region distribution, and cohort enrollment trends.',
     icon: Users,
-    filters: ['By Partner', 'By Region', 'By Gender'],
+    filters: ['all', 'gender', 'programType'],
   },
   {
+    id: 'impact',
     title: 'Outcome & Impact Report',
-    description: 'Employment status changes, income trends, IPL analysis, and SROI data preparation.',
+    description: 'Employment and cohort-level delivery trends for program oversight.',
     icon: TrendingUp,
-    filters: ['Full Report', 'By Cohort', 'SROI Export'],
+    filters: ['all', 'programYear', 'region'],
   },
 ];
 
+const reportFilterLabels: Record<string, Record<string, string>> = {
+  attendance: { all: 'All Sessions', cohort: 'By Cohort Year', term: 'By Term' },
+  output: { all: 'All Milestones', 'Business Plan': 'Business Plan', CV: 'CV', 'Application Letter': 'Cover Letter' },
+  enrollment: { all: 'All Youth', gender: 'By Gender', programType: 'By Program Type' },
+  impact: { all: 'Full Impact', programYear: 'By Program Year', region: 'By Region' },
+};
+
+const formatDate = (value: string | undefined) => {
+  if (!value) return '-';
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString('en-UG');
+};
+
+const exportCsv = (filename: string, rows: any[]) => {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return;
+  }
+
+  const headers = Array.from(new Set(rows.flatMap((row) => Object.keys(row || {}))));
+  const csvRows = [headers.join(','), ...rows.map((row) => headers.map((header) => `"${String(row?.[header] ?? '').replace(/"/g, '""')}"`).join(','))];
+  const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
 export default function Reports() {
+  const { toast } = useToast();
+  const [selectedReport, setSelectedReport] = useState<'attendance' | 'output' | 'enrollment' | 'impact'>('attendance');
+  const [selectedFilter, setSelectedFilter] = useState('all');
+
+  const reportsQuery = useQuery({ queryKey: ['reports'] as const, queryFn: getReports }) as UseQueryResult<any[], Error>;
+  const youthQuery = useQuery({ queryKey: ['youth'] as const, queryFn: getYouth }) as UseQueryResult<any[], Error>;
+  const outcomesQuery = useQuery({ queryKey: ['outcomes'] as const, queryFn: getOutcomes }) as UseQueryResult<any[], Error>;
+
+  const { data: reportsData = [], isLoading: reportsLoading } = reportsQuery;
+  const { data: youthData = [], isLoading: youthLoading } = youthQuery;
+  const { data: outcomesData = [], isLoading: outcomesLoading } = outcomesQuery;
+
+  const isLoading = reportsLoading || youthLoading || outcomesLoading;
+
+  const attendanceSummary = useMemo(() => {
+    const totalSessions = reportsData.length;
+    const totalPresent = reportsData.reduce((sum: number, item: any) => sum + Number(item.present || 0), 0);
+    const totalAbsent = reportsData.reduce((sum: number, item: any) => sum + Number(item.absent || 0), 0);
+    const totalExcused = reportsData.reduce((sum: number, item: any) => sum + Number(item.excused || 0), 0);
+    return { totalSessions, totalPresent, totalAbsent, totalExcused };
+  }, [reportsData]);
+
+  const milestoneSummary = useMemo(() => {
+    const items = new Map<string, { total: number; completed: number; inProgress: number; notStarted: number }>();
+    outcomesData.forEach((item: any) => {
+      const milestoneType = item.milestone_type || 'Unknown';
+      const current = items.get(milestoneType) || { total: 0, completed: 0, inProgress: 0, notStarted: 0 };
+      current.total += 1;
+      if (item.status === 'Completed') current.completed += 1;
+      else if (item.status === 'In Progress') current.inProgress += 1;
+      else current.notStarted += 1;
+      items.set(milestoneType, current);
+    });
+    return Array.from(items.entries()).map(([milestoneType, summary]) => ({ milestoneType, ...summary }));
+  }, [outcomesData]);
+
+  const youthByGender = useMemo<Record<string, number>>(() => {
+    return (youthData as any[]).reduce((acc: Record<string, number>, item: any) => {
+      const gender = item.gender || 'Unknown';
+      acc[gender] = (acc[gender] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+  }, [youthData]);
+
+  const youthByProgram = useMemo<Record<string, number>>(() => {
+    return (youthData as any[]).reduce((acc: Record<string, number>, item: any) => {
+      const program = item.program_type || item.programType || 'Unknown';
+      acc[program] = (acc[program] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+  }, [youthData]);
+
+  const youthByRegion = useMemo<Record<string, number>>(() => {
+    return (youthData as any[]).reduce((acc: Record<string, number>, item: any) => {
+      const region = item.region || 'Unknown';
+      acc[region] = (acc[region] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+  }, [youthData]);
+
+  const filteredAttendance = useMemo(() => {
+    const data = reportsData as any[];
+    if (selectedFilter === 'term') {
+      const selectedTerm = data.length > 0 ? data[0].term_number : null;
+      return selectedTerm == null ? data : data.filter((item) => item.term_number === selectedTerm);
+    }
+    if (selectedFilter === 'cohort') {
+      const selectedCohort = data.length > 0 ? data[0].cohort_year : null;
+      return selectedCohort == null ? data : data.filter((item) => item.cohort_year === selectedCohort);
+    }
+    return data;
+  }, [reportsData, selectedFilter]);
+
+  const activeCategory = reportCategories.find((item) => item.id === selectedReport);
+
+  const exportReportFile = async () => {
+    try {
+      const blob = await downloadExport('reports');
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `wezesha-${selectedReport}-report.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast({ title: 'Export ready', description: 'Your report export is downloading.' });
+    } catch (err: any) {
+      toast({ title: 'Export failed', description: err?.message || 'Unable to download report.' });
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="page-header">
         <h1 className="page-title">Reports & Data Exports</h1>
-        <p className="page-description">Generate reports for donor reporting, internal reviews, and SROI calculations</p>
+        <p className="page-description">Generate reports for donor reporting, internal review, and impact tracking.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {reports.map(report => (
-          <Card key={report.title} className="hover:shadow-md transition-shadow">
-            <CardHeader className="pb-2">
-              <div className="flex items-start gap-3">
-                <div className="h-10 w-10 rounded-lg bg-accent flex items-center justify-center shrink-0">
-                  <report.icon className="h-5 w-5 text-accent-foreground" />
+      {isLoading ? (
+        <div className="rounded-xl border border-border bg-muted/50 p-8 text-center text-sm text-muted-foreground">Loading reports…</div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Attendance Summary</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="rounded-xl bg-background p-4 border border-border">
+                    <p className="text-xs text-muted-foreground">Sessions</p>
+                    <p className="text-2xl font-semibold">{attendanceSummary.totalSessions}</p>
+                  </div>
+                  <div className="rounded-xl bg-background p-4 border border-border">
+                    <p className="text-xs text-muted-foreground">Total Present</p>
+                    <p className="text-2xl font-semibold">{attendanceSummary.totalPresent}</p>
+                  </div>
+                  <div className="rounded-xl bg-background p-4 border border-border">
+                    <p className="text-xs text-muted-foreground">Total Absent</p>
+                    <p className="text-2xl font-semibold">{attendanceSummary.totalAbsent}</p>
+                  </div>
+                  <div className="rounded-xl bg-background p-4 border border-border">
+                    <p className="text-xs text-muted-foreground">Total Excused</p>
+                    <p className="text-2xl font-semibold">{attendanceSummary.totalExcused}</p>
+                  </div>
                 </div>
-                <div>
-                  <CardTitle className="text-base font-heading">{report.title}</CardTitle>
-                  <p className="text-xs text-muted-foreground mt-1">{report.description}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Enrollment Overview</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="rounded-xl bg-background p-4 border border-border">
+                    <p className="text-xs text-muted-foreground">Total Youth</p>
+                    <p className="text-2xl font-semibold">{youthData.length}</p>
+                  </div>
+                  <div className="rounded-xl bg-background p-4 border border-border">
+                    <p className="text-xs text-muted-foreground">Program Types</p>
+                    <p className="text-2xl font-semibold">{Object.keys(youthByProgram).length}</p>
+                  </div>
+                  <div className="rounded-xl bg-background p-4 border border-border">
+                    <p className="text-xs text-muted-foreground">Regions</p>
+                    <p className="text-2xl font-semibold">{Object.keys(youthByRegion).length}</p>
+                  </div>
+                  <div className="rounded-xl bg-background p-4 border border-border">
+                    <p className="text-xs text-muted-foreground">Milestones Tracked</p>
+                    <p className="text-2xl font-semibold">{milestoneSummary.length}</p>
+                  </div>
                 </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            {reportCategories.map((report) => {
+              const isActive = report.id === selectedReport;
+              return (
+                <button
+                  key={report.id}
+                  type="button"
+                  className={`rounded-2xl border p-4 text-left transition-all ${isActive ? 'border-primary bg-primary/10 shadow-sm' : 'border-border bg-background hover:border-primary/80'}`}
+                  onClick={() => {
+                    setSelectedReport(report.id as any);
+                    setSelectedFilter('all');
+                  }}
+                >
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                      <report.icon className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold">{report.title}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{report.description}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {report.filters.map((filter) => (
+                      <span key={filter} className="rounded-full bg-muted px-2 py-1 text-[11px] text-muted-foreground">{filter === 'all' ? 'All Data' : filter}</span>
+                    ))}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <Card>
+            <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <CardTitle className="text-base font-heading">{activeCategory?.title}</CardTitle>
+                <p className="text-sm text-muted-foreground">{activeCategory?.description}</p>
+              </div>
+              <div className="flex flex-wrap gap-2 items-center">
+                <div className="flex flex-wrap gap-2">
+                  {(activeCategory?.filters || []).map((filter) => (
+                    <Button
+                      key={filter}
+                      variant={selectedFilter === filter ? 'secondary' : 'outline'}
+                      size="sm"
+                      className="h-9"
+                      onClick={() => setSelectedFilter(filter)}
+                    >
+                      {reportFilterLabels[selectedReport]?.[filter] || filter}
+                    </Button>
+                  ))}
+                </div>
+                <Button size="sm" className="h-9" onClick={exportReportFile}>
+                  <Download className="h-3.5 w-3.5 mr-1" /> Export Excel
+                </Button>
+                <Button size="sm" variant="outline" className="h-9" onClick={() => exportCsv(`${selectedReport}-report.csv`, selectedReport === 'attendance' ? filteredAttendance : selectedReport === 'enrollment' ? youthData : selectedReport === 'output' ? outcomesData : youthData)}>
+                  <Download className="h-3.5 w-3.5 mr-1" /> Export CSV
+                </Button>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-wrap gap-2 mb-3">
-                {report.filters.map(f => (
-                  <span key={f} className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{f}</span>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline"><Download className="h-3.5 w-3.5 mr-1" /> Export CSV</Button>
-                <Button size="sm"><Download className="h-3.5 w-3.5 mr-1" /> Export PDF</Button>
-              </div>
+              {selectedReport === 'attendance' && (
+                <div className="space-y-4">
+                  <div className="overflow-x-auto">
+                    <table className="w-full table-auto border-collapse">
+                      <thead>
+                        <tr className="text-left text-xs text-muted-foreground">
+                          <th className="px-3 py-2">Session</th>
+                          <th className="px-3 py-2">Date</th>
+                          <th className="px-3 py-2">Cohort</th>
+                          <th className="px-3 py-2">Term</th>
+                          <th className="px-3 py-2">Present</th>
+                          <th className="px-3 py-2">Absent</th>
+                          <th className="px-3 py-2">Excused</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredAttendance.map((item: any) => (
+                          <tr key={item.id} className="border-t">
+                            <td className="px-3 py-2">{item.topic}</td>
+                            <td className="px-3 py-2">{formatDate(item.session_date)}</td>
+                            <td className="px-3 py-2">{item.cohort_year || 'Unknown'}</td>
+                            <td className="px-3 py-2">{item.term_number || 'N/A'}</td>
+                            <td className="px-3 py-2">{item.present ?? 0}</td>
+                            <td className="px-3 py-2">{item.absent ?? 0}</td>
+                            <td className="px-3 py-2">{item.excused ?? 0}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {selectedReport === 'output' && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {milestoneSummary.map((item) => (
+                    <div key={item.milestoneType} className="rounded-xl border border-border bg-muted/50 p-4">
+                      <p className="text-sm font-semibold">{item.milestoneType}</p>
+                      <p className="text-xs text-muted-foreground mb-3">{item.total} milestones tracked</p>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex items-center justify-between"><span>Completed</span><span>{item.completed}</span></div>
+                        <div className="flex items-center justify-between"><span>In progress</span><span>{item.inProgress}</span></div>
+                        <div className="flex items-center justify-between"><span>Not started</span><span>{item.notStarted}</span></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {selectedReport === 'enrollment' && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="rounded-xl border border-border bg-muted/50 p-4">
+                    <p className="text-sm font-semibold">Gender</p>
+                    <div className="mt-3 space-y-2 text-sm">
+                      {Object.entries(youthByGender).map(([label, value]) => (
+                        <div key={label} className="flex items-center justify-between"><span>{label}</span><span>{value}</span></div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-border bg-muted/50 p-4">
+                    <p className="text-sm font-semibold">Program Type</p>
+                    <div className="mt-3 space-y-2 text-sm">
+                      {Object.entries(youthByProgram).map(([label, value]) => (
+                        <div key={label} className="flex items-center justify-between"><span>{label}</span><span>{value}</span></div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-border bg-muted/50 p-4">
+                    <p className="text-sm font-semibold">Regions</p>
+                    <div className="mt-3 space-y-2 text-sm">
+                      {Object.entries(youthByRegion).slice(0, 6).map(([label, value]) => (
+                        <div key={label} className="flex items-center justify-between"><span>{label}</span><span>{value}</span></div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {selectedReport === 'impact' && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="rounded-xl border border-border bg-muted/50 p-4">
+                    <p className="text-sm font-semibold">Program reach</p>
+                    <div className="mt-3 space-y-2 text-sm">
+                      {Object.entries(youthByProgram).map(([program, count]) => (
+                        <div key={program} className="flex items-center justify-between"><span>{program}</span><span>{count}</span></div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-border bg-muted/50 p-4">
+                    <p className="text-sm font-semibold">Youth distribution</p>
+                    <div className="mt-3 space-y-2 text-sm">
+                      {Object.entries(youthByGender).map(([gender, count]) => (
+                        <div key={gender} className="flex items-center justify-between"><span>{gender}</span><span>{count}</span></div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
-        ))}
-      </div>
+        </>
+      )}
     </div>
   );
 }

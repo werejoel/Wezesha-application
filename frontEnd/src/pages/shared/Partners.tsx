@@ -1,15 +1,33 @@
 import { useEffect, useMemo, useState } from "react";
-import { getPartners, getPersonnel, createPartner, createPersonnel } from "@/api";
+import {
+  getPartners,
+  getPersonnel,
+  createPartner,
+  createPersonnel,
+} from "@/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Building2, Plus, Users, UserCheck, Phone, Mail } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { useUser } from "@/hooks/use-user";
 
 type Partner = {
@@ -40,37 +58,37 @@ type Personnel = {
 
 type PersonnelForm = {
   name: string;
-  role: 'YBF' | 'Instructor' | 'Enumerator';
+  role: "YBF" | "Instructor" | "Enumerator";
   contact: string;
   email: string;
   assignedTo: string;
   programYearStart: string;
   subjectArea: string;
   geographicArea: string;
-  status: 'Active' | 'Inactive';
+  status: "Active" | "Inactive";
 };
 
 const defaultPersonnelForm: PersonnelForm = {
-  name: '',
-  role: 'YBF',
-  contact: '',
-  email: '',
-  assignedTo: '',
-  programYearStart: '',
-  subjectArea: '',
-  geographicArea: '',
-  status: 'Active',
+  name: "",
+  role: "YBF",
+  contact: "",
+  email: "",
+  assignedTo: "",
+  programYearStart: "",
+  subjectArea: "",
+  geographicArea: "",
+  status: "Active",
 };
 
 const defaultPartnerForm = {
-  name: '',
-  type: 'TVET',
-  location: '',
-  district: '',
-  contactName: '',
-  contactPhone: '',
-  contactEmail: '',
-  status: 'Active',
+  name: "",
+  type: "TVET",
+  location: "",
+  district: "",
+  contactName: "",
+  contactPhone: "",
+  contactEmail: "",
+  status: "Active",
   startDate: new Date().toISOString().slice(0, 10),
 };
 
@@ -85,66 +103,80 @@ const MAX = {
 };
 
 const normalizeRole = (role: string | undefined | null) => {
-  if (!role) return 'Staff';
+  if (!role) return "Staff";
   const normalized = role.toString().trim().toLowerCase();
-  if (normalized === 'ybf') return 'YBF';
-  if (normalized === 'administrator' || normalized === 'admin') return 'Admin';
+  if (normalized === "ybf") return "YBF";
+  if (normalized === "administrator" || normalized === "admin") return "Admin";
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 };
 
 const normalizePartner = (partner: any): Partner => ({
   id: partner.id,
-  name: partner.name || 'Unknown institution',
-  type: (partner.type || partner.institution_type || 'TVET').toString().toUpperCase(),
-  location: partner.location || partner.location || '-',
-  district: partner.district || '-',
-  contactName: partner.contact_name || '-',
-  contactPhone: partner.contact_phone || '-',
-  contactEmail: partner.contact_email || '-',
-  status: partner.status || 'Active',
-  startDate: partner.partnership_date || partner.created_at || '',
+  name: partner.name || "Unknown institution",
+  type: (partner.type || partner.institution_type || "TVET")
+    .toString()
+    .toUpperCase(),
+  location: partner.location || partner.location || "-",
+  district: partner.district || "-",
+  contactName: partner.contact_name || "-",
+  contactPhone: partner.contact_phone || "-",
+  contactEmail: partner.contact_email || "-",
+  status: partner.status || "Active",
+  startDate: partner.partnership_date || partner.created_at || "",
   cohortsCount: partner.cohorts_count ?? 0,
-  assignedYBF: partner.assignedYBF || '-',
+  assignedYBF: partner.assignedYBF || "-",
 });
 
 const normalizePersonnel = (person: any): Personnel => ({
   id: person.id,
-  name: person.name || 'Unknown staff',
+  name: person.name || "Unknown staff",
   role: normalizeRole(person.role),
-  email: person.email || '-',
-  contact: person.email || '-',
-  assignedTo: '-',
-  details: person.created_at ? `Account created ${new Date(person.created_at).toLocaleDateString()}` : 'No details',
-  status: 'Active',
+  email: person.email || "-",
+  contact: person.email || "-",
+  assignedTo: "-",
+  details: person.created_at
+    ? `Account created ${new Date(person.created_at).toLocaleDateString()}`
+    : "No details",
+  status: "Active",
 });
 
 export default function Partners() {
   const { isProgramManager, isYBF, user } = useUser();
   const [partnerFormError, setPartnerFormError] = useState<string | null>(null);
-  const [personnelFormError, setPersonnelFormError] = useState<string | null>(null);
-  const [partnerFieldErrors, setPartnerFieldErrors] = useState<Record<string,string>>({});
-  const [personnelFieldErrors, setPersonnelFieldErrors] = useState<Record<string,string>>({});
+  const [personnelFormError, setPersonnelFormError] = useState<string | null>(
+    null,
+  );
+  const [partnerFieldErrors, setPartnerFieldErrors] = useState<
+    Record<string, string>
+  >({});
+  const [personnelFieldErrors, setPersonnelFieldErrors] = useState<
+    Record<string, string>
+  >({});
   const [partners, setPartners] = useState<Partner[]>([]);
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
   const [partnerAddOpen, setPartnerAddOpen] = useState(false);
   const [personnelAddOpen, setPersonnelAddOpen] = useState(false);
   const [partnerForm, setPartnerForm] = useState(defaultPartnerForm);
-  const [personnelForm, setPersonnelForm] = useState<PersonnelForm>(defaultPersonnelForm);
+  const [personnelForm, setPersonnelForm] =
+    useState<PersonnelForm>(defaultPersonnelForm);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const canAddPartner = isProgramManager() || isYBF();
-  const canManagePersonnel = isProgramManager() || user?.role === 'admin';
+  const canManagePersonnel = isProgramManager() || user?.role === "admin";
 
   useEffect(() => {
     const loadBackendData = async () => {
       try {
         setLoading(true);
-        const [partnerRows, personnelRows] = await Promise.all([getPartners(), getPersonnel()]);
+        const [partnerRows, personnelRows] = await Promise.all([
+          getPartners(),
+          getPersonnel(),
+        ]);
         setPartners(partnerRows.map(normalizePartner));
         setPersonnel(personnelRows.map(normalizePersonnel));
       } catch (err: any) {
-        setError(err?.message || 'Failed to load partner or personnel data.');
+        setError(err?.message || "Failed to load partner or personnel data.");
       } finally {
         setLoading(false);
       }
@@ -161,29 +193,56 @@ export default function Partners() {
   }, [partnerAddOpen, personnelAddOpen]);
 
   const validatePartnerForm = () => {
-    const errs: Record<string,string> = {};
-    if (!partnerForm.name || !partnerForm.name.trim()) errs.name = 'Institution name is required';
-    if (partnerForm.name && partnerForm.name.length > MAX.name) errs.name = `Institution name must be ≤ ${MAX.name} chars`;
-    if (!partnerForm.district || !partnerForm.district.trim()) errs.district = 'District is required';
-    if (partnerForm.district && partnerForm.district.length > MAX.district) errs.district = `District must be ≤ ${MAX.district} chars`;
-    if (!partnerForm.type) errs.type = 'Partner type is required';
-    if (partnerForm.location && partnerForm.location.length > MAX.location) errs.location = `Location must be ≤ ${MAX.location} chars`;
-    if (partnerForm.contactName && partnerForm.contactName.length > MAX.contactName) errs.contactName = `Contact name must be ≤ ${MAX.contactName} chars`;
-    if (partnerForm.contactPhone && partnerForm.contactPhone.length > MAX.contactPhone) errs.contactPhone = `Phone must be ≤ ${MAX.contactPhone} chars`;
-    if (partnerForm.contactPhone && !PHONE_RE.test(partnerForm.contactPhone)) errs.contactPhone = 'Contact phone is invalid';
-    if (partnerForm.contactEmail && !/^\S+@\S+\.\S+$/.test(partnerForm.contactEmail)) errs.contactEmail = 'Contact email is invalid';
+    const errs: Record<string, string> = {};
+    if (!partnerForm.name || !partnerForm.name.trim())
+      errs.name = "Institution name is required";
+    if (partnerForm.name && partnerForm.name.length > MAX.name)
+      errs.name = `Institution name must be ≤ ${MAX.name} chars`;
+    if (!partnerForm.district || !partnerForm.district.trim())
+      errs.district = "District is required";
+    if (partnerForm.district && partnerForm.district.length > MAX.district)
+      errs.district = `District must be ≤ ${MAX.district} chars`;
+    if (!partnerForm.type) errs.type = "Partner type is required";
+    if (partnerForm.location && partnerForm.location.length > MAX.location)
+      errs.location = `Location must be ≤ ${MAX.location} chars`;
+    if (
+      partnerForm.contactName &&
+      partnerForm.contactName.length > MAX.contactName
+    )
+      errs.contactName = `Contact name must be ≤ ${MAX.contactName} chars`;
+    if (
+      partnerForm.contactPhone &&
+      partnerForm.contactPhone.length > MAX.contactPhone
+    )
+      errs.contactPhone = `Phone must be ≤ ${MAX.contactPhone} chars`;
+    if (partnerForm.contactPhone && !PHONE_RE.test(partnerForm.contactPhone))
+      errs.contactPhone = "Contact phone is invalid";
+    if (
+      partnerForm.contactEmail &&
+      !/^\S+@\S+\.\S+$/.test(partnerForm.contactEmail)
+    )
+      errs.contactEmail = "Contact email is invalid";
     return errs;
   };
 
   const validatePersonnelForm = () => {
-    const errs: Record<string,string> = {};
-    if (!personnelForm.name || !personnelForm.name.trim()) errs.name = 'Name is required';
-    if (personnelForm.name && personnelForm.name.length > MAX.name) errs.name = `Name must be ≤ ${MAX.name} chars`;
-    if (!personnelForm.email || !personnelForm.email.trim()) errs.email = 'Email is required';
-    if (personnelForm.email && !/^\S+@\S+\.\S+$/.test(personnelForm.email)) errs.email = 'Email is invalid';
-    if (personnelForm.contact && personnelForm.contact.length > MAX.contactPhone) errs.contact = `Phone must be ≤ ${MAX.contactPhone} chars`;
-    if (personnelForm.contact && !PHONE_RE.test(personnelForm.contact)) errs.contact = 'Phone is invalid';
-    if (!personnelForm.role) errs.role = 'Role is required';
+    const errs: Record<string, string> = {};
+    if (!personnelForm.name || !personnelForm.name.trim())
+      errs.name = "Name is required";
+    if (personnelForm.name && personnelForm.name.length > MAX.name)
+      errs.name = `Name must be ≤ ${MAX.name} chars`;
+    if (!personnelForm.email || !personnelForm.email.trim())
+      errs.email = "Email is required";
+    if (personnelForm.email && !/^\S+@\S+\.\S+$/.test(personnelForm.email))
+      errs.email = "Email is invalid";
+    if (
+      personnelForm.contact &&
+      personnelForm.contact.length > MAX.contactPhone
+    )
+      errs.contact = `Phone must be ≤ ${MAX.contactPhone} chars`;
+    if (personnelForm.contact && !PHONE_RE.test(personnelForm.contact))
+      errs.contact = "Phone is invalid";
+    if (!personnelForm.role) errs.role = "Role is required";
     return errs;
   };
 
@@ -216,7 +275,7 @@ export default function Partners() {
       setPartnerAddOpen(false);
       setPartnerForm(defaultPartnerForm);
     } catch (err: any) {
-      setError(err?.message || 'Failed to create partner.');
+      setError(err?.message || "Failed to create partner.");
     }
   };
 
@@ -242,16 +301,16 @@ export default function Partners() {
           role: normalizeRole(created.role),
           email: created.email,
           contact: created.email,
-          assignedTo: personnelForm.assignedTo || '-',
+          assignedTo: personnelForm.assignedTo || "-",
           details: `Account created ${new Date(created.created_at).toLocaleDateString()}`,
-          status: 'Active',
+          status: "Active",
         },
         ...prev,
       ]);
       setPersonnelAddOpen(false);
       setPersonnelForm(defaultPersonnelForm);
     } catch (err: any) {
-      setError(err?.message || 'Failed to create personnel.');
+      setError(err?.message || "Failed to create personnel.");
     }
   };
 
@@ -260,13 +319,17 @@ export default function Partners() {
       <div className="page-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="page-title">Partners & Personnel</h1>
-          <p className="page-description">Manage institutional partners and linked program staff.</p>
+          <p className="page-description">
+            Manage institutional partners and linked program staff.
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           {canManagePersonnel && (
             <Dialog open={personnelAddOpen} onOpenChange={setPersonnelAddOpen}>
               <DialogTrigger asChild>
-                <Button variant="secondary"><Plus className="h-4 w-4 mr-1" /> Add Personnel</Button>
+                <Button variant="secondary">
+                  <Plus className="h-4 w-4 mr-1" /> Add Personnel
+                </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
@@ -283,11 +346,24 @@ export default function Partners() {
                     <Input
                       id="personnel-name"
                       value={personnelForm.name}
-                      onChange={(e) => { setPersonnelForm({ ...personnelForm, name: e.target.value }); setPersonnelFieldErrors({ ...personnelFieldErrors, name: '' }); }}
+                      onChange={(e) => {
+                        setPersonnelForm({
+                          ...personnelForm,
+                          name: e.target.value,
+                        });
+                        setPersonnelFieldErrors({
+                          ...personnelFieldErrors,
+                          name: "",
+                        });
+                      }}
                       maxLength={MAX.name}
                       placeholder="Jane Doe"
                     />
-                    {personnelFieldErrors.name && <p className="text-sm text-destructive mt-1">{personnelFieldErrors.name}</p>}
+                    {personnelFieldErrors.name && (
+                      <p className="text-sm text-destructive mt-1">
+                        {personnelFieldErrors.name}
+                      </p>
+                    )}
                   </div>
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div>
@@ -295,7 +371,16 @@ export default function Partners() {
                       <select
                         id="personnel-role"
                         value={personnelForm.role}
-                        onChange={(e) => { setPersonnelForm({ ...personnelForm, role: e.target.value as PersonnelForm['role'] }); setPersonnelFieldErrors({ ...personnelFieldErrors, role: '' }); }}
+                        onChange={(e) => {
+                          setPersonnelForm({
+                            ...personnelForm,
+                            role: e.target.value as PersonnelForm["role"],
+                          });
+                          setPersonnelFieldErrors({
+                            ...personnelFieldErrors,
+                            role: "",
+                          });
+                        }}
                         className="w-full rounded-lg border bg-card px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
                       >
                         <option value="YBF">Youth Business Fellow</option>
@@ -309,15 +394,30 @@ export default function Partners() {
                         id="personnel-email"
                         type="email"
                         value={personnelForm.email}
-                        onChange={(e) => { setPersonnelForm({ ...personnelForm, email: e.target.value }); setPersonnelFieldErrors({ ...personnelFieldErrors, email: '' }); }}
+                        onChange={(e) => {
+                          setPersonnelForm({
+                            ...personnelForm,
+                            email: e.target.value,
+                          });
+                          setPersonnelFieldErrors({
+                            ...personnelFieldErrors,
+                            email: "",
+                          });
+                        }}
                         maxLength={MAX.contactEmail}
                         placeholder="staff@wezesha.org"
                       />
                       <div className="flex items-center text-sm text-muted-foreground mt-1">
                         <Mail className="h-4 w-4 mr-2" />
-                        <span>Use a work or institutional email when available.</span>
+                        <span>
+                          Use a work or institutional email when available.
+                        </span>
                       </div>
-                      {personnelFieldErrors.email && <p className="text-sm text-destructive mt-1">{personnelFieldErrors.email}</p>}
+                      {personnelFieldErrors.email && (
+                        <p className="text-sm text-destructive mt-1">
+                          {personnelFieldErrors.email}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="grid sm:grid-cols-2 gap-4">
@@ -326,7 +426,16 @@ export default function Partners() {
                       <Input
                         id="personnel-contact"
                         value={personnelForm.contact}
-                        onChange={(e) => { setPersonnelForm({ ...personnelForm, contact: e.target.value }); setPersonnelFieldErrors({ ...personnelFieldErrors, contact: '' }); }}
+                        onChange={(e) => {
+                          setPersonnelForm({
+                            ...personnelForm,
+                            contact: e.target.value,
+                          });
+                          setPersonnelFieldErrors({
+                            ...personnelFieldErrors,
+                            contact: "",
+                          });
+                        }}
                         maxLength={MAX.contactPhone}
                         placeholder="+254700000000"
                       />
@@ -334,47 +443,73 @@ export default function Partners() {
                         <Phone className="h-4 w-4 mr-2" />
                         <span>International format, e.g. +254712345678</span>
                       </div>
-                      {personnelFieldErrors.contact && <p className="text-sm text-destructive mt-1">{personnelFieldErrors.contact}</p>}
+                      {personnelFieldErrors.contact && (
+                        <p className="text-sm text-destructive mt-1">
+                          {personnelFieldErrors.contact}
+                        </p>
+                      )}
                     </div>
                     <div>
                       <Label htmlFor="personnel-assigned">Assigned To</Label>
                       <Input
                         id="personnel-assigned"
                         value={personnelForm.assignedTo}
-                        onChange={(e) => setPersonnelForm({ ...personnelForm, assignedTo: e.target.value })}
+                        onChange={(e) =>
+                          setPersonnelForm({
+                            ...personnelForm,
+                            assignedTo: e.target.value,
+                          })
+                        }
                         placeholder="Institution or area"
                       />
                     </div>
                   </div>
-                  {personnelForm.role === 'YBF' && (
+                  {personnelForm.role === "YBF" && (
                     <div>
                       <Label htmlFor="personnel-year">Program Year Start</Label>
                       <Input
                         id="personnel-year"
                         value={personnelForm.programYearStart}
-                        onChange={(e) => setPersonnelForm({ ...personnelForm, programYearStart: e.target.value })}
+                        onChange={(e) =>
+                          setPersonnelForm({
+                            ...personnelForm,
+                            programYearStart: e.target.value,
+                          })
+                        }
                         placeholder="2024"
                       />
                     </div>
                   )}
-                  {personnelForm.role === 'Instructor' && (
+                  {personnelForm.role === "Instructor" && (
                     <div>
                       <Label htmlFor="personnel-subject">Subject Area</Label>
                       <Input
                         id="personnel-subject"
                         value={personnelForm.subjectArea}
-                        onChange={(e) => setPersonnelForm({ ...personnelForm, subjectArea: e.target.value })}
+                        onChange={(e) =>
+                          setPersonnelForm({
+                            ...personnelForm,
+                            subjectArea: e.target.value,
+                          })
+                        }
                         placeholder="Business Studies"
                       />
                     </div>
                   )}
-                  {personnelForm.role === 'Enumerator' && (
+                  {personnelForm.role === "Enumerator" && (
                     <div>
-                      <Label htmlFor="personnel-area">Geographic Area / Cohort</Label>
+                      <Label htmlFor="personnel-area">
+                        Geographic Area / Cohort
+                      </Label>
                       <Input
                         id="personnel-area"
                         value={personnelForm.geographicArea}
-                        onChange={(e) => setPersonnelForm({ ...personnelForm, geographicArea: e.target.value })}
+                        onChange={(e) =>
+                          setPersonnelForm({
+                            ...personnelForm,
+                            geographicArea: e.target.value,
+                          })
+                        }
                         placeholder="Nairobi, Kisumu"
                       />
                     </div>
@@ -385,7 +520,12 @@ export default function Partners() {
                       <select
                         id="personnel-status"
                         value={personnelForm.status}
-                        onChange={(e) => setPersonnelForm({ ...personnelForm, status: e.target.value as PersonnelForm['status'] })}
+                        onChange={(e) =>
+                          setPersonnelForm({
+                            ...personnelForm,
+                            status: e.target.value as PersonnelForm["status"],
+                          })
+                        }
                         className="w-full rounded-lg border bg-card px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
                       >
                         <option value="Active">Active</option>
@@ -393,8 +533,21 @@ export default function Partners() {
                       </select>
                     </div>
                     <div className="flex items-end justify-end gap-2">
-                      <Button variant="outline" onClick={() => { setPersonnelAddOpen(false); setPersonnelFieldErrors({}); }}>Cancel</Button>
-                      <Button onClick={handleAddPersonnel} disabled={!personnelFormValid}>Save</Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setPersonnelAddOpen(false);
+                          setPersonnelFieldErrors({});
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={handleAddPersonnel}
+                        disabled={!personnelFormValid}
+                      >
+                        Save
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -404,7 +557,9 @@ export default function Partners() {
           {canAddPartner && (
             <Dialog open={partnerAddOpen} onOpenChange={setPartnerAddOpen}>
               <DialogTrigger asChild>
-                <Button><Plus className="h-4 w-4 mr-1" /> Add Partner</Button>
+                <Button>
+                  <Plus className="h-4 w-4 mr-1" /> Add Partner
+                </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
@@ -421,18 +576,27 @@ export default function Partners() {
                     <Input
                       id="partner-name"
                       value={partnerForm.name}
-                      onChange={(e) => setPartnerForm({ ...partnerForm, name: e.target.value })}
+                      onChange={(e) =>
+                        setPartnerForm({ ...partnerForm, name: e.target.value })
+                      }
                       maxLength={MAX.name}
                       placeholder="E.g. City Youth Centre"
                     />
                   </div>
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div>
-                      <Label htmlFor="partner-location">Physical Location</Label>
+                      <Label htmlFor="partner-location">
+                        Physical Location
+                      </Label>
                       <Input
                         id="partner-location"
                         value={partnerForm.location}
-                        onChange={(e) => setPartnerForm({ ...partnerForm, location: e.target.value })}
+                        onChange={(e) =>
+                          setPartnerForm({
+                            ...partnerForm,
+                            location: e.target.value,
+                          })
+                        }
                         maxLength={MAX.location}
                         placeholder="Nairobi CBD"
                       />
@@ -442,7 +606,12 @@ export default function Partners() {
                       <Input
                         id="partner-district"
                         value={partnerForm.district}
-                        onChange={(e) => setPartnerForm({ ...partnerForm, district: e.target.value })}
+                        onChange={(e) =>
+                          setPartnerForm({
+                            ...partnerForm,
+                            district: e.target.value,
+                          })
+                        }
                         maxLength={MAX.district}
                         placeholder="Nairobi"
                       />
@@ -454,7 +623,12 @@ export default function Partners() {
                       <select
                         id="partner-type"
                         value={partnerForm.type}
-                        onChange={(e) => setPartnerForm({ ...partnerForm, type: e.target.value as 'TVET' | 'CBO' })}
+                        onChange={(e) =>
+                          setPartnerForm({
+                            ...partnerForm,
+                            type: e.target.value as "TVET" | "CBO",
+                          })
+                        }
                         className="w-full rounded-lg border bg-card px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
                       >
                         <option value="TVET">TVET</option>
@@ -466,7 +640,12 @@ export default function Partners() {
                       <select
                         id="partner-status"
                         value={partnerForm.status}
-                        onChange={(e) => setPartnerForm({ ...partnerForm, status: e.target.value as 'Active' | 'Inactive' })}
+                        onChange={(e) =>
+                          setPartnerForm({
+                            ...partnerForm,
+                            status: e.target.value as "Active" | "Inactive",
+                          })
+                        }
                         className="w-full rounded-lg border bg-card px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
                       >
                         <option value="Active">Active</option>
@@ -480,18 +659,40 @@ export default function Partners() {
                       <Input
                         id="partner-contact"
                         value={partnerForm.contactName}
-                        onChange={(e) => { setPartnerForm({ ...partnerForm, contactName: e.target.value }); setPartnerFieldErrors({ ...partnerFieldErrors, contactName: '' }); }}
+                        onChange={(e) => {
+                          setPartnerForm({
+                            ...partnerForm,
+                            contactName: e.target.value,
+                          });
+                          setPartnerFieldErrors({
+                            ...partnerFieldErrors,
+                            contactName: "",
+                          });
+                        }}
                         maxLength={MAX.contactName}
                         placeholder="James Mwangi"
                       />
-                      {partnerFieldErrors.contactName && <p className="text-sm text-destructive mt-1">{partnerFieldErrors.contactName}</p>}
+                      {partnerFieldErrors.contactName && (
+                        <p className="text-sm text-destructive mt-1">
+                          {partnerFieldErrors.contactName}
+                        </p>
+                      )}
                     </div>
                     <div>
                       <Label htmlFor="partner-phone">Contact Phone</Label>
                       <Input
                         id="partner-phone"
                         value={partnerForm.contactPhone}
-                        onChange={(e) => { setPartnerForm({ ...partnerForm, contactPhone: e.target.value }); setPartnerFieldErrors({ ...partnerFieldErrors, contactPhone: '' }); }}
+                        onChange={(e) => {
+                          setPartnerForm({
+                            ...partnerForm,
+                            contactPhone: e.target.value,
+                          });
+                          setPartnerFieldErrors({
+                            ...partnerFieldErrors,
+                            contactPhone: "",
+                          });
+                        }}
                         maxLength={MAX.contactPhone}
                         placeholder="+254712345678"
                       />
@@ -499,7 +700,11 @@ export default function Partners() {
                         <Phone className="h-4 w-4 mr-2" />
                         <span>International format, e.g. +254712345678</span>
                       </div>
-                      {partnerFieldErrors.contactPhone && <p className="text-sm text-destructive mt-1">{partnerFieldErrors.contactPhone}</p>}
+                      {partnerFieldErrors.contactPhone && (
+                        <p className="text-sm text-destructive mt-1">
+                          {partnerFieldErrors.contactPhone}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div>
@@ -507,15 +712,28 @@ export default function Partners() {
                     <Input
                       id="partner-email"
                       value={partnerForm.contactEmail}
-                        onChange={(e) => { setPartnerForm({ ...partnerForm, contactEmail: e.target.value }); setPartnerFieldErrors({ ...partnerFieldErrors, contactEmail: '' }); }}
-                        maxLength={MAX.contactEmail}
+                      onChange={(e) => {
+                        setPartnerForm({
+                          ...partnerForm,
+                          contactEmail: e.target.value,
+                        });
+                        setPartnerFieldErrors({
+                          ...partnerFieldErrors,
+                          contactEmail: "",
+                        });
+                      }}
+                      maxLength={MAX.contactEmail}
                       placeholder="partner@domain.com"
                     />
                     <div className="flex items-center text-sm text-muted-foreground mt-1">
                       <Mail className="h-4 w-4 mr-2" />
                       <span>Use an institutional email where possible.</span>
                     </div>
-                    {partnerFieldErrors.contactEmail && <p className="text-sm text-destructive mt-1">{partnerFieldErrors.contactEmail}</p>}
+                    {partnerFieldErrors.contactEmail && (
+                      <p className="text-sm text-destructive mt-1">
+                        {partnerFieldErrors.contactEmail}
+                      </p>
+                    )}
                   </div>
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div>
@@ -524,12 +742,30 @@ export default function Partners() {
                         id="partner-start"
                         type="date"
                         value={partnerForm.startDate}
-                        onChange={(e) => setPartnerForm({ ...partnerForm, startDate: e.target.value })}
+                        onChange={(e) =>
+                          setPartnerForm({
+                            ...partnerForm,
+                            startDate: e.target.value,
+                          })
+                        }
                       />
                     </div>
                     <div className="flex items-end justify-end gap-2">
-                      <Button variant="outline" onClick={() => { setPartnerAddOpen(false); setPartnerFieldErrors({}); }}>Cancel</Button>
-                      <Button onClick={handleAddPartner} disabled={!partnerFormValid}>Save Partner</Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setPartnerAddOpen(false);
+                          setPartnerFieldErrors({});
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={handleAddPartner}
+                        disabled={!partnerFormValid}
+                      >
+                        Save Partner
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -546,17 +782,36 @@ export default function Partners() {
       ) : null}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard title="Total Partners" value={partners.length} subtitle={`${partners.filter((p) => p.status === 'Active').length} Active`} icon={Building2} variant="primary" />
-        <StatCard title="YBFs & Instructors" value={personnel.filter((p) => p.role !== 'Enumerator').length} icon={UserCheck} />
-        <StatCard title="Total Personnel" value={personnel.length} icon={Users} variant="success" />
+        <StatCard
+          title="Total Partners"
+          value={partners.length}
+          subtitle={`${partners.filter((p) => p.status === "Active").length} Active`}
+          icon={Building2}
+          variant="primary"
+        />
+        <StatCard
+          title="YBFs & Instructors"
+          value={personnel.filter((p) => p.role !== "Enumerator").length}
+          icon={UserCheck}
+        />
+        <StatCard
+          title="Total Personnel"
+          value={personnel.length}
+          icon={Users}
+          variant="success"
+        />
       </div>
 
       {/* search removed as requested */}
 
       <Tabs defaultValue="partners">
         <TabsList>
-          <TabsTrigger value="partners">Partners ({filteredPartners.length})</TabsTrigger>
-          <TabsTrigger value="personnel">Personnel ({filteredPersonnel.length})</TabsTrigger>
+          <TabsTrigger value="partners">
+            Partners ({filteredPartners.length})
+          </TabsTrigger>
+          <TabsTrigger value="personnel">
+            Personnel ({filteredPersonnel.length})
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="partners">
@@ -579,7 +834,10 @@ export default function Partners() {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center py-10 text-sm text-muted-foreground">
+                      <TableCell
+                        colSpan={9}
+                        className="text-center py-10 text-sm text-muted-foreground"
+                      >
                         Loading partners from backend...
                       </TableCell>
                     </TableRow>
@@ -587,7 +845,15 @@ export default function Partners() {
                     filteredPartners.map((p) => (
                       <TableRow key={p.id} className="hover:bg-muted/50">
                         <TableCell className="font-medium">{p.name}</TableCell>
-                        <TableCell><Badge variant={p.type === 'TVET' ? 'default' : 'secondary'}>{p.type}</Badge></TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              p.type === "TVET" ? "default" : "secondary"
+                            }
+                          >
+                            {p.type}
+                          </Badge>
+                        </TableCell>
                         <TableCell>{p.location}</TableCell>
                         <TableCell>{p.district}</TableCell>
                         <TableCell className="text-xs text-muted-foreground">
@@ -597,15 +863,30 @@ export default function Partners() {
                           <br />
                           {p.contactEmail}
                         </TableCell>
-                        <TableCell>{p.startDate ? new Date(p.startDate).toLocaleDateString() : '-'}</TableCell>
+                        <TableCell>
+                          {p.startDate
+                            ? new Date(p.startDate).toLocaleDateString()
+                            : "-"}
+                        </TableCell>
                         <TableCell>{p.cohortsCount}</TableCell>
                         <TableCell>{p.assignedYBF}</TableCell>
-                        <TableCell><Badge variant={p.status === 'Active' ? 'default' : 'outline'}>{p.status}</Badge></TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              p.status === "Active" ? "default" : "outline"
+                            }
+                          >
+                            {p.status}
+                          </Badge>
+                        </TableCell>
                       </TableRow>
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center py-10 text-sm text-muted-foreground">
+                      <TableCell
+                        colSpan={9}
+                        className="text-center py-10 text-sm text-muted-foreground"
+                      >
                         No partner records found.
                       </TableCell>
                     </TableRow>
@@ -621,7 +902,10 @@ export default function Partners() {
             <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
                 <CardTitle>Personnel Records</CardTitle>
-                <p className="text-sm text-muted-foreground">Youth Business Fellows, instructors and enumerators loaded from the backend.</p>
+                <p className="text-sm text-muted-foreground">
+                  Youth Business Fellows, instructors and enumerators loaded
+                  from the backend.
+                </p>
               </div>
             </CardHeader>
             <CardContent className="p-0 overflow-x-auto">
@@ -639,7 +923,10 @@ export default function Partners() {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-10 text-sm text-muted-foreground">
+                      <TableCell
+                        colSpan={6}
+                        className="text-center py-10 text-sm text-muted-foreground"
+                      >
                         Loading personnel from backend...
                       </TableCell>
                     </TableRow>
@@ -647,20 +934,35 @@ export default function Partners() {
                     filteredPersonnel.map((p) => (
                       <TableRow key={p.id}>
                         <TableCell className="font-medium">{p.name}</TableCell>
-                        <TableCell><Badge variant="secondary">{p.role}</Badge></TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">{p.role}</Badge>
+                        </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {p.contact}
                           <br />
                           {p.email}
                         </TableCell>
                         <TableCell>{p.assignedTo}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground">{p.details}</TableCell>
-                        <TableCell><Badge variant={p.status === 'Active' ? 'default' : 'outline'}>{p.status}</Badge></TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {p.details}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              p.status === "Active" ? "default" : "outline"
+                            }
+                          >
+                            {p.status}
+                          </Badge>
+                        </TableCell>
                       </TableRow>
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-10 text-sm text-muted-foreground">
+                      <TableCell
+                        colSpan={6}
+                        className="text-center py-10 text-sm text-muted-foreground"
+                      >
                         No personnel records found.
                       </TableCell>
                     </TableRow>
