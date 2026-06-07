@@ -120,7 +120,6 @@ const normalizePersonnel = (person: any): Personnel => ({
 
 export default function Partners() {
   const { isProgramManager, isYBF, user } = useUser();
-  const [search, setSearch] = useState('');
   const [partnerFormError, setPartnerFormError] = useState<string | null>(null);
   const [personnelFormError, setPersonnelFormError] = useState<string | null>(null);
   const [partnerFieldErrors, setPartnerFieldErrors] = useState<Record<string,string>>({});
@@ -191,25 +190,8 @@ export default function Partners() {
   const partnerFormValid = Object.keys(validatePartnerForm()).length === 0;
   const personnelFormValid = Object.keys(validatePersonnelForm()).length === 0;
 
-  const filteredPartners = useMemo(
-    () => partners.filter((p) =>
-      [p.name, p.district, p.location, p.contactName, p.contactEmail]
-        .join(' ')
-        .toLowerCase()
-        .includes(search.toLowerCase()),
-    ),
-    [partners, search],
-  );
-
-  const filteredPersonnel = useMemo(
-    () => personnel.filter((p) =>
-      [p.name, p.email, p.assignedTo, p.role, p.details]
-        .join(' ')
-        .toLowerCase()
-        .includes(search.toLowerCase()),
-    ),
-    [personnel, search],
-  );
+  const filteredPartners = partners;
+  const filteredPersonnel = personnel;
 
   const handleAddPartner = async () => {
     try {

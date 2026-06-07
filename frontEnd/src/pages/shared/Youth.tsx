@@ -100,7 +100,6 @@ function YouthDetailDialog({ y }: { y: typeof initialYouth[0] }) {
 
 export default function Youth() {
   const { isProgramManager, isYBF, user } = useUser();
-  const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'at-risk'>('all');
   const [youthList, setYouthList] = useState(initialYouth);
   const [addOpen, setAddOpen] = useState(false);
@@ -135,9 +134,7 @@ export default function Youth() {
 
   const canEnroll = isProgramManager() || isYBF();
 
-  const filtered = youthList
-    .filter(y => filter === 'at-risk' ? y.riskFlag : true)
-    .filter(y => y.fullName.toLowerCase().includes(search.toLowerCase()) || y.partner.toLowerCase().includes(search.toLowerCase()));
+  const filtered = youthList.filter(y => filter === 'at-risk' ? y.riskFlag : true);
 
   const atRisk = youthList.filter(y => y.riskFlag).length;
   const inWork = youthList.filter(y => !y.employmentStatus.includes('Unemployed')).length;
@@ -315,18 +312,9 @@ export default function Youth() {
         <StatCard title="In Work" value={inWork} subtitle={`${Math.round(inWork / Math.max(youthList.length, 1))}% of total`} icon={Briefcase} variant="success" />
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3">
-        <input
-          type="text"
-          placeholder="Search youth by name or partner..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="flex-1 sm:max-w-xs px-3 py-2 rounded-lg border bg-card text-sm outline-none focus:ring-2 focus:ring-ring"
-        />
-        <div className="flex gap-2">
-          <Button variant={filter === 'all' ? 'default' : 'outline'} size="sm" onClick={() => setFilter('all')}>All</Button>
-          <Button variant={filter === 'at-risk' ? 'destructive' : 'outline'} size="sm" onClick={() => setFilter('at-risk')}>At Risk</Button>
-        </div>
+      <div className="flex gap-2">
+        <Button variant={filter === 'all' ? 'default' : 'outline'} size="sm" onClick={() => setFilter('all')}>All</Button>
+        <Button variant={filter === 'at-risk' ? 'destructive' : 'outline'} size="sm" onClick={() => setFilter('at-risk')}>At Risk</Button>
       </div>
 
       <Card>

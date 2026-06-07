@@ -172,6 +172,24 @@ export const deleteUser = (id: string) => fetch(`${BASE_URL}/users/${id}`, {
   headers: getAuthHeaders(),
 }).then(handleResponse);
 
+export const downloadExport = (resource: string = 'all') =>
+  fetch(`${BASE_URL}/export?resource=${encodeURIComponent(resource)}`, {
+    headers: getAuthHeaders(),
+  }).then(async (res) => {
+    if (!res.ok) {
+      const text = await res.text();
+      let body;
+      try {
+        body = text ? JSON.parse(text) : null;
+      } catch {
+        body = text;
+      }
+      const msg = body && (body.error || body.message) ? body.error || body.message : `HTTP ${res.status}: ${res.statusText}`;
+      throw new Error(msg);
+    }
+    return res.blob();
+  });
+
 // Attendance
 export const getAttendance = () => get('/attendance');
 export const createAttendance = (data: object) => post('/attendance', data);

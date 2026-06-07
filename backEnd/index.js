@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
+const ExcelJS = require("exceljs");
 const pool = require("./db");
 require("dotenv").config();
 
@@ -259,6 +260,57 @@ app.get('/api/youth/at-risk', authenticateToken, authorizeRoles('admin', 'progra
     res.json({ total: Number(countRes.rows[0].count || 0), page, limit, rows: rowsRes.rows });
   } catch (err) {
     console.error('At-risk query error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/export', authenticateToken, authorizeRoles('admin'), async (req, res) => {
+  try {
+    const resource = (req.query.resource || 'all').toString().toLowerCase();
+    const workbook = new ExcelJS.Workbook();
+    const datasets = [];
+
+    const pushWorksheet = (name, rows) => {
+      const sheet = workbook.addWorksheet(name);
+      if (rows.length === 0) {
+        sheet.addRow(['No data available']);
+        return;
+      }
+      const headers = Object.keys(rows[0]);
+      sheet.columns = headers.map((header) => ({ header, key: header, width: Math.max(12, header.length + 2) }));
+      rows.forEach((row) => {
+        sheet.addRow(headers.map((header) => row[header]));
+      });
+    };
+
+    if (resource === 'all' || resource === 'youth') {
+      const youthRes = await pool.query("SELECT * FROM youth WHERE deleted_by IS NULL ORDER BY created_at DESC");
+      datasets.push({ name: 'Youth', rows: youthRes.rows });
+    }
+    if (resource === 'all' || resource === 'partners') {
+      const partnersRes = await pool.query("SELECT * FROM partner_institution WHERE deleted_by IS NULL ORDER BY created_at DESC");
+      datasets.push({ name: 'Partners', rows: partnersRes.rows });
+    }
+    if (resource === 'all' || resource === 'sessions') {
+      const sessionsRes = await pool.query("SELECT * FROM session ORDER BY session_date DESC");
+      datasets.push({ name: 'Sessions', rows: sessionsRes.rows });
+    }
+    if (resource === 'all' || resource === 'users') {
+      const usersRes = await pool.query("SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC");
+      datasets.push({ name: 'Users', rows: usersRes.rows });
+    }
+
+    if (datasets.length === 0) {
+      return res.status(400).json({ error: `Invalid export resource: ${resource}` });
+    }
+
+    datasets.forEach((dataset) => pushWorksheet(dataset.name, dataset.rows));
+    const buffer = await workbook.xlsx.writeBuffer();
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="wezesha-${resource}-export.xlsx"`);
+    res.send(Buffer.from(buffer));
+  } catch (err) {
+    console.error('Export error:', err);
     res.status(500).json({ error: err.message });
   }
 });

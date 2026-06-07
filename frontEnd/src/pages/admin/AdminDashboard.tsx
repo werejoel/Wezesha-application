@@ -3,10 +3,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { StatCard } from "@/components/StatCard";
-import { getDashboardStats, getYouth, getPartners, getSessions, getUsers, getAtRiskYouth, getLowAttendanceSessions, createUser, updateUser } from "@/api";
+import { getDashboardStats, getYouth, getPartners, getSessions, getUsers, getAtRiskYouth, getLowAttendanceSessions, createUser, updateUser, downloadExport } from "@/api";
 import {
     Building2, Users, UserCheck, GraduationCap, FileText, Target,
-    Shield, Activity, Bell, Search, Download, RefreshCw, TrendingUp,
+    Shield, Activity, Bell, Download, RefreshCw, TrendingUp,
     TrendingDown, Clock, CheckCircle2, AlertCircle, ArrowUpRight,
     Calendar, MoreHorizontal, Zap, ServerCrash, Database,
 } from "lucide-react";
@@ -89,15 +89,12 @@ function SystemHealthGauge({ score }: { score: number }) {
 export default function AdminDashboard() {
     const navigate = useNavigate();
     const { toast } = useToast();
-    const [searchQuery, setSearchQuery] = useState('');
-
     const { data: stats, isLoading: statsLoading } = useQuery({
         queryKey: ['dashboard'],
         queryFn: getDashboardStats,
     });
     const [usersPage, setUsersPage] = useState(1);
     const [usersPageSize, setUsersPageSize] = useState(10);
-    const [usersSearch, setUsersSearch] = useState('');
     const { data: youthData, isLoading: youthLoading } = useQuery({
         queryKey: ['youth'],
         queryFn: getYouth,
@@ -111,8 +108,8 @@ export default function AdminDashboard() {
         queryFn: getSessions,
     });
     const { data: usersData, isLoading: usersLoading } = useQuery<any, Error, any>({
-        queryKey: ['users', usersPage, usersPageSize, usersSearch],
-        queryFn: async () => await getUsers({ page: usersPage, limit: usersPageSize, q: usersSearch }),
+        queryKey: ['users', usersPage, usersPageSize],
+        queryFn: async () => await getUsers({ page: usersPage, limit: usersPageSize }),
     });
     const { data: atRiskListData, isLoading: atRiskListLoading } = useQuery({
         queryKey: ['youth', 'atRisk'],
@@ -122,6 +119,8 @@ export default function AdminDashboard() {
         queryKey: ['sessions', 'lowAttendance'],
         queryFn: () => getLowAttendanceSessions({ threshold: 70, limit: 5, page: 1 }),
     });
+
+    const [usersSearch, setUsersSearch] = useState('');
 
     const actionRoutes: Record<string, string | null> = {
         'Add Partner': '/partners',
@@ -208,34 +207,26 @@ export default function AdminDashboard() {
         }, 1400);
     };
 
-    const exportCsv = (filename: string, rows: any[]) => {
-        const csvContent = [Object.keys(rows[0] || {}).join(','), ...rows.map((row) => Object.values(row).map((value) => `"${String(value ?? '')}"`).join(','))].join('\n');
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', filename);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+    const downloadExportFile = async (resource: string, filename: string) => {
+        try {
+            const blob = await downloadExport(resource);
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.style.display = 'none';
+            link.href = url;
+            link.setAttribute('download', filename);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            toast({ title: 'Export ready', description: `Downloaded ${filename}` });
+        } catch (error: any) {
+            toast({ title: 'Export failed', description: error?.message || 'Unable to download data.' });
+        }
     };
 
-    const normalizedSearch = searchQuery.trim().toLowerCase();
-    const filteredAtRiskYouth = useMemo(() => {
-        const baseAtRisk = atRiskListData?.rows || [];
-        if (!normalizedSearch) return baseAtRisk;
-        return baseAtRisk.filter((y: any) => {
-            const fields = [
-                y.full_name,
-                y.partner_name,
-                y.gender,
-                y.program_type,
-            ];
-            return fields.some((field) => typeof field === 'string' && field.toLowerCase().includes(normalizedSearch));
-        });
-    }, [atRiskListData?.rows, normalizedSearch]);
-
+    const filteredAtRiskYouth = useMemo(() => atRiskListData?.rows || [], [atRiskListData?.rows]);
+    const users = (usersData as any)?.rows || [];
     const recentActivity = useMemo(() => {
         const baseActivity = [
             ...((sessionsData || []).slice(0, 3).map((session: any) => ({
@@ -251,12 +242,18 @@ export default function AdminDashboard() {
                 time: y.enrolment_date ? new Date(y.enrolment_date).toLocaleDateString() : 'Unknown date',
             })) as any[]),
         ];
-        if (!normalizedSearch) return baseActivity;
-        return baseActivity.filter((item) =>
-            item.message.toLowerCase().includes(normalizedSearch) ||
-            item.time.toLowerCase().includes(normalizedSearch),
-        );
-    }, [normalizedSearch, sessionsData, youthData]);
+        return baseActivity;
+    }, [sessionsData, youthData]);
+
+    const filteredUsers = useMemo(() => {
+        const query = usersSearch.trim().toLowerCase();
+        if (!query) return users;
+
+        return users.filter((u: any) => {
+            const searchFields = [u.name, u.full_name, u.email, u.role];
+            return searchFields.some((field) => String(field || '').toLowerCase().includes(query));
+        });
+    }, [users, usersSearch]);
 
     if (statsLoading || youthLoading || partnersLoading || sessionsLoading || usersLoading || atRiskListLoading || lowAttendanceLoading) {
         return (
@@ -273,7 +270,6 @@ export default function AdminDashboard() {
     const youth = youthData || [];
     const partners = partnersData || [];
     const sessions = sessionsData || [];
-    const users = (usersData as any)?.rows || [];
     const usersTotal = (usersData as any)?.total ?? undefined;
     const lowAttendanceList = lowAttendanceData?.rows || [];
 
@@ -390,16 +386,7 @@ export default function AdminDashboard() {
                     <p className="page-description">System-wide overview and administrative controls</p>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                    <div className="relative block md:block w-full md:w-52">
-                        <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-                        <Input
-                            placeholder="Search youth, alerts or actions…"
-                            className="pl-8 h-8 text-sm w-full"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                        />
-                    </div>
-                    <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+                    <Button variant="default" size="sm" className="h-8 gap-1.5 text-xs bg-sky-600 text-white hover:bg-sky-700 shadow-sm shadow-sky-200" onClick={() => downloadExportFile('all', 'wezesha-data.xlsx')}>
                         <Download className="h-3.5 w-3.5" /> Export
                     </Button>
                     <Button variant="outline" size="icon" className="h-8 w-8 relative">
@@ -713,7 +700,7 @@ export default function AdminDashboard() {
                             {filteredAtRiskYouth.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center py-6 text-muted-foreground gap-2">
                                     <CheckCircle2 className="h-8 w-8 text-primary/40" />
-                                    <p className="text-sm">No at-risk youth found{normalizedSearch ? ' for that search' : ''}</p>
+                                    <p className="text-sm">No at-risk youth found</p>
                                 </div>
                             ) : filteredAtRiskYouth.map((y: any) => (
                                 <div key={y.id} className="flex items-center justify-between p-2.5 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
@@ -746,7 +733,7 @@ export default function AdminDashboard() {
                     <div className="flex items-center justify-between mb-3">
                         <Input placeholder="Search users..." value={usersSearch} onChange={(e) => { setUsersSearch(e.target.value); setUsersPage(1); }} className="w-64" />
                         <div className="flex items-center gap-2">
-                            <Button variant="outline" size="sm" onClick={() => exportCsv('users.csv', (usersData as any)?.rows || users)}>Export</Button>
+                            <Button type="button" variant="default" size="sm" className="bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm shadow-emerald-200" onClick={() => downloadExportFile('users', 'users.xlsx')}>Export</Button>
                             <select value={usersPageSize} onChange={(e) => { setUsersPageSize(Number(e.target.value)); setUsersPage(1); }} className="rounded-lg border bg-card px-2 py-1 text-sm">
                                 <option value={5}>5</option>
                                 <option value={10}>10</option>
@@ -766,7 +753,7 @@ export default function AdminDashboard() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {((usersData as any)?.rows || users).map((u: any) => (
+                                {filteredUsers.map((u: any) => (
                                     <tr key={u.id} className="border-t">
                                         <td className="px-3 py-2">{u.name || u.full_name || u.email}</td>
                                         <td className="px-3 py-2 text-xs text-muted-foreground">{u.email}</td>
@@ -955,9 +942,10 @@ export default function AdminDashboard() {
                                 <div className="space-y-3">
                                     <p className="text-sm text-muted-foreground">Download data snapshots for reporting or review.</p>
                                     <div className="flex flex-wrap gap-2">
-                                        <Button className="h-10" onClick={() => exportCsv('youth.csv', youth)}>Export Youth</Button>
-                                        <Button className="h-10" onClick={() => exportCsv('partners.csv', partners)}>Export Partners</Button>
-                                        <Button className="h-10" onClick={() => exportCsv('sessions.csv', sessions)}>Export Sessions</Button>
+                                        <Button variant="default" className="h-10 bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm shadow-emerald-200" onClick={() => downloadExportFile('youth', 'youth.xlsx')}>Export Youth</Button>
+                                        <Button variant="default" className="h-10 bg-orange-500 text-white hover:bg-orange-600 shadow-sm shadow-orange-200" onClick={() => downloadExportFile('partners', 'partners.xlsx')}>Export Partners</Button>
+                                        <Button variant="default" className="h-10 bg-violet-600 text-white hover:bg-violet-700 shadow-sm shadow-violet-200" onClick={() => downloadExportFile('sessions', 'sessions.xlsx')}>Export Sessions</Button>
+                                        <Button variant="default" className="h-10 bg-sky-600 text-white hover:bg-sky-700 shadow-sm shadow-sky-200" onClick={() => downloadExportFile('all', 'wezesha-data.xlsx')}>Export All</Button>
                                     </div>
                                 </div>
                             )}
