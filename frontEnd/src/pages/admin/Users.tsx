@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { getUsers, createUser, updateUser, deleteUser } from "@/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import {
   Table,
   TableHeader,
@@ -253,6 +254,20 @@ export default function AdminUsers() {
   };
 
   const totalPages = Math.max(1, Math.ceil((totalCount || 0) / pageSize));
+  const usersCount = totalCount || users.length;
+  const adminCount = users.filter((u) => u.role === "admin").length;
+  const managerCount = users.filter((u) => u.role === "program_manager").length;
+  const ybfCount = users.filter((u) => u.role === "ybf").length;
+  const instructorCount = users.filter((u) => u.role === "instructor").length;
+  const enumeratorCount = users.filter((u) => u.role === "enumerator").length;
+  const distributionTotal = Math.max(usersCount, 1);
+  const roleDistribution = [
+    { role: "admin", label: "Admins", count: adminCount, color: "bg-sky-500" },
+    { role: "program_manager", label: "Program Managers", count: managerCount, color: "bg-emerald-500" },
+    { role: "ybf", label: "YBF", count: ybfCount, color: "bg-fuchsia-500" },
+    { role: "instructor", label: "Instructors", count: instructorCount, color: "bg-violet-500" },
+    { role: "enumerator", label: "Enumerators", count: enumeratorCount, color: "bg-slate-500" },
+  ];
 
   return (
     <div className="space-y-6">
@@ -470,6 +485,50 @@ export default function AdminUsers() {
         </div>
       )}
 
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
+          <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Total users</p>
+          <p className="mt-2 text-3xl font-semibold text-slate-900">{usersCount}</p>
+        </div>
+        <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 shadow-sm">
+          <p className="text-xs uppercase tracking-[0.2em] text-sky-700">Admins</p>
+          <p className="mt-2 text-3xl font-semibold text-sky-900">{adminCount}</p>
+        </div>
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm">
+          <p className="text-xs uppercase tracking-[0.2em] text-emerald-700">Program managers</p>
+          <p className="mt-2 text-3xl font-semibold text-emerald-900">{managerCount}</p>
+        </div>
+        <div className="rounded-2xl border border-fuchsia-200 bg-fuchsia-50 p-4 shadow-sm">
+          <p className="text-xs uppercase tracking-[0.2em] text-fuchsia-700">YBF</p>
+          <p className="mt-2 text-3xl font-semibold text-fuchsia-900">{ybfCount}</p>
+        </div>
+      </div>
+
+      <Card className="overflow-hidden border border-slate-200 bg-white shadow-sm">
+        <CardHeader className="bg-slate-50">
+          <CardTitle>Role distribution</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 p-4">
+          {roleDistribution.map((item) => {
+            const percent = Math.round((item.count / distributionTotal) * 100);
+            return (
+              <div key={item.role} className="space-y-2">
+                <div className="flex items-center justify-between text-sm text-slate-700">
+                  <span className="font-medium text-slate-900">{item.label}</span>
+                  <span className="font-semibold text-slate-900">{item.count} ({percent}%)</span>
+                </div>
+                <div className="h-3 overflow-hidden rounded-full bg-slate-100">
+                  <div
+                    className={`${item.color} h-full rounded-full transition-all duration-300`}
+                    style={{ width: `${percent}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
+
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-2 justify-start">
           <Input
@@ -522,14 +581,24 @@ export default function AdminUsers() {
           <CardTitle>Users</CardTitle>
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
-          <Table>
+          <Table className="min-w-full">
             <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead>Actions</TableHead>
+              <TableRow className="bg-slate-100/90">
+                <TableHead className="text-xs uppercase tracking-[0.12em] text-slate-500">
+                  Name
+                </TableHead>
+                <TableHead className="text-xs uppercase tracking-[0.12em] text-slate-500">
+                  Email
+                </TableHead>
+                <TableHead className="text-xs uppercase tracking-[0.12em] text-slate-500">
+                  Role
+                </TableHead>
+                <TableHead className="text-xs uppercase tracking-[0.12em] text-slate-500">
+                  Created
+                </TableHead>
+                <TableHead className="text-xs uppercase tracking-[0.12em] text-slate-500">
+                  Actions
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -537,7 +606,7 @@ export default function AdminUsers() {
                 <TableRow>
                   <TableCell
                     colSpan={5}
-                    className="text-center py-8 text-sm text-muted-foreground"
+                    className="text-center py-10 text-sm text-muted-foreground"
                   >
                     Loading users...
                   </TableCell>
@@ -546,46 +615,55 @@ export default function AdminUsers() {
                 <TableRow>
                   <TableCell
                     colSpan={5}
-                    className="text-center py-8 text-sm text-muted-foreground"
+                    className="text-center py-10 text-sm text-muted-foreground"
                   >
                     No users found.
                   </TableCell>
                 </TableRow>
               ) : (
-                users.map((u) => (
-                  <TableRow key={u.id}>
-                    <TableCell className="font-medium">
+                users.map((u, index) => (
+                  <TableRow
+                    key={u.id}
+                    className={`${index % 2 === 0 ? "bg-white" : "bg-slate-50/60"} transition hover:bg-slate-100`}
+                  >
+                    <TableCell className="py-4 font-semibold text-slate-900">
                       {u.name || u.full_name || u.email}
                     </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
+                    <TableCell className="py-4 text-sm text-slate-500">
                       {u.email}
                     </TableCell>
-                    <TableCell>
-                      <span className="text-sm">{u.role}</span>
+                    <TableCell className="py-4">
+                      <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+                        {u.role}
+                      </span>
                     </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
+                    <TableCell className="py-4 text-sm text-slate-500">
                       {u.created_at
                         ? new Date(u.created_at).toLocaleDateString()
                         : "-"}
                     </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
+                    <TableCell className="py-4">
+                      <div className="flex flex-wrap gap-2">
                         <Button
-                          variant="outline"
+                          className="bg-sky-600 text-white hover:bg-sky-700"
                           size="sm"
                           onClick={() => openEdit(u)}
                         >
                           Edit
                         </Button>
                         <Button
-                          variant="outline"
+                          className={
+                            u.role === "admin"
+                              ? "bg-amber-500 text-slate-900 hover:bg-amber-600"
+                              : "bg-emerald-600 text-white hover:bg-emerald-700"
+                          }
                           size="sm"
                           onClick={() => handleToggleRole(u)}
                         >
                           {u.role === "admin" ? "Demote" : "Promote"}
                         </Button>
                         <Button
-                          variant="destructive"
+                          className="bg-rose-600 text-white hover:bg-rose-700"
                           size="sm"
                           onClick={() => handleDelete(String(u.id))}
                         >

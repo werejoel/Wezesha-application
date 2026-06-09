@@ -88,7 +88,10 @@ const ProgramManagerDashboard = () => {
   const navigate = useNavigate();
 
   const downloadExportFile = async () => {
-    const t = toast({ title: "Preparing export", description: "Generating file..." });
+    const t = toast({
+      title: "Preparing export",
+      description: "Generating file...",
+    });
     setExporting(true);
     try {
       const blob = await downloadExport("all");
@@ -101,11 +104,17 @@ const ProgramManagerDashboard = () => {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
       t.dismiss();
-      toast({ title: "Export ready", description: "wezesha-data.xlsx downloaded" });
+      toast({
+        title: "Export ready",
+        description: "wezesha-data.xlsx downloaded",
+      });
     } catch (error: any) {
       console.error("Export failed", error);
       t.dismiss();
-      toast({ title: "Export failed", description: error?.message || "Unable to export data." });
+      toast({
+        title: "Export failed",
+        description: error?.message || "Unable to export data.",
+      });
     } finally {
       setExporting(false);
     }
@@ -117,8 +126,19 @@ const ProgramManagerDashboard = () => {
   const [refreshing, setRefreshing] = useState(false);
 
   const handleRefresh = async () => {
-    const keys = ['dashboard-stats', 'youth', 'partners', 'sessions', 'cases', 'outcomes', 'reports'];
-    const t = toast({ title: "Refreshing data", description: "Fetching latest program data..." });
+    const keys = [
+      "dashboard-stats",
+      "youth",
+      "partners",
+      "sessions",
+      "cases",
+      "outcomes",
+      "reports",
+    ];
+    const t = toast({
+      title: "Refreshing data",
+      description: "Refreshing data in progress...",
+    });
     setRefreshing(true);
     try {
       await Promise.all(
@@ -127,11 +147,17 @@ const ProgramManagerDashboard = () => {
         ),
       );
       t.dismiss();
-      toast({ title: "Refresh complete", description: "Program data refreshed." });
+      toast({
+        title: "Refresh complete",
+        description: "Program data refreshed.",
+      });
       setRefreshing(false);
     } catch (e) {
       t.dismiss();
-      toast({ title: "Refresh failed", description: "Unable to refresh all data." });
+      toast({
+        title: "Refresh failed",
+        description: "Unable to refresh all data.",
+      });
       setRefreshing(false);
     }
   };
@@ -226,11 +252,27 @@ const ProgramManagerDashboard = () => {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" onClick={() => downloadExportFile()}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => downloadExportFile()}
+          >
             {exporting ? (
               <svg className="animate-spin w-4 h-4 mr-2" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                  fill="none"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                />
               </svg>
             ) : (
               <Download className="w-4 h-4 mr-2" />
@@ -240,8 +282,20 @@ const ProgramManagerDashboard = () => {
           <Button size="sm" onClick={handleRefresh}>
             {refreshing ? (
               <svg className="animate-spin w-4 h-4 mr-2" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                  fill="none"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                />
               </svg>
             ) : (
               <RefreshCw className="w-4 h-4 mr-2" />
@@ -251,32 +305,48 @@ const ProgramManagerDashboard = () => {
         </div>
       </div>
 
-        {/* ── Quick Actions */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg font-heading">Quick Actions</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {[
-                { label: "Add Partner", icon: Building2, color: "bg-blue-600 hover:bg-blue-700" },
-                { label: "Create Session", icon: Calendar, color: "bg-green-600 hover:bg-green-700" },
-                { label: "View Reports", icon: FileText, color: "bg-purple-600 hover:bg-purple-700" },
-                { label: "Export Data", icon: Download, color: "bg-orange-500 hover:bg-orange-600" },
-              ].map((action) => (
-                <Button
-                  key={action.label}
-                  className={`h-15 flex-col gap-2 justify-center text-white ${action.color}`}
-                  onClick={() => handleQuickAction(action.label)}
-                  disabled={action.label === 'Export Data' && exporting}
-                >
-                  <action.icon className="w-6 h-6" />
-                  <span className="text-sm font-medium">{action.label}</span>
-                </Button>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+      {/* ── Quick Actions */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg font-heading">Quick Actions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[
+              {
+                label: "Add Partner",
+                icon: Building2,
+                color: "bg-blue-600 hover:bg-blue-700",
+              },
+              {
+                label: "Create Session",
+                icon: Calendar,
+                color: "bg-green-600 hover:bg-green-700",
+              },
+              {
+                label: "View Reports",
+                icon: FileText,
+                color: "bg-purple-600 hover:bg-purple-700",
+              },
+              {
+                label: "Export Data",
+                icon: Download,
+                color: "bg-orange-500 hover:bg-orange-600",
+              },
+            ].map((action) => (
+              <Button
+                key={action.label}
+                className={`h-15 flex-col gap-2 justify-center text-white ${action.color}`}
+                onClick={() => handleQuickAction(action.label)}
+                disabled={action.label === "Export Data" && exporting}
+              >
+                <action.icon className="w-6 h-6" />
+                <span className="text-sm font-medium">{action.label}</span>
+              </Button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* ── Key Metrics ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -512,8 +582,6 @@ const ProgramManagerDashboard = () => {
           </CardContent>
         </Card>
       </div>
-
-      
     </div>
   );
 };
