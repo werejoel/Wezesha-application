@@ -11,7 +11,16 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { downloadExport, getOutcomes, getReports, getYouth } from "@/api";
+import { ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import "./reports.css";
+
+const STATUS_COLORS = [
+  "#16a34a",
+  "#2563eb",
+  "#f97316",
+  "#8b5cf6",
+  "#ec4899",
+];
 
 const reportCategories = [
   {
@@ -214,6 +223,15 @@ export default function Reports() {
       {} as Record<string, number>,
     );
   }, [youthData]);
+
+  const outcomeStatusDistribution = useMemo(() => {
+    const counts = new Map<string, number>();
+    outcomesData.forEach((item: any) => {
+      const status = item.status || "Unknown";
+      counts.set(status, (counts.get(status) || 0) + 1);
+    });
+    return Array.from(counts.entries()).map(([name, value]) => ({ name, value }));
+  }, [outcomesData]);
 
   const filteredAttendance = useMemo(() => {
     const data = reportsData as any[];
@@ -548,7 +566,7 @@ export default function Reports() {
               )}
 
               {selectedReport === "impact" && (
-                <div className="reports-panel grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="reports-panel grid grid-cols-1 lg:grid-cols-3 gap-4">
                   <div className="reports-panel-item">
                     <p className="text-sm font-semibold">Program reach</p>
                     <div className="mt-3 space-y-2 text-sm">
@@ -577,6 +595,31 @@ export default function Reports() {
                           <span>{count}</span>
                         </div>
                       ))}
+                    </div>
+                  </div>
+                  <div className="reports-panel-item">
+                    <p className="text-sm font-semibold">Outcome milestone status</p>
+                    <div className="mt-3 h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={outcomeStatusDistribution}
+                            dataKey="value"
+                            nameKey="name"
+                            cx="50%"
+                            cy="50%"
+                            outerRadius={90}
+                            label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                          >
+                            {outcomeStatusDistribution.map((entry, index) => (
+                              <Cell
+                                key={entry.name}
+                                fill={STATUS_COLORS[index % STATUS_COLORS.length]}
+                              />
+                            ))}
+                          </Pie>
+                        </PieChart>
+                      </ResponsiveContainer>
                     </div>
                   </div>
                 </div>

@@ -12,7 +12,7 @@ import { useUser } from "@/hooks/use-user";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 const MAX = { topic: 200, facilitator: 100, venue: 150 };
-
+const SESSION_TERMS = ["Term 1", "Term 2"] as const;
 
 export default function Sessions() {
   const { isProgramManager, isYBF } = useUser();
@@ -32,6 +32,7 @@ export default function Sessions() {
     if (!form.topic || !form.topic.trim()) errs.topic = 'Topic is required';
     if (form.topic && form.topic.length > MAX.topic) errs.topic = `Topic must be ≤ ${MAX.topic} chars`;
     if (!form.session_date) errs.session_date = 'Session date is required';
+    if (!SESSION_TERMS.includes(form.term as any)) errs.term = 'Term is required';
     if (form.facilitator && form.facilitator.length > MAX.facilitator) errs.facilitator = `Facilitator must be ≤ ${MAX.facilitator} chars`;
     if (form.venue && form.venue.length > MAX.venue) errs.venue = `Venue must be ≤ ${MAX.venue} chars`;
     if (!form.sessionNumber || Number(form.sessionNumber) <= 0) errs.sessionNumber = 'Session number must be > 0';
@@ -108,15 +109,24 @@ export default function Sessions() {
                 </div>
                 <div className="grid sm:grid-cols-2 gap-4">
                   <div>
+                    <Label htmlFor="session-term">Term</Label>
+                    <select id="session-term" value={form.term} onChange={e => { setForm({ ...form, term: e.target.value }); setFieldErrors({ ...fieldErrors, term: '' }); }} className="mt-1 block w-full rounded-md border border-input bg-background py-2 px-3 text-sm shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary">
+                      {SESSION_TERMS.map((term) => (
+                        <option key={term} value={term}>{term}</option>
+                      ))}
+                    </select>
+                    {fieldErrors.term && <p className="text-sm text-destructive mt-1">{fieldErrors.term}</p>}
+                  </div>
+                  <div>
                     <Label htmlFor="session-facilitator">Facilitator</Label>
                     <Input id="session-facilitator" value={form.facilitator} onChange={e => { setForm({ ...form, facilitator: e.target.value }); setFieldErrors({ ...fieldErrors, facilitator: '' }); }} />
                     {fieldErrors.facilitator && <p className="text-sm text-destructive mt-1">{fieldErrors.facilitator}</p>}
                   </div>
-                  <div>
-                    <Label htmlFor="session-venue">Venue</Label>
-                    <Input id="session-venue" value={form.venue} onChange={e => { setForm({ ...form, venue: e.target.value }); setFieldErrors({ ...fieldErrors, venue: '' }); }} />
-                    {fieldErrors.venue && <p className="text-sm text-destructive mt-1">{fieldErrors.venue}</p>}
-                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="session-venue">Venue</Label>
+                  <Input id="session-venue" value={form.venue} onChange={e => { setForm({ ...form, venue: e.target.value }); setFieldErrors({ ...fieldErrors, venue: '' }); }} />
+                  {fieldErrors.venue && <p className="text-sm text-destructive mt-1">{fieldErrors.venue}</p>}
                 </div>
                 <div className="flex justify-end gap-2">
                   <Button variant="outline" onClick={() => { setNewOpen(false); setFieldErrors({}); }}>Cancel</Button>
@@ -129,7 +139,7 @@ export default function Sessions() {
                         topic: form.topic,
                         session_date: form.session_date,
                         venue: form.venue,
-                        term_number: form.term === 'Term 1' ? 1 : form.term === 'Term 2' ? 2 : 3,
+                        term_number: form.term === 'Term 1' ? 1 : 2,
                         session_number: Number(form.sessionNumber),
                         facilitator: form.facilitator,
                       };
@@ -170,7 +180,7 @@ export default function Sessions() {
       </div>
 
       <div className="flex gap-2">
-        {['all', 'Term 1', 'Term 2', 'Term 3'].map(t => (
+        {['all', 'Term 1', 'Term 2'].map(t => (
           <Button key={t} variant={termFilter === t ? 'default' : 'outline'} size="sm" onClick={() => setTermFilter(t)}>
             {t === 'all' ? 'All Terms' : t}
           </Button>

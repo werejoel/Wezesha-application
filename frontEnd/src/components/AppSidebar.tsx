@@ -41,7 +41,15 @@ const mainItems = [
 
 const roleSidebarItems: Record<string, typeof mainItems> = {
   admin: mainItems,
-  program_manager: mainItems,
+  program_manager: [
+    mainItems[0],
+    mainItems[1],
+    mainItems[3],
+    mainItems[4],
+    mainItems[5],
+    mainItems[6],
+    mainItems[7],
+  ],
   ybf: [
     mainItems[0],
     mainItems[1],

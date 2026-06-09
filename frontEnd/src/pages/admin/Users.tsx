@@ -177,7 +177,11 @@ export default function AdminUsers() {
   const handleToggleRole = async (u: any) => {
     const newRole = u.role === "admin" ? "enumerator" : "admin";
     try {
-      const updated = await updateUser(String(u.id), { role: newRole });
+      const updated = await updateUser(String(u.id), {
+        name: u.name,
+        email: u.email,
+        role: newRole,
+      });
       setUsers(users.map((x) => (String(x.id) === String(u.id) ? updated : x)));
       toast({
         title: "User updated",
@@ -256,7 +260,7 @@ export default function AdminUsers() {
         <div>
           <h1 className="page-title">User Management</h1>
           <p className="page-description">
-            Create, view and manage application users (admin only)
+            Create, view and manage application users
           </p>
         </div>
         <div>
@@ -467,7 +471,7 @@ export default function AdminUsers() {
       )}
 
       <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 justify-start">
           <Input
             placeholder="Search users by name or email"
             value={search}

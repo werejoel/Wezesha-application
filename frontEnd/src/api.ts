@@ -99,6 +99,7 @@ export const getDashboardStats = () => get("/dashboard");
 
 // Partners
 export const getPartners = () => get("/partners");
+export const getCohorts = () => get("/cohorts");
 export const getPersonnel = () => get("/personnel");
 export const createPersonnel = (data: object) => post("/personnel", data);
 export const createPartner = (data: object) => post("/partners", data);

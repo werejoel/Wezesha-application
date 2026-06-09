@@ -11,6 +11,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Plus, Users, AlertTriangle, Briefcase } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
 import { useEffect, useState } from "react";
@@ -21,7 +28,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { createYouth, getYouth } from "@/api";
+import { createYouth, getCohorts, getPartners, getYouth } from "@/api";
 import { useUser } from "@/hooks/use-user";
 import { formatMoney } from "@/lib/utils";
 
@@ -233,14 +240,22 @@ export default function Youth() {
   const { isProgramManager, isYBF, user } = useUser();
   const [filter, setFilter] = useState<"all" | "at-risk">("all");
   const [youthList, setYouthList] = useState<YouthData[]>([]);
+  const [partners, setPartners] = useState<{ id: string; name: string }[]>([]);
+  const [cohorts, setCohorts] = useState<{
+    id: string;
+    label: string;
+    partnerId: string;
+    year: number;
+  }[]>([]);
   const [loadingYouth, setLoadingYouth] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [form, setForm] = useState({
     fullName: "",
     gender: "Female",
     partner: "",
+    partnerId: "",
     programType: "In-School",
-    cohort: "Cohort 2024-1",
+    cohort: "",
     enrollmentDate: new Date().toISOString().slice(0, 10),
     dateOfBirth: "",
     district: "",
@@ -264,7 +279,62 @@ export default function Youth() {
         if (mounted) setLoadingYouth(false);
       }
     };
+
+    const loadPartners = async () => {
+      try {
+        const rows = await getPartners();
+        if (!mounted) return;
+        const options = Array.isArray(rows)
+          ? rows.map((partner: any) => ({
+              id: String(partner.id ?? partner.partner_id ?? partner.name),
+              name: String(partner.name || partner.partner_name || partner.partner || ""),
+            }))
+          : [];
+        setPartners(options);
+        if (!form.partner && options.length > 0) {
+          setForm((prev) => ({ ...prev, partner: options[0].name, partnerId: options[0].id }));
+        }
+      } catch (err) {
+        console.error("Failed to load partners", err);
+        if (mounted) setPartners([]);
+      }
+    };
+
+    const loadCohorts = async () => {
+      try {
+        const rows = await getCohorts();
+        if (!mounted) return;
+        const options = Array.isArray(rows)
+          ? rows.map((cohort: any) => ({
+              id: String(cohort.id),
+              label:
+                cohort.label || `Cohort ${cohort.program_year}` || `Cohort ${cohort.year}`,
+              partnerId: String(cohort.partner_institution_id || ""),
+              year: Number(cohort.program_year ?? cohort.year ?? 0),
+            }))
+          : [];
+        setCohorts(options);
+        const selectedPartnerId = form.partnerId || options[0]?.partnerId || "";
+        const matching = options.filter((c) => c.partnerId === selectedPartnerId);
+        if (matching.length > 0 && !matching.some((c) => c.label === form.cohort)) {
+          setForm((prev) => ({
+            ...prev,
+            partner: prev.partner || (partners.find(p => p.id === matching[0].partnerId)?.name ?? ""),
+            partnerId: prev.partnerId || matching[0].partnerId,
+            cohort: matching[0].label,
+          }));
+        } else if (!form.cohort && options.length > 0) {
+          setForm((prev) => ({ ...prev, cohort: options[0].label, partnerId: prev.partnerId || options[0].partnerId }));
+        }
+      } catch (err) {
+        console.error("Failed to load cohorts", err);
+        if (mounted) setCohorts([]);
+      }
+    };
+
     loadYouth();
+    loadPartners();
+    loadCohorts();
     return () => {
       mounted = false;
     };
@@ -297,6 +367,17 @@ export default function Youth() {
     filter === "at-risk" ? y.riskFlag : true,
   );
 
+  const filteredCohorts = cohorts.filter(
+    (cohort) => cohort.partnerId === form.partnerId,
+  );
+
+  useEffect(() => {
+    const matching = cohorts.filter((cohort) => cohort.partnerId === form.partnerId);
+    if (matching.length > 0 && !matching.some((cohort) => cohort.label === form.cohort)) {
+      setForm((prev) => ({ ...prev, cohort: matching[0].label }));
+    }
+  }, [form.partnerId, cohorts]);
+
   const atRisk = youthList.filter((y) => y.riskFlag).length;
   const inWork = youthList.filter(
     (y) => !y.employmentStatus.includes("Unemployed"),
@@ -316,6 +397,15 @@ export default function Youth() {
           gender: form.gender,
           district: form.district,
         };
+        if (form.partnerId) payload.partner_institution_id = form.partnerId;
+        else if (form.partner) payload.partner = form.partner;
+
+        // prefer sending cohort_id when we can resolve it from loaded cohorts
+        const selectedCohort = cohorts.find(
+          (c) => c.label === form.cohort && c.partnerId === form.partnerId,
+        );
+        if (selectedCohort) payload.cohort_id = selectedCohort.id;
+        else if (form.cohort) payload.cohort = form.cohort;
         const created = await createYouth(payload);
         const newYouth = normalizeYouth({
           ...created,
@@ -339,8 +429,9 @@ export default function Youth() {
           fullName: "",
           gender: "Female",
           partner: "",
+          partnerId: "",
           programType: "In-School",
-          cohort: "Cohort 2024-1",
+          cohort: "",
           enrollmentDate: new Date().toISOString().slice(0, 10),
           dateOfBirth: "",
           district: "",
@@ -419,7 +510,7 @@ export default function Youth() {
                         setForm({ ...form, district: e.target.value });
                         setFieldErrors({ ...fieldErrors, district: "" });
                       }}
-                      placeholder="Nairobi"
+                      placeholder="Mukono"
                     />
                     {fieldErrors.district && (
                       <p className="text-sm text-destructive mt-1">
@@ -448,15 +539,37 @@ export default function Youth() {
                   </div>
                   <div>
                     <Label htmlFor="youth-partner">Partner Institution</Label>
-                    <Input
-                      id="youth-partner"
-                      value={form.partner}
-                      onChange={(e) => {
-                        setForm({ ...form, partner: e.target.value });
-                        setFieldErrors({ ...fieldErrors, partner: "" });
-                      }}
-                      placeholder="Nairobi Technical Institute"
-                    />
+                    {partners.length > 0 ? (
+                      <Select
+                        value={form.partnerId}
+                        onValueChange={(value) => {
+                          const sel = partners.find((p) => p.id === value) || { name: "", id: value };
+                          setForm({ ...form, partner: sel.name, partnerId: sel.id });
+                          setFieldErrors({ ...fieldErrors, partner: "" });
+                        }}
+                      >
+                        <SelectTrigger id="youth-partner">
+                          <SelectValue placeholder="Select a partner" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {partners.map((partner) => (
+                            <SelectItem key={partner.id} value={partner.id}>
+                              {partner.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        id="youth-partner"
+                        value={form.partner}
+                        onChange={(e) => {
+                          setForm({ ...form, partner: e.target.value });
+                          setFieldErrors({ ...fieldErrors, partner: "" });
+                        }}
+                        placeholder="YMCA Technical Institute"
+                      />
+                    )}
                     {fieldErrors.partner && (
                       <p className="text-sm text-destructive mt-1">
                         {fieldErrors.partner}
@@ -486,15 +599,36 @@ export default function Youth() {
                   </div>
                   <div>
                     <Label htmlFor="youth-cohort">Cohort</Label>
-                    <Input
-                      id="youth-cohort"
-                      value={form.cohort}
-                      onChange={(e) => {
-                        setForm({ ...form, cohort: e.target.value });
-                        setFieldErrors({ ...fieldErrors, cohort: "" });
-                      }}
-                      placeholder="Cohort 2024-1"
-                    />
+                    {filteredCohorts.length > 0 ? (
+                      <Select
+                        value={form.cohort}
+                        onValueChange={(value) => {
+                          setForm({ ...form, cohort: value });
+                          setFieldErrors({ ...fieldErrors, cohort: "" });
+                        }}
+                      >
+                        <SelectTrigger id="youth-cohort">
+                          <SelectValue placeholder="Select a cohort" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {filteredCohorts.map((cohort) => (
+                            <SelectItem key={cohort.id} value={cohort.label}>
+                              {cohort.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        id="youth-cohort"
+                        value={form.cohort}
+                        onChange={(e) => {
+                          setForm({ ...form, cohort: e.target.value });
+                          setFieldErrors({ ...fieldErrors, cohort: "" });
+                        }}
+                        placeholder="Cohort 2024"
+                      />
+                    )}
                     {fieldErrors.cohort && (
                       <p className="text-sm text-destructive mt-1">
                         {fieldErrors.cohort}
