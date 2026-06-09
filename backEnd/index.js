@@ -59,6 +59,12 @@ const PERMISSIONS = {
   enumerator: ['read_outcomes', 'write_outcomes', 'read_limited']
 };
 
+const generateRandomPassword = () => {
+  const randomPart = Math.random().toString(36).slice(-8);
+  const numericPart = Math.floor(100 + Math.random() * 900);
+  return `${randomPart}${numericPart}`;
+};
+
 // Auth routes
 app.post(
   "/api/auth/register",
@@ -221,6 +227,95 @@ app.get("/api/personnel", authenticateToken, authorizeRoles('admin', 'program_ma
     res.status(500).json({ error: err.message });
   }
 });
+
+app.post(
+  "/api/personnel",
+  authenticateToken,
+  authorizeRoles('admin', 'program_manager'),
+  validateRequired(["name", "email", "role"]),
+  async (req, res) => {
+    const { name, email, role } = req.body;
+    const normalizedRole = String(role).trim().toLowerCase();
+    if (!['ybf', 'instructor', 'enumerator'].includes(normalizedRole)) {
+      return res.status(400).json({ error: 'Invalid role for personnel' });
+    }
+
+    try {
+      const password = generateRandomPassword();
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const result = await pool.query(
+        "INSERT INTO users (name, email, password_hash, role) VALUES ($1, $2, $3, $4) RETURNING id, name, email, role, created_at",
+        [name, email, hashedPassword, normalizedRole],
+      );
+      res.status(201).json(result.rows[0]);
+    } catch (err) {
+      if (err.code === '23505') {
+        res.status(400).json({ error: 'Email already exists' });
+      } else {
+        res.status(500).json({ error: err.message });
+      }
+    }
+  },
+);
+
+app.put(
+  "/api/personnel/:id",
+  authenticateToken,
+  authorizeRoles('admin', 'program_manager'),
+  async (req, res) => {
+    const { id } = req.params;
+    const { name, email, role } = req.body;
+    let normalizedRole = role;
+    if (role) {
+      normalizedRole = String(role).trim().toLowerCase();
+      if (!['ybf', 'instructor', 'enumerator'].includes(normalizedRole)) {
+        return res.status(400).json({ error: 'Invalid role for personnel' });
+      }
+    }
+
+    try {
+      const result = await pool.query(
+        `UPDATE users
+         SET name = COALESCE($1, name),
+             email = COALESCE($2, email),
+             role = COALESCE($3, role),
+             updated_at = NOW()
+         WHERE id = $4
+         RETURNING id, name, email, role, created_at`,
+        [name || null, email || null, normalizedRole || null, id],
+      );
+      if (result.rows.length === 0)
+        return res.status(404).json({ error: 'Personnel not found' });
+      res.json(result.rows[0]);
+    } catch (err) {
+      if (err.code === '23505') {
+        res.status(400).json({ error: 'Email already exists' });
+      } else {
+        res.status(500).json({ error: err.message });
+      }
+    }
+  },
+);
+
+app.delete(
+  "/api/personnel/:id",
+  authenticateToken,
+  authorizeRoles('admin', 'program_manager'),
+  async (req, res) => {
+    const { id } = req.params;
+    try {
+      const result = await pool.query(
+        "DELETE FROM users WHERE id = $1 RETURNING id",
+        [id],
+      );
+      if (result.rows.length === 0)
+        return res.status(404).json({ error: 'Personnel not found' });
+      res.json({ message: 'Personnel deleted successfully' });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  },
+);
 
 // Paginated list of at-risk youth
 app.get('/api/youth/at-risk', authenticateToken, authorizeRoles('admin', 'program_manager', 'ybf'), async (req, res) => {
@@ -438,13 +533,13 @@ app.post(
 
     if (!name || !district || !partnerType) {
       return res.status(400).json({
-        error: "Missing required fields: name, district, institution_type/type",
+        error: "Missing required fields: name, district, type",
       });
     }
 
-    const insertPartner = async (typeColumn) => {
+    try {
       const result = await pool.query(
-        `INSERT INTO partner_institution (name, district, ${typeColumn}, location, contact_name, contact_phone, contact_email, partnership_date)
+        `INSERT INTO partner_institution (name, district, type, location, contact_name, contact_phone, contact_email, partnership_date)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
         [
           name,
@@ -457,23 +552,9 @@ app.post(
           partnershipDate,
         ],
       );
-      return result.rows[0];
-    };
-
-    try {
-      const createdPartner = await insertPartner("institution_type");
-      res.status(201).json(createdPartner);
+      res.status(201).json(result.rows[0]);
     } catch (err) {
-      if (err.message.includes('column "institution_type" does not exist')) {
-        try {
-          const createdPartner = await insertPartner('"type"');
-          res.status(201).json(createdPartner);
-        } catch (innerErr) {
-          res.status(500).json({ error: innerErr.message });
-        }
-      } else {
-        res.status(500).json({ error: err.message });
-      }
+      res.status(500).json({ error: err.message });
     }
   },
 );
@@ -497,10 +578,10 @@ app.put("/api/partners/:id", authenticateToken, authorizeRoles('admin', 'program
   const partnerType = institution_type || type;
   const partnershipDate = partnership_date || startDate || null;
 
-  const updatePartner = async (typeColumn) => {
+  try {
     const result = await pool.query(
       `UPDATE partner_institution 
-       SET name = $1, district = $2, ${typeColumn} = $3, location = $4, contact_name = $5, contact_phone = $6, contact_email = $7, partnership_date = $8, status = $9, updated_at = NOW()
+       SET name = $1, district = $2, type = $3, location = $4, contact_name = $5, contact_phone = $6, contact_email = $7, partnership_date = $8, status = $9, updated_at = NOW()
        WHERE id = $10 AND deleted_by IS NULL RETURNING *`,
       [
         name,
@@ -515,39 +596,10 @@ app.put("/api/partners/:id", authenticateToken, authorizeRoles('admin', 'program
         id,
       ],
     );
-    return result.rows[0];
-  };
 
-  try {
-    let updatedPartner;
-    try {
-      updatedPartner = await updatePartner("institution_type");
-    } catch (err) {
-      if (err.message.includes('column "institution_type" does not exist')) {
-        updatedPartner = await updatePartner('"type"');
-      } else {
-        throw err;
-      }
-    }
-
-    if (!updatedPartner)
-      return res.status(404).json({ error: "Partner not found" });
-    res.json(updatedPartner);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.delete("/api/partners/:id", authenticateToken, authorizeRoles('admin'), async (req, res) => {
-  const { id } = req.params;
-  try {
-    const result = await pool.query(
-      "UPDATE partner_institution SET deleted_by = $1, deleted_at = NOW() WHERE id = $2 AND deleted_by IS NULL RETURNING *",
-      [req.user.id, id],
-    );
     if (result.rows.length === 0)
       return res.status(404).json({ error: "Partner not found" });
-    res.json({ message: "Partner deleted successfully" });
+    res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -752,7 +804,11 @@ app.delete("/api/sessions/:id", authenticateToken, authorizeRoles('admin'), asyn
 app.get("/api/cases", authenticateToken, authorizeRoles('admin', 'program_manager', 'ybf'), async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT * FROM case_note ORDER BY created_at DESC",
+      `SELECT cn.*, y.full_name AS youth_name, u.name AS author_name
+       FROM case_note cn
+       LEFT JOIN youth y ON y.id = cn.youth_id
+       LEFT JOIN users u ON u.id = cn.author_id
+       ORDER BY cn.created_at DESC`,
     );
     res.json(result.rows);
   } catch (err) {
@@ -963,8 +1019,8 @@ app.put("/api/attendance/:id", authenticateToken, authorizeRoles('admin', 'progr
   }
 });
 
-// User management (admin only)
-app.get("/api/users", authenticateToken, authorizeRoles('admin'), async (req, res) => {
+// User management (admin and program manager)
+app.get("/api/users", authenticateToken, authorizeRoles('admin', 'program_manager'), async (req, res) => {
   const { page = 1, limit = 10, q } = req.query;
   const pageNum = parseInt(page, 10) || 1;
   const lim = parseInt(limit, 10) || 10;
@@ -995,7 +1051,7 @@ app.get("/api/users", authenticateToken, authorizeRoles('admin'), async (req, re
   }
 });
 
-app.put("/api/users/:id", authenticateToken, authorizeRoles('admin'), async (req, res) => {
+app.put("/api/users/:id", authenticateToken, authorizeRoles('admin', 'program_manager'), async (req, res) => {
   const { id } = req.params;
   const { name, email, role } = req.body;
   try {
@@ -1011,7 +1067,7 @@ app.put("/api/users/:id", authenticateToken, authorizeRoles('admin'), async (req
   }
 });
 
-app.delete("/api/users/:id", authenticateToken, authorizeRoles('admin'), async (req, res) => {
+app.delete("/api/users/:id", authenticateToken, authorizeRoles('admin', 'program_manager'), async (req, res) => {
   const { id } = req.params;
   try {
     const result = await pool.query("DELETE FROM users WHERE id = $1 RETURNING *", [id]);

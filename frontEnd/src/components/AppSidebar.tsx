@@ -45,14 +45,12 @@ const roleSidebarItems: Record<string, typeof mainItems> = {
   ybf: [
     mainItems[0],
     mainItems[1],
-    mainItems[2],
     mainItems[3],
     mainItems[5],
   ],
   instructor: [
     mainItems[0],
     mainItems[3],
-    mainItems[2],
   ],
   enumerator: [
     mainItems[0],

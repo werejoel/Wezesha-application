@@ -59,7 +59,7 @@ const App = () => (
                       <Route
                         path="/users"
                         element={
-                          <RoleProtectedRoute allowedRoles={["admin"]}>
+                          <RoleProtectedRoute allowedRoles={["admin", "program_manager"]}>
                             <AdminUsers />
                           </RoleProtectedRoute>
                         }
@@ -91,7 +91,7 @@ const App = () => (
                       <Route
                         path="/cases"
                         element={
-                          <RoleProtectedRoute allowedRoles={['admin', 'program_manager', 'enumerator']}>
+                          <RoleProtectedRoute allowedRoles={['admin', 'program_manager', 'ybf', 'enumerator']}>
                             <Cases />
                           </RoleProtectedRoute>
                         }

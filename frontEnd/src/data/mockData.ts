@@ -159,7 +159,7 @@ export const caseNotes: CaseNote[] = [
   { id: 'CN004', youthId: 'Y005', youthName: 'Esther Auma', author: 'Fatima Hassan', date: '2024-04-10', category: 'Employment Lead', note: 'Local hotel chain hiring front desk staff. Referred Esther for interview on April 15.' },
   { id: 'CN005', youthId: 'Y008', youthName: 'Henry Oloo', author: 'Peter Omondi', date: '2024-04-12', category: 'At-Risk Flag', note: 'Henry reported financial difficulties affecting attendance. Connected to emergency support fund.', followUpDate: '2024-04-20', assignedTo: 'Peter Omondi' },
   { id: 'CN006', youthId: 'Y010', youthName: 'James Kiptoo', author: 'David Kimani', date: '2024-04-15', category: 'General Update', note: 'James completed his CV and submitted 3 job applications this week. Very motivated.' },
-  { id: 'CN007', youthId: 'Y001', youthName: 'Alice Wanjiru', author: 'Kevin Otieno', date: '2024-05-01', category: 'Business Support', note: 'Field visit: Alice\'s bead-making business is operational. Monthly revenue approximately KES 8,000. Needs help with record-keeping.' },
+  { id: 'CN007', youthId: 'Y001', youthName: 'Alice Wanjiru', author: 'Kevin Otieno', date: '2024-05-01', category: 'Business Support', note: 'Field visit: Alice\'s bead-making business is operational. Monthly revenue approximately UGX 8,000. Needs help with record-keeping.' },
 ];
 
 export const dashboardStats = {

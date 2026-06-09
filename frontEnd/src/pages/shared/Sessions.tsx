@@ -1,4 +1,3 @@
-import { sessions as initialSessions } from "@/data/mockData";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -7,8 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CalendarCheck, Plus, CheckCircle2 } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
-import { useState } from "react";
-import { createSession } from "@/api";
+import { useEffect, useState } from "react";
+import { createSession, getSessions } from "@/api";
 import { useUser } from "@/hooks/use-user";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
@@ -18,7 +17,8 @@ const MAX = { topic: 200, facilitator: 100, venue: 150 };
 export default function Sessions() {
   const { isProgramManager, isYBF } = useUser();
   const [termFilter, setTermFilter] = useState<string>('all');
-  const [sessionsList, setSessionsList] = useState(initialSessions);
+  const [sessionsList, setSessionsList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
   const filtered = sessionsList.filter(s => termFilter === 'all' || s.term === termFilter);
   const avgAttendance = Math.round(sessionsList.reduce((s, ses) => s + (ses.attendanceCount / Math.max(ses.totalYouth,1) * 100), 0) / Math.max(sessionsList.length, 1));
   const [newOpen, setNewOpen] = useState(false);
@@ -28,6 +28,7 @@ export default function Sessions() {
   const validateSessionForm = () => {
     const errs: Record<string,string> = {};
     if (!form.cohort || !form.cohort.trim()) errs.cohort = 'Cohort is required';
+    if (!form.cohortId || !/^[0-9]+$/.test(form.cohortId)) errs.cohortId = 'Numeric cohort ID is required';
     if (!form.topic || !form.topic.trim()) errs.topic = 'Topic is required';
     if (form.topic && form.topic.length > MAX.topic) errs.topic = `Topic must be ≤ ${MAX.topic} chars`;
     if (!form.session_date) errs.session_date = 'Session date is required';
@@ -38,6 +39,27 @@ export default function Sessions() {
   };
 
   const formValid = Object.keys(validateSessionForm()).length === 0;
+
+  useEffect(() => {
+    let mounted = true;
+    const loadSessions = async () => {
+      try {
+        setLoading(true);
+        const rows = await getSessions();
+        if (!mounted) return;
+        setSessionsList(Array.isArray(rows) ? rows : []);
+      } catch (err) {
+        console.error('Failed to load sessions', err);
+        if (mounted) setSessionsList([]);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    loadSessions();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -63,7 +85,7 @@ export default function Sessions() {
                   {fieldErrors.cohort && <p className="text-sm text-destructive mt-1">{fieldErrors.cohort}</p>}
                 </div>
                 <div>
-                  <Label htmlFor="session-cohort-id">Cohort ID (optional)</Label>
+                  <Label htmlFor="session-cohort-id">Cohort ID</Label>
                   <Input id="session-cohort-id" value={form.cohortId} onChange={e => { setForm({ ...form, cohortId: e.target.value }); setFieldErrors({ ...fieldErrors, cohortId: '' }); }} placeholder="e.g. 12" />
                   {fieldErrors.cohortId && <p className="text-sm text-destructive mt-1">{fieldErrors.cohortId}</p>}
                 </div>
@@ -101,57 +123,37 @@ export default function Sessions() {
                   <Button onClick={async () => {
                     const errs = validateSessionForm();
                     if (Object.keys(errs).length > 0) { setFieldErrors(errs); return; }
-                    if (form.cohortId && /^\\d+$/.test(String(form.cohortId))) {
-                      try {
-                        const payload: any = {
-                          cohort_id: Number(form.cohortId),
-                          topic: form.topic,
-                          session_date: form.session_date,
-                          venue: form.venue,
-                          term_number: form.term === 'Term 1' ? 1 : form.term === 'Term 2' ? 2 : 3,
-                          session_number: Number(form.sessionNumber),
-                          facilitator: form.facilitator,
-                        };
-                        const created = await createSession(payload);
-                        const newSession = {
-                          id: created.id,
-                          cohort: form.cohort,
-                          partner: created.partner_name || form.partner || 'Unknown',
-                          term: form.term,
-                          sessionNumber: created.session_number || Number(form.sessionNumber),
-                          topic: created.topic || form.topic,
-                          facilitator: created.facilitator || form.facilitator,
-                          date: created.session_date || form.session_date,
-                          time: created.time || '',
-                          venue: created.venue || form.venue,
-                          attendanceCount: created.attendance_count || 0,
-                          totalYouth: created.total || 0,
-                        };
-                        setSessionsList([newSession, ...sessionsList]);
-                        setNewOpen(false);
-                        setForm({ cohort: '', cohortId: '', topic: '', session_date: new Date().toISOString().slice(0,10), facilitator: '', venue: '', term: 'Term 1', sessionNumber: 1 });
-                      } catch (err: any) {
-                        console.error('create session error', err);
-                        setFieldErrors({ ...fieldErrors, cohortId: err?.message || 'Failed to create session' });
-                      }
-                    } else {
-                      const newSession = {
-                        id: `S${String(sessionsList.length + 1).padStart(3,'0')}`,
-                        cohort: form.cohort,
-                        partner: form.partner || 'Unknown',
-                        term: form.term as 'Term 1'|'Term 2'|'Term 3',
-                        sessionNumber: Number(form.sessionNumber),
+                    try {
+                      const payload: any = {
+                        cohort_id: Number(form.cohortId),
                         topic: form.topic,
-                        facilitator: form.facilitator,
-                        date: form.session_date,
-                        time: '',
+                        session_date: form.session_date,
                         venue: form.venue,
-                        attendanceCount: 0,
-                        totalYouth: 0,
+                        term_number: form.term === 'Term 1' ? 1 : form.term === 'Term 2' ? 2 : 3,
+                        session_number: Number(form.sessionNumber),
+                        facilitator: form.facilitator,
                       };
-                      setSessionsList([newSession, ...sessionsList]);
+                      const created = await createSession(payload);
+                      const newSession = {
+                        id: created.id,
+                        cohort: form.cohort,
+                        partner: created.partner_name || '',
+                        term: form.term,
+                        sessionNumber: created.session_number || Number(form.sessionNumber),
+                        topic: created.topic || form.topic,
+                        facilitator: created.facilitator || form.facilitator,
+                        date: created.session_date || form.session_date,
+                        time: created.time || '',
+                        venue: created.venue || form.venue,
+                        attendanceCount: created.attendance_count || 0,
+                        totalYouth: created.total || 0,
+                      };
+                      setSessionsList((prev) => [newSession, ...prev]);
                       setNewOpen(false);
                       setForm({ cohort: '', cohortId: '', topic: '', session_date: new Date().toISOString().slice(0,10), facilitator: '', venue: '', term: 'Term 1', sessionNumber: 1 });
+                    } catch (err: any) {
+                      console.error('create session error', err);
+                      setFieldErrors({ ...fieldErrors, cohortId: err?.message || 'Failed to create session' });
                     }
                   }} disabled={!formValid}>Save Session</Button>
                 </div>

@@ -1,9 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   getPartners,
   getPersonnel,
   createPartner,
   createPersonnel,
+  updatePartner,
+  deletePartner,
+  updatePersonnel,
+  deletePersonnel,
 } from "@/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Building2, Plus, Users, UserCheck, Phone, Mail } from "lucide-react";
+import { Building2, Plus, Users, UserCheck, Phone, Mail, Edit3, Trash2 } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -28,6 +32,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useUser } from "@/hooks/use-user";
 
 type Partner = {
@@ -159,10 +173,20 @@ export default function Partners() {
   const [partnerForm, setPartnerForm] = useState(defaultPartnerForm);
   const [personnelForm, setPersonnelForm] =
     useState<PersonnelForm>(defaultPersonnelForm);
+  const [editingPartner, setEditingPartner] = useState<Partner | null>(null);
+  const [editingPersonnel, setEditingPersonnel] = useState<Personnel | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    type: "partner" | "personnel";
+    id: string;
+    name: string;
+  } | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const canAddPartner = isProgramManager() || isYBF();
+  const canEditPartner = isProgramManager() || user?.role === "admin";
+  const canDeletePartner = user?.role === "admin";
   const canManagePersonnel = isProgramManager() || user?.role === "admin";
 
   useEffect(() => {
@@ -186,10 +210,18 @@ export default function Partners() {
   }, []);
 
   useEffect(() => {
-    if (!partnerAddOpen) setPartnerFormError(null);
-    if (!personnelAddOpen) setPersonnelFormError(null);
-    if (!partnerAddOpen) setPartnerFieldErrors({});
-    if (!personnelAddOpen) setPersonnelFieldErrors({});
+    if (!partnerAddOpen) {
+      setPartnerFormError(null);
+      setPartnerFieldErrors({});
+      setEditingPartner(null);
+      setPartnerForm(defaultPartnerForm);
+    }
+    if (!personnelAddOpen) {
+      setPersonnelFormError(null);
+      setPersonnelFieldErrors({});
+      setEditingPersonnel(null);
+      setPersonnelForm(defaultPersonnelForm);
+    }
   }, [partnerAddOpen, personnelAddOpen]);
 
   const validatePartnerForm = () => {
@@ -251,8 +283,76 @@ export default function Partners() {
 
   const filteredPartners = partners;
   const filteredPersonnel = personnel;
+  const partnerColumnCount = 9 + (canEditPartner || canDeletePartner ? 1 : 0);
+  const personnelColumnCount = 6 + (canManagePersonnel ? 1 : 0);
 
-  const handleAddPartner = async () => {
+  const openEditPartner = (partner: Partner) => {
+    setEditingPartner(partner);
+    setPartnerForm({
+      name: partner.name,
+      type: partner.type as "TVET" | "CBO",
+      location: partner.location,
+      district: partner.district,
+      contactName: partner.contactName,
+      contactPhone: partner.contactPhone,
+      contactEmail: partner.contactEmail,
+      status: partner.status as "Active" | "Inactive",
+      startDate: partner.startDate
+        ? new Date(partner.startDate).toISOString().slice(0, 10)
+        : new Date().toISOString().slice(0, 10),
+    });
+    setPartnerAddOpen(true);
+  };
+
+  const openEditPersonnel = (person: Personnel) => {
+    setEditingPersonnel(person);
+    setPersonnelForm({
+      name: person.name,
+      role:
+        person.role === "YBF"
+          ? "YBF"
+          : person.role === "Instructor"
+          ? "Instructor"
+          : "Enumerator",
+      contact: person.contact === "-" ? "" : person.contact,
+      email: person.email === "-" ? "" : person.email,
+      assignedTo: person.assignedTo === "-" ? "" : person.assignedTo,
+      programYearStart: "",
+      subjectArea: "",
+      geographicArea: "",
+      status: person.status as "Active" | "Inactive",
+    });
+    setPersonnelAddOpen(true);
+  };
+
+  const openDeleteTarget = (
+    type: "partner" | "personnel",
+    id: string,
+    name: string,
+  ) => {
+    setDeleteTarget({ type, id, name });
+    setDeleteOpen(true);
+  };
+
+  const handleDeleteConfirmed = async () => {
+    if (!deleteTarget) return;
+    const { type, id } = deleteTarget;
+    try {
+      if (type === "partner") {
+        await deletePartner(id);
+        setPartners((prev) => prev.filter((item) => item.id !== id));
+      } else {
+        await deletePersonnel(id);
+        setPersonnel((prev) => prev.filter((item) => item.id !== id));
+      }
+      setDeleteTarget(null);
+      setDeleteOpen(false);
+    } catch (err: any) {
+      setError(err?.message || `Failed to delete ${type}`);
+    }
+  };
+
+  const handleSavePartner = async () => {
     try {
       const validation = validatePartnerForm();
       if (Object.keys(validation).length > 0) {
@@ -260,26 +360,39 @@ export default function Partners() {
         return;
       }
 
-      const created = await createPartner({
+      const payload = {
         name: partnerForm.name,
         district: partnerForm.district,
-        institution_type: partnerForm.type,
+        type: partnerForm.type,
         location: partnerForm.location,
         contact_name: partnerForm.contactName,
         contact_phone: partnerForm.contactPhone,
         contact_email: partnerForm.contactEmail,
         partnership_date: partnerForm.startDate,
-      });
+        status: partnerForm.status,
+      };
 
-      setPartners((prev) => [normalizePartner(created), ...prev]);
+      if (editingPartner) {
+        const updated = await updatePartner(editingPartner.id, payload);
+        setPartners((prev) =>
+          prev.map((p) =>
+            p.id === updated.id ? normalizePartner(updated) : p,
+          ),
+        );
+      } else {
+        const created = await createPartner(payload);
+        setPartners((prev) => [normalizePartner(created), ...prev]);
+      }
+
       setPartnerAddOpen(false);
       setPartnerForm(defaultPartnerForm);
+      setEditingPartner(null);
     } catch (err: any) {
-      setError(err?.message || "Failed to create partner.");
+      setError(err?.message || "Failed to save partner.");
     }
   };
 
-  const handleAddPersonnel = async () => {
+  const handleSavePersonnel = async () => {
     try {
       const validation = validatePersonnelForm();
       if (Object.keys(validation).length > 0) {
@@ -287,30 +400,61 @@ export default function Partners() {
         return;
       }
 
-      const created = await createPersonnel({
+      const payload = {
         name: personnelForm.name,
         email: personnelForm.email,
         role: personnelForm.role.toLowerCase(),
-        assigned_to: personnelForm.assignedTo,
-      });
+      };
 
-      setPersonnel((prev) => [
-        {
-          id: created.id,
-          name: created.name,
-          role: normalizeRole(created.role),
-          email: created.email,
-          contact: created.email,
-          assignedTo: personnelForm.assignedTo || "-",
-          details: `Account created ${new Date(created.created_at).toLocaleDateString()}`,
-          status: "Active",
-        },
-        ...prev,
-      ]);
+      if (editingPersonnel) {
+        const updated = await updatePersonnel(editingPersonnel.id, payload);
+        setPersonnel((prev) =>
+          prev.map((p) =>
+            p.id === String(updated.id)
+              ? {
+                  ...p,
+                  name: updated.name,
+                  email: updated.email,
+                  contact: updated.email,
+                  assignedTo: personnelForm.assignedTo || "-",
+                  role: normalizeRole(updated.role),
+                  details: updated.created_at
+                    ? `Account created ${new Date(
+                        updated.created_at,
+                      ).toLocaleDateString()}`
+                    : p.details,
+                  status: personnelForm.status,
+                }
+              : p,
+          ),
+        );
+      } else {
+        const created = await createPersonnel({
+          ...payload,
+          assigned_to: personnelForm.assignedTo,
+        });
+        setPersonnel((prev) => [
+          {
+            id: created.id,
+            name: created.name,
+            role: normalizeRole(created.role),
+            email: created.email,
+            contact: created.email,
+            assignedTo: personnelForm.assignedTo || "-",
+            details: created.created_at
+              ? `Account created ${new Date(created.created_at).toLocaleDateString()}`
+              : "New personnel account",
+            status: "Active",
+          },
+          ...prev,
+        ]);
+      }
+
       setPersonnelAddOpen(false);
       setPersonnelForm(defaultPersonnelForm);
+      setEditingPersonnel(null);
     } catch (err: any) {
-      setError(err?.message || "Failed to create personnel.");
+      setError(err?.message || "Failed to save personnel.");
     }
   };
 
@@ -333,7 +477,9 @@ export default function Partners() {
               </DialogTrigger>
               <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
-                  <DialogTitle>Add Personnel Record</DialogTitle>
+                  <DialogTitle>
+                    {editingPersonnel ? "Edit Personnel Record" : "Add Personnel Record"}
+                  </DialogTitle>
                 </DialogHeader>
                 {personnelFormError ? (
                   <div className="rounded-lg border border-destructive/10 bg-destructive/5 p-3 text-sm text-destructive">
@@ -543,10 +689,10 @@ export default function Partners() {
                         Cancel
                       </Button>
                       <Button
-                        onClick={handleAddPersonnel}
+                        onClick={handleSavePersonnel}
                         disabled={!personnelFormValid}
                       >
-                        Save
+                        {editingPersonnel ? "Update" : "Save"}
                       </Button>
                     </div>
                   </div>
@@ -563,7 +709,9 @@ export default function Partners() {
               </DialogTrigger>
               <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
-                  <DialogTitle>Add New Partner</DialogTitle>
+                  <DialogTitle>
+                    {editingPartner ? "Edit Partner" : "Add New Partner"}
+                  </DialogTitle>
                 </DialogHeader>
                 {partnerFormError ? (
                   <div className="rounded-lg border border-destructive/10 bg-destructive/5 p-3 text-sm text-destructive">
@@ -761,10 +909,10 @@ export default function Partners() {
                         Cancel
                       </Button>
                       <Button
-                        onClick={handleAddPartner}
+                        onClick={handleSavePartner}
                         disabled={!partnerFormValid}
                       >
-                        Save Partner
+                        {editingPartner ? "Update Partner" : "Save Partner"}
                       </Button>
                     </div>
                   </div>
@@ -780,6 +928,29 @@ export default function Partners() {
           {error}
         </div>
       ) : null}
+
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm delete</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget?.type === "partner"
+                ? `Remove partner ${deleteTarget.name} from the system?`
+                : `Remove personnel ${deleteTarget?.name} from the system?`}
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground"
+              onClick={handleDeleteConfirmed}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatCard
@@ -829,13 +1000,14 @@ export default function Partners() {
                     <TableHead>Cohorts</TableHead>
                     <TableHead>YBF</TableHead>
                     <TableHead>Status</TableHead>
+                    {(canEditPartner || canDeletePartner) && <TableHead>Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loading ? (
                     <TableRow>
                       <TableCell
-                        colSpan={9}
+                        colSpan={partnerColumnCount}
                         className="text-center py-10 text-sm text-muted-foreground"
                       >
                         Loading partners from backend...
@@ -879,12 +1051,36 @@ export default function Partners() {
                             {p.status}
                           </Badge>
                         </TableCell>
+                        {(canEditPartner || canDeletePartner) && (
+                          <TableCell className="flex gap-2">
+                            {canEditPartner && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => openEditPartner(p)}
+                              >
+                                <Edit3 className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {canDeletePartner && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  openDeleteTarget("partner", p.id, p.name)
+                                }
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))
                   ) : (
                     <TableRow>
                       <TableCell
-                        colSpan={9}
+                        colSpan={partnerColumnCount}
                         className="text-center py-10 text-sm text-muted-foreground"
                       >
                         No partner records found.
@@ -918,13 +1114,14 @@ export default function Partners() {
                     <TableHead>Assigned To</TableHead>
                     <TableHead>Details</TableHead>
                     <TableHead>Status</TableHead>
+                    {canManagePersonnel && <TableHead>Actions</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loading ? (
                     <TableRow>
                       <TableCell
-                        colSpan={6}
+                        colSpan={personnelColumnCount}
                         className="text-center py-10 text-sm text-muted-foreground"
                       >
                         Loading personnel from backend...
@@ -955,12 +1152,32 @@ export default function Partners() {
                             {p.status}
                           </Badge>
                         </TableCell>
+                        {canManagePersonnel && (
+                          <TableCell className="flex gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openEditPersonnel(p)}
+                            >
+                              <Edit3 className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                openDeleteTarget("personnel", p.id, p.name)
+                              }
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))
                   ) : (
                     <TableRow>
                       <TableCell
-                        colSpan={6}
+                        colSpan={personnelColumnCount}
                         className="text-center py-10 text-sm text-muted-foreground"
                       >
                         No personnel records found.

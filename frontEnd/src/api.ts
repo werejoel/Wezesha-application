@@ -113,6 +113,17 @@ export const deletePartner = (id: string) =>
     method: "DELETE",
     headers: getAuthHeaders(),
   }).then(handleResponse);
+export const updatePersonnel = (id: string, data: object) =>
+  fetch(`${BASE_URL}/personnel/${id}`, {
+    method: "PUT",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  }).then(handleResponse);
+export const deletePersonnel = (id: string) =>
+  fetch(`${BASE_URL}/personnel/${id}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  }).then(handleResponse);
 
 // Youth
 export const getYouth = () => get("/youth");

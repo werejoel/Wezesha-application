@@ -1,4 +1,3 @@
-import { type Youth, youth as initialYouth } from "@/data/mockData";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,7 +13,7 @@ import {
 } from "@/components/ui/table";
 import { Plus, Users, AlertTriangle, Briefcase } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -22,8 +21,57 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { createYouth } from "@/api";
+import { createYouth, getYouth } from "@/api";
 import { useUser } from "@/hooks/use-user";
+import { formatMoney } from "@/lib/utils";
+
+type YouthData = {
+  id: string;
+  fullName: string;
+  dob?: string;
+  gender?: string;
+  region?: string;
+  district?: string;
+  partner?: string;
+  programType?: string;
+  cohort?: string;
+  educationLevel?: string;
+  attendanceRate?: number;
+  businessPlan?: string;
+  cv?: string;
+  applicationLetter?: string;
+  employmentStatus?: string;
+  riskFlag?: boolean;
+  baselineIncome?: number;
+  currentIncome?: number;
+  aboveIPL?: boolean;
+  hasBusiness?: boolean;
+};
+
+function normalizeYouth(item: any): YouthData {
+  return {
+    id: String(item.id ?? item.youth_id ?? ""),
+    fullName: item.full_name || item.fullName || "Unknown",
+    dob: item.date_of_birth || item.dob || "",
+    gender: item.gender || "Female",
+    region: item.region || "",
+    district: item.district || "",
+    partner: item.partner_name || item.partner || "",
+    programType: item.program_type || item.programType || "In-School",
+    cohort: item.cohort_name || item.cohort || "",
+    educationLevel: item.education_level || item.educationLevel || "",
+    attendanceRate: Number(item.attendance_rate ?? item.attendanceRate ?? 0),
+    businessPlan: item.business_plan_status || item.businessPlan || "Not Started",
+    cv: item.cv_status || item.cv || "Not Started",
+    applicationLetter: item.application_letter_status || item.applicationLetter || "Not Started",
+    employmentStatus: item.employment_status || item.employmentStatus || "Unemployed",
+    riskFlag: Boolean(item.risk_flag ?? item.riskFlag ?? false),
+    baselineIncome: Number(item.baseline_income ?? item.baselineIncome ?? 0),
+    currentIncome: Number(item.current_income ?? item.currentIncome ?? 0),
+    aboveIPL: Boolean(item.above_ipl ?? item.aboveIPL ?? false),
+    hasBusiness: Boolean(item.has_business ?? item.hasBusiness ?? false),
+  };
+}
 
 function MilestoneIndicator({ status }: { status: string }) {
   const colors = {
@@ -39,7 +87,7 @@ function MilestoneIndicator({ status }: { status: string }) {
   );
 }
 
-function YouthDetailDialog({ y }: { y: (typeof initialYouth)[0] }) {
+function YouthDetailDialog({ y }: { y: YouthData }) {
   return (
     <Dialog>
       <DialogTrigger asChild>
@@ -161,11 +209,11 @@ function YouthDetailDialog({ y }: { y: (typeof initialYouth)[0] }) {
               </div>
               <div>
                 <span className="text-muted-foreground">Baseline Income:</span>{" "}
-                KES {y.baselineIncome.toLocaleString()}
+                {formatMoney(y.baselineIncome)}
               </div>
               <div>
                 <span className="text-muted-foreground">Current Income:</span>{" "}
-                KES {y.currentIncome.toLocaleString()}
+                {formatMoney(y.currentIncome)}
               </div>
               <div className="col-span-2">
                 <span className="text-muted-foreground">Above IPL:</span>{" "}
@@ -184,7 +232,8 @@ function YouthDetailDialog({ y }: { y: (typeof initialYouth)[0] }) {
 export default function Youth() {
   const { isProgramManager, isYBF, user } = useUser();
   const [filter, setFilter] = useState<"all" | "at-risk">("all");
-  const [youthList, setYouthList] = useState(initialYouth);
+  const [youthList, setYouthList] = useState<YouthData[]>([]);
+  const [loadingYouth, setLoadingYouth] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [form, setForm] = useState({
     fullName: "",
@@ -199,6 +248,27 @@ export default function Youth() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const MAX = { name: 100, cohort: 60, partner: 150 };
+
+  useEffect(() => {
+    let mounted = true;
+    const loadYouth = async () => {
+      try {
+        setLoadingYouth(true);
+        const rows = await getYouth();
+        if (!mounted) return;
+        setYouthList(Array.isArray(rows) ? rows.map(normalizeYouth) : []);
+      } catch (err) {
+        console.error('Failed to load youth', err);
+        if (mounted) setYouthList([]);
+      } finally {
+        if (mounted) setLoadingYouth(false);
+      }
+    };
+    loadYouth();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const validateYouthForm = () => {
     const errs: Record<string, string> = {};
@@ -247,31 +317,22 @@ export default function Youth() {
           district: form.district,
         };
         const created = await createYouth(payload);
-        const newYouth: Youth = {
-          id: created.id,
-          fullName: created.full_name || created.fullName || form.fullName,
-          dob: created.date_of_birth || form.dateOfBirth,
-          gender: created.gender || form.gender,
-          nationality: created.nationality || "Kenyan",
-          region: created.region || "Nairobi",
-          district: created.district || form.district,
-          partner: created.partner_name || form.partner,
-          programType: created.program_type || form.programType,
-          cohort: created.cohort || form.cohort,
-          enrollmentDate: created.enrolment_date || form.enrollmentDate,
-          employmentStatus: created.employment_status || "Unemployed",
-          baselineIncome: created.baseline_income || 0,
-          currentIncome: created.current_income || 0,
-          aboveIPL: created.above_ipl || false,
-          educationLevel: created.education_level || "Secondary",
-          hasBusiness: created.has_business || false,
-          businessPlan: "Not Started",
-          cv: "Not Started",
-          applicationLetter: "Not Started",
-          attendanceRate: 0,
-          mentorshipStatus: "Active",
-          riskFlag: false,
-        };
+        const newYouth = normalizeYouth({
+          ...created,
+          partner_name: created.partner_name || form.partner,
+          cohort_name: created.cohort_name || form.cohort,
+          baseline_income: created.baseline_income || 0,
+          current_income: created.current_income || 0,
+          above_ipl: created.above_ipl || false,
+          education_level: created.education_level || "Secondary",
+          has_business: created.has_business || false,
+          employment_status: created.employment_status || "Unemployed",
+          attendance_rate: created.attendance_rate || 0,
+          business_plan_status: created.business_plan_status || "Not Started",
+          cv_status: created.cv_status || "Not Started",
+          application_letter_status: created.application_letter_status || "Not Started",
+          risk_flag: created.risk_flag || false,
+        });
         setYouthList([newYouth, ...youthList]);
         setAddOpen(false);
         setForm({
