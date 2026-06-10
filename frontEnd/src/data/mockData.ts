@@ -13,6 +13,7 @@ export interface Partner {
   startDate: string;
   cohortsCount: number;
   assignedYBF: string;
+  assignedInstructors: string[];
   youthCount: number;
 }
 
@@ -23,6 +24,9 @@ export interface Personnel {
   contact: string;
   email: string;
   assignedTo: string;
+  programYearStart?: string;
+  subjectArea?: string;
+  geographicArea?: string;
   status: 'Active' | 'Inactive';
 }
 
@@ -80,23 +84,23 @@ export interface CaseNote {
 }
 
 export const partners: Partner[] = [
-  { id: 'P001', name: 'Nairobi Technical Institute', type: 'TVET', location: 'Nairobi CBD', district: 'Nairobi', contactName: 'James Mwangi', contactPhone: '+254712345678', contactEmail: 'james@nti.ac.ke', status: 'Active', startDate: '2024-01-15', cohortsCount: 3, assignedYBF: 'Sarah Ochieng', youthCount: 87 },
-  { id: 'P002', name: 'Kisumu Youth CBO', type: 'CBO', location: 'Kisumu Town', district: 'Kisumu', contactName: 'Mary Akinyi', contactPhone: '+254723456789', contactEmail: 'mary@kysumuyouth.org', status: 'Active', startDate: '2024-03-01', cohortsCount: 2, assignedYBF: 'Peter Omondi', youthCount: 54 },
-  { id: 'P003', name: 'Mombasa Polytechnic', type: 'TVET', location: 'Mombasa Island', district: 'Mombasa', contactName: 'Hassan Ali', contactPhone: '+254734567890', contactEmail: 'hassan@mombpoly.ac.ke', status: 'Active', startDate: '2024-02-10', cohortsCount: 2, assignedYBF: 'Fatima Hassan', youthCount: 62 },
-  { id: 'P004', name: 'Nakuru Skills Centre', type: 'TVET', location: 'Nakuru Town', district: 'Nakuru', contactName: 'Grace Wanjiku', contactPhone: '+254745678901', contactEmail: 'grace@nakuruskills.ac.ke', status: 'Active', startDate: '2024-04-01', cohortsCount: 1, assignedYBF: 'David Kimani', youthCount: 31 },
-  { id: 'P005', name: 'Eldoret Community Initiative', type: 'CBO', location: 'Eldoret Town', district: 'Uasin Gishu', contactName: 'Joseph Kiprop', contactPhone: '+254756789012', contactEmail: 'joseph@eci.org', status: 'Inactive', startDate: '2023-06-15', cohortsCount: 1, assignedYBF: 'Sarah Ochieng', youthCount: 22 },
-  { id: 'P006', name: 'Thika Technical Training', type: 'TVET', location: 'Thika Town', district: 'Kiambu', contactName: 'Ann Njeri', contactPhone: '+254767890123', contactEmail: 'ann@thikatech.ac.ke', status: 'Active', startDate: '2025-01-10', cohortsCount: 1, assignedYBF: 'Peter Omondi', youthCount: 28 },
+  { id: 'P001', name: 'Nairobi Technical Institute', type: 'TVET', location: 'Nairobi CBD', district: 'Nairobi', contactName: 'James Mwangi', contactPhone: '+254712345678', contactEmail: 'james@nti.ac.ke', status: 'Active', startDate: '2024-01-15', cohortsCount: 3, assignedYBF: 'Sarah Ochieng', assignedInstructors: ['John Kamau'], youthCount: 87 },
+  { id: 'P002', name: 'Kisumu Youth CBO', type: 'CBO', location: 'Kisumu Town', district: 'Kisumu', contactName: 'Mary Akinyi', contactPhone: '+254723456789', contactEmail: 'mary@kysumuyouth.org', status: 'Active', startDate: '2024-03-01', cohortsCount: 2, assignedYBF: 'Peter Omondi', assignedInstructors: [], youthCount: 54 },
+  { id: 'P003', name: 'Mombasa Polytechnic', type: 'TVET', location: 'Mombasa Island', district: 'Mombasa', contactName: 'Hassan Ali', contactPhone: '+254734567890', contactEmail: 'hassan@mombpoly.ac.ke', status: 'Active', startDate: '2024-02-10', cohortsCount: 2, assignedYBF: 'Fatima Hassan', assignedInstructors: ['Lucy Adhiambo'], youthCount: 62 },
+  { id: 'P004', name: 'Nakuru Skills Centre', type: 'TVET', location: 'Nakuru Town', district: 'Nakuru', contactName: 'Grace Wanjiku', contactPhone: '+254745678901', contactEmail: 'grace@nakuruskills.ac.ke', status: 'Active', startDate: '2024-04-01', cohortsCount: 1, assignedYBF: 'David Kimani', assignedInstructors: [], youthCount: 31 },
+  { id: 'P005', name: 'Eldoret Community Initiative', type: 'CBO', location: 'Eldoret Town', district: 'Uasin Gishu', contactName: 'Joseph Kiprop', contactPhone: '+254756789012', contactEmail: 'joseph@eci.org', status: 'Inactive', startDate: '2023-06-15', cohortsCount: 1, assignedYBF: 'Sarah Ochieng', assignedInstructors: [], youthCount: 22 },
+  { id: 'P006', name: 'Thika Technical Training', type: 'TVET', location: 'Thika Town', district: 'Kiambu', contactName: 'Ann Njeri', contactPhone: '+254767890123', contactEmail: 'ann@thikatech.ac.ke', status: 'Active', startDate: '2025-01-10', cohortsCount: 1, assignedYBF: 'Peter Omondi', assignedInstructors: [], youthCount: 28 },
 ];
 
 export const personnel: Personnel[] = [
-  { id: 'YBF001', name: 'Sarah Ochieng', role: 'YBF', contact: '+254712000001', email: 'sarah@wezesha.org', assignedTo: 'Nairobi, Uasin Gishu', status: 'Active' },
-  { id: 'YBF002', name: 'Peter Omondi', role: 'YBF', contact: '+254712000002', email: 'peter@wezesha.org', assignedTo: 'Kisumu, Kiambu', status: 'Active' },
-  { id: 'YBF003', name: 'Fatima Hassan', role: 'YBF', contact: '+254712000003', email: 'fatima@wezesha.org', assignedTo: 'Mombasa', status: 'Active' },
-  { id: 'YBF004', name: 'David Kimani', role: 'YBF', contact: '+254712000004', email: 'david@wezesha.org', assignedTo: 'Nakuru', status: 'Active' },
-  { id: 'INS001', name: 'John Kamau', role: 'Instructor', contact: '+254723000001', email: 'john@nti.ac.ke', assignedTo: 'Nairobi Technical Institute', status: 'Active' },
-  { id: 'INS002', name: 'Lucy Adhiambo', role: 'Instructor', contact: '+254723000002', email: 'lucy@mombpoly.ac.ke', assignedTo: 'Mombasa Polytechnic', status: 'Active' },
-  { id: 'ENM001', name: 'Kevin Otieno', role: 'Enumerator', contact: '+254734000001', email: 'kevin@wezesha.org', assignedTo: 'Nairobi, Kisumu', status: 'Active' },
-  { id: 'ENM002', name: 'Ruth Chebet', role: 'Enumerator', contact: '+254734000002', email: 'ruth@wezesha.org', assignedTo: 'Mombasa, Nakuru', status: 'Active' },
+  { id: 'YBF001', name: 'Sarah Ochieng', role: 'YBF', contact: '+254712000001', email: 'sarah@wezesha.org', assignedTo: 'Nairobi Technical Institute, Eldoret Community Initiative', programYearStart: '2024', status: 'Active' },
+  { id: 'YBF002', name: 'Peter Omondi', role: 'YBF', contact: '+254712000002', email: 'peter@wezesha.org', assignedTo: 'Kisumu Youth CBO, Thika Technical Training', programYearStart: '2024', status: 'Active' },
+  { id: 'YBF003', name: 'Fatima Hassan', role: 'YBF', contact: '+254712000003', email: 'fatima@wezesha.org', assignedTo: 'Mombasa Polytechnic', programYearStart: '2024', status: 'Active' },
+  { id: 'YBF004', name: 'David Kimani', role: 'YBF', contact: '+254712000004', email: 'david@wezesha.org', assignedTo: 'Nakuru Skills Centre', programYearStart: '2025', status: 'Active' },
+  { id: 'INS001', name: 'John Kamau', role: 'Instructor', contact: '+254723000001', email: 'john@nti.ac.ke', assignedTo: 'Nairobi Technical Institute', subjectArea: 'Business Studies', status: 'Active' },
+  { id: 'INS002', name: 'Lucy Adhiambo', role: 'Instructor', contact: '+254723000002', email: 'lucy@mombpoly.ac.ke', assignedTo: 'Mombasa Polytechnic', subjectArea: 'Entrepreneurship', status: 'Active' },
+  { id: 'ENM001', name: 'Kevin Otieno', role: 'Enumerator', contact: '+254734000001', email: 'kevin@wezesha.org', assignedTo: 'Nairobi, Kisumu', geographicArea: 'Nairobi, Kisumu', status: 'Active' },
+  { id: 'ENM002', name: 'Ruth Chebet', role: 'Enumerator', contact: '+254734000002', email: 'ruth@wezesha.org', assignedTo: 'Mombasa, Nakuru', geographicArea: 'Mombasa, Nakuru', status: 'Active' },
 ];
 
 export const youth: Youth[] = Array.from({ length: 40 }, (_, i) => {
@@ -155,7 +159,7 @@ export const caseNotes: CaseNote[] = [
   { id: 'CN004', youthId: 'Y005', youthName: 'Esther Auma', author: 'Fatima Hassan', date: '2024-04-10', category: 'Employment Lead', note: 'Local hotel chain hiring front desk staff. Referred Esther for interview on April 15.' },
   { id: 'CN005', youthId: 'Y008', youthName: 'Henry Oloo', author: 'Peter Omondi', date: '2024-04-12', category: 'At-Risk Flag', note: 'Henry reported financial difficulties affecting attendance. Connected to emergency support fund.', followUpDate: '2024-04-20', assignedTo: 'Peter Omondi' },
   { id: 'CN006', youthId: 'Y010', youthName: 'James Kiptoo', author: 'David Kimani', date: '2024-04-15', category: 'General Update', note: 'James completed his CV and submitted 3 job applications this week. Very motivated.' },
-  { id: 'CN007', youthId: 'Y001', youthName: 'Alice Wanjiru', author: 'Kevin Otieno', date: '2024-05-01', category: 'Business Support', note: 'Field visit: Alice\'s bead-making business is operational. Monthly revenue approximately KES 8,000. Needs help with record-keeping.' },
+  { id: 'CN007', youthId: 'Y001', youthName: 'Alice Wanjiru', author: 'Kevin Otieno', date: '2024-05-01', category: 'Business Support', note: 'Field visit: Alice\'s bead-making business is operational. Monthly revenue approximately UGX 8,000. Needs help with record-keeping.' },
 ];
 
 export const dashboardStats = {

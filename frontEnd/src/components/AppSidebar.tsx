@@ -31,6 +31,7 @@ import { cn } from "@/lib/utils";
 const mainItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Partners", url: "/partners", icon: Building2 },
+  { title: "Users", url: "/users", icon: Users },
   { title: "Youth", url: "/youth", icon: Users },
   { title: "Sessions", url: "/sessions", icon: CalendarCheck },
   { title: "Case Management", url: "/cases", icon: FolderOpen },
@@ -40,18 +41,24 @@ const mainItems = [
 
 const roleSidebarItems: Record<string, typeof mainItems> = {
   admin: mainItems,
-  program_manager: mainItems,
+  program_manager: [
+    mainItems[0],
+    mainItems[1],
+    mainItems[3],
+    mainItems[4],
+    mainItems[5],
+    mainItems[6],
+    mainItems[7],
+  ],
   ybf: [
     mainItems[0],
     mainItems[1],
-    mainItems[2],
     mainItems[3],
     mainItems[5],
   ],
   instructor: [
     mainItems[0],
     mainItems[3],
-    mainItems[2],
   ],
   enumerator: [
     mainItems[0],

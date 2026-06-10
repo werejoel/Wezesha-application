@@ -1,24 +1,100 @@
-import { youth as initialYouth } from "@/data/mockData";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Plus, Users, AlertTriangle, Briefcase } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
-import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useEffect, useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { createYouth, getCohorts, getPartners, getYouth } from "@/api";
 import { useUser } from "@/hooks/use-user";
+import { formatMoney } from "@/lib/utils";
+
+type YouthData = {
+  id: string;
+  fullName: string;
+  dob?: string;
+  gender?: string;
+  region?: string;
+  district?: string;
+  partner?: string;
+  programType?: string;
+  cohort?: string;
+  educationLevel?: string;
+  attendanceRate?: number;
+  businessPlan?: string;
+  cv?: string;
+  applicationLetter?: string;
+  employmentStatus?: string;
+  riskFlag?: boolean;
+  baselineIncome?: number;
+  currentIncome?: number;
+  aboveIPL?: boolean;
+  hasBusiness?: boolean;
+};
+
+function normalizeYouth(item: any): YouthData {
+  return {
+    id: String(item.id ?? item.youth_id ?? ""),
+    fullName: item.full_name || item.fullName || "Unknown",
+    dob: item.date_of_birth || item.dob || "",
+    gender: item.gender || "Female",
+    region: item.region || "",
+    district: item.district || "",
+    partner: item.partner_name || item.partner || "",
+    programType: item.program_type || item.programType || "In-School",
+    cohort: item.cohort_name || item.cohort || "",
+    educationLevel: item.education_level || item.educationLevel || "",
+    attendanceRate: Number(item.attendance_rate ?? item.attendanceRate ?? 0),
+    businessPlan: item.business_plan_status || item.businessPlan || "Not Started",
+    cv: item.cv_status || item.cv || "Not Started",
+    applicationLetter: item.application_letter_status || item.applicationLetter || "Not Started",
+    employmentStatus: item.employment_status || item.employmentStatus || "Unemployed",
+    riskFlag: Boolean(item.risk_flag ?? item.riskFlag ?? false),
+    baselineIncome: Number(item.baseline_income ?? item.baselineIncome ?? 0),
+    currentIncome: Number(item.current_income ?? item.currentIncome ?? 0),
+    aboveIPL: Boolean(item.above_ipl ?? item.aboveIPL ?? false),
+    hasBusiness: Boolean(item.has_business ?? item.hasBusiness ?? false),
+  };
+}
 
 function MilestoneIndicator({ status }: { status: string }) {
-  const colors = { 'Completed': 'bg-success', 'In Progress': 'bg-warning', 'Not Started': 'bg-muted' };
+  const colors = {
+    Completed: "bg-success",
+    "In Progress": "bg-warning",
+    "Not Started": "bg-muted",
+  };
   return (
-    <span className={`inline-block h-2.5 w-2.5 rounded-full ${colors[status as keyof typeof colors] || 'bg-muted'}`} title={status} />
+    <span
+      className={`inline-block h-2.5 w-2.5 rounded-full ${colors[status as keyof typeof colors] || "bg-muted"}`}
+      title={status}
+    />
   );
 }
 
-function YouthDetailDialog({ y }: { y: typeof initialYouth[0] }) {
+function YouthDetailDialog({ y }: { y: YouthData }) {
   return (
     <Dialog>
       <DialogTrigger asChild>
@@ -26,9 +102,17 @@ function YouthDetailDialog({ y }: { y: typeof initialYouth[0] }) {
           <TableCell className="font-medium">{y.fullName}</TableCell>
           <TableCell>{y.gender}</TableCell>
           <TableCell>{y.partner}</TableCell>
-          <TableCell><Badge variant="secondary">{y.programType}</Badge></TableCell>
           <TableCell>
-            <span className={y.attendanceRate < 80 ? 'text-destructive font-semibold' : 'text-foreground font-semibold'}>
+            <Badge variant="secondary">{y.programType}</Badge>
+          </TableCell>
+          <TableCell>
+            <span
+              className={
+                y.attendanceRate < 80
+                  ? "text-destructive font-semibold"
+                  : "text-foreground font-semibold"
+              }
+            >
               {y.attendanceRate}%
             </span>
           </TableCell>
@@ -39,8 +123,22 @@ function YouthDetailDialog({ y }: { y: typeof initialYouth[0] }) {
               <MilestoneIndicator status={y.applicationLetter} />
             </div>
           </TableCell>
-          <TableCell><Badge variant={y.employmentStatus.includes('Unemployed') ? 'destructive' : 'default'}>{y.employmentStatus}</Badge></TableCell>
-          <TableCell>{y.riskFlag && <AlertTriangle className="h-4 w-4 text-destructive" />}</TableCell>
+          <TableCell>
+            <Badge
+              variant={
+                y.employmentStatus.includes("Unemployed")
+                  ? "destructive"
+                  : "default"
+              }
+            >
+              {y.employmentStatus}
+            </Badge>
+          </TableCell>
+          <TableCell>
+            {y.riskFlag && (
+              <AlertTriangle className="h-4 w-4 text-destructive" />
+            )}
+          </TableCell>
         </TableRow>
       </DialogTrigger>
       <DialogContent className="max-w-lg">
@@ -49,22 +147,45 @@ function YouthDetailDialog({ y }: { y: typeof initialYouth[0] }) {
         </DialogHeader>
         <div className="space-y-4 text-sm">
           <div className="grid grid-cols-2 gap-3">
-            <div><span className="text-muted-foreground">ID:</span> {y.id}</div>
-            <div><span className="text-muted-foreground">DOB:</span> {y.dob}</div>
-            <div><span className="text-muted-foreground">Gender:</span> {y.gender}</div>
-            <div><span className="text-muted-foreground">Region:</span> {y.region}</div>
-            <div><span className="text-muted-foreground">Partner:</span> {y.partner}</div>
-            <div><span className="text-muted-foreground">Cohort:</span> {y.cohort}</div>
-            <div><span className="text-muted-foreground">Program:</span> {y.programType}</div>
-            <div><span className="text-muted-foreground">Education:</span> {y.educationLevel}</div>
+            <div>
+              <span className="text-muted-foreground">ID:</span> {y.id}
+            </div>
+            <div>
+              <span className="text-muted-foreground">DOB:</span> {y.dob}
+            </div>
+            <div>
+              <span className="text-muted-foreground">Gender:</span> {y.gender}
+            </div>
+            <div>
+              <span className="text-muted-foreground">Region:</span> {y.region}
+            </div>
+            <div>
+              <span className="text-muted-foreground">Partner:</span>{" "}
+              {y.partner}
+            </div>
+            <div>
+              <span className="text-muted-foreground">Cohort:</span> {y.cohort}
+            </div>
+            <div>
+              <span className="text-muted-foreground">Program:</span>{" "}
+              {y.programType}
+            </div>
+            <div>
+              <span className="text-muted-foreground">Education:</span>{" "}
+              {y.educationLevel}
+            </div>
           </div>
           <div className="border-t pt-3">
-            <h4 className="font-semibold mb-2 font-heading">Output Milestones</h4>
+            <h4 className="font-semibold mb-2 font-heading">
+              Output Milestones
+            </h4>
             <div className="grid grid-cols-3 gap-2">
               <div className="text-center p-2 rounded-lg bg-muted">
                 <MilestoneIndicator status={y.businessPlan} />
                 <p className="text-xs mt-1">Business Plan</p>
-                <p className="text-xs text-muted-foreground">{y.businessPlan}</p>
+                <p className="text-xs text-muted-foreground">
+                  {y.businessPlan}
+                </p>
               </div>
               <div className="text-center p-2 rounded-lg bg-muted">
                 <MilestoneIndicator status={y.cv} />
@@ -74,20 +195,38 @@ function YouthDetailDialog({ y }: { y: typeof initialYouth[0] }) {
               <div className="text-center p-2 rounded-lg bg-muted">
                 <MilestoneIndicator status={y.applicationLetter} />
                 <p className="text-xs mt-1">Cover Letter</p>
-                <p className="text-xs text-muted-foreground">{y.applicationLetter}</p>
+                <p className="text-xs text-muted-foreground">
+                  {y.applicationLetter}
+                </p>
               </div>
             </div>
           </div>
           <div className="border-t pt-3">
-            <h4 className="font-semibold mb-2 font-heading">Income & Employment</h4>
+            <h4 className="font-semibold mb-2 font-heading">
+              Income & Employment
+            </h4>
             <div className="grid grid-cols-2 gap-3">
-              <div><span className="text-muted-foreground">Status:</span> {y.employmentStatus}</div>
-              <div><span className="text-muted-foreground">Attendance:</span> {y.attendanceRate}%</div>
-              <div><span className="text-muted-foreground">Baseline Income:</span> KES {y.baselineIncome.toLocaleString()}</div>
-              <div><span className="text-muted-foreground">Current Income:</span> KES {y.currentIncome.toLocaleString()}</div>
+              <div>
+                <span className="text-muted-foreground">Status:</span>{" "}
+                {y.employmentStatus}
+              </div>
+              <div>
+                <span className="text-muted-foreground">Attendance:</span>{" "}
+                {y.attendanceRate}%
+              </div>
+              <div>
+                <span className="text-muted-foreground">Baseline Income:</span>{" "}
+                {formatMoney(y.baselineIncome)}
+              </div>
+              <div>
+                <span className="text-muted-foreground">Current Income:</span>{" "}
+                {formatMoney(y.currentIncome)}
+              </div>
               <div className="col-span-2">
-                <span className="text-muted-foreground">Above IPL:</span>{' '}
-                <Badge variant={y.aboveIPL ? 'default' : 'destructive'}>{y.aboveIPL ? 'Yes' : 'No'}</Badge>
+                <span className="text-muted-foreground">Above IPL:</span>{" "}
+                <Badge variant={y.aboveIPL ? "default" : "destructive"}>
+                  {y.aboveIPL ? "Yes" : "No"}
+                </Badge>
               </div>
             </div>
           </div>
@@ -99,64 +238,211 @@ function YouthDetailDialog({ y }: { y: typeof initialYouth[0] }) {
 
 export default function Youth() {
   const { isProgramManager, isYBF, user } = useUser();
-  const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<'all' | 'at-risk'>('all');
-  const [youthList, setYouthList] = useState(initialYouth);
+  const [filter, setFilter] = useState<"all" | "at-risk">("all");
+  const [youthList, setYouthList] = useState<YouthData[]>([]);
+  const [partners, setPartners] = useState<{ id: string; name: string }[]>([]);
+  const [cohorts, setCohorts] = useState<{
+    id: string;
+    label: string;
+    partnerId: string;
+    year: number;
+  }[]>([]);
+  const [loadingYouth, setLoadingYouth] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [form, setForm] = useState({
-    fullName: '',
-    gender: 'Female',
-    partner: '',
-    programType: 'In-School',
-    cohort: 'Cohort 2024-1',
+    fullName: "",
+    gender: "Female",
+    partner: "",
+    partnerId: "",
+    programType: "In-School",
+    cohort: "",
     enrollmentDate: new Date().toISOString().slice(0, 10),
+    dateOfBirth: "",
+    district: "",
   });
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const MAX = { name: 100, cohort: 60, partner: 150 };
+
+  useEffect(() => {
+    let mounted = true;
+    const loadYouth = async () => {
+      try {
+        setLoadingYouth(true);
+        const rows = await getYouth();
+        if (!mounted) return;
+        setYouthList(Array.isArray(rows) ? rows.map(normalizeYouth) : []);
+      } catch (err) {
+        console.error('Failed to load youth', err);
+        if (mounted) setYouthList([]);
+      } finally {
+        if (mounted) setLoadingYouth(false);
+      }
+    };
+
+    const loadPartners = async () => {
+      try {
+        const rows = await getPartners();
+        if (!mounted) return;
+        const options = Array.isArray(rows)
+          ? rows.map((partner: any) => ({
+              id: String(partner.id ?? partner.partner_id ?? partner.name),
+              name: String(partner.name || partner.partner_name || partner.partner || ""),
+            }))
+          : [];
+        setPartners(options);
+        if (!form.partner && options.length > 0) {
+          setForm((prev) => ({ ...prev, partner: options[0].name, partnerId: options[0].id }));
+        }
+      } catch (err) {
+        console.error("Failed to load partners", err);
+        if (mounted) setPartners([]);
+      }
+    };
+
+    const loadCohorts = async () => {
+      try {
+        const rows = await getCohorts();
+        if (!mounted) return;
+        const options = Array.isArray(rows)
+          ? rows.map((cohort: any) => ({
+              id: String(cohort.id),
+              label:
+                cohort.label || `Cohort ${cohort.program_year}` || `Cohort ${cohort.year}`,
+              partnerId: String(cohort.partner_institution_id || ""),
+              year: Number(cohort.program_year ?? cohort.year ?? 0),
+            }))
+          : [];
+        setCohorts(options);
+        const selectedPartnerId = form.partnerId || options[0]?.partnerId || "";
+        const matching = options.filter((c) => c.partnerId === selectedPartnerId);
+        if (matching.length > 0 && !matching.some((c) => c.label === form.cohort)) {
+          setForm((prev) => ({
+            ...prev,
+            partner: prev.partner || (partners.find(p => p.id === matching[0].partnerId)?.name ?? ""),
+            partnerId: prev.partnerId || matching[0].partnerId,
+            cohort: matching[0].label,
+          }));
+        } else if (!form.cohort && options.length > 0) {
+          setForm((prev) => ({ ...prev, cohort: options[0].label, partnerId: prev.partnerId || options[0].partnerId }));
+        }
+      } catch (err) {
+        console.error("Failed to load cohorts", err);
+        if (mounted) setCohorts([]);
+      }
+    };
+
+    loadYouth();
+    loadPartners();
+    loadCohorts();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const validateYouthForm = () => {
+    const errs: Record<string, string> = {};
+    if (!form.fullName || !form.fullName.trim())
+      errs.fullName = "Full name is required";
+    if (form.fullName && form.fullName.length > MAX.name)
+      errs.fullName = `Full name must be ≤ ${MAX.name} chars`;
+    if (!form.partner || !form.partner.trim())
+      errs.partner = "Partner is required";
+    if (form.partner && form.partner.length > MAX.partner)
+      errs.partner = `Partner must be ≤ ${MAX.partner} chars`;
+    if (!form.cohort || !form.cohort.trim()) errs.cohort = "Cohort is required";
+    if (form.cohort && form.cohort.length > MAX.cohort)
+      errs.cohort = `Cohort must be ≤ ${MAX.cohort} chars`;
+    if (!form.dateOfBirth) errs.dateOfBirth = "Date of birth is required";
+    if (!form.district || !form.district.trim())
+      errs.district = "District is required";
+    return errs;
+  };
+
+  const formValid = Object.keys(validateYouthForm()).length === 0;
 
   const canEnroll = isProgramManager() || isYBF();
 
-  const filtered = youthList
-    .filter(y => filter === 'at-risk' ? y.riskFlag : true)
-    .filter(y => y.fullName.toLowerCase().includes(search.toLowerCase()) || y.partner.toLowerCase().includes(search.toLowerCase()));
+  const filtered = youthList.filter((y) =>
+    filter === "at-risk" ? y.riskFlag : true,
+  );
 
-  const atRisk = youthList.filter(y => y.riskFlag).length;
-  const inWork = youthList.filter(y => !y.employmentStatus.includes('Unemployed')).length;
+  const filteredCohorts = cohorts.filter(
+    (cohort) => cohort.partnerId === form.partnerId,
+  );
+
+  useEffect(() => {
+    const matching = cohorts.filter((cohort) => cohort.partnerId === form.partnerId);
+    if (matching.length > 0 && !matching.some((cohort) => cohort.label === form.cohort)) {
+      setForm((prev) => ({ ...prev, cohort: matching[0].label }));
+    }
+  }, [form.partnerId, cohorts]);
+
+  const atRisk = youthList.filter((y) => y.riskFlag).length;
+  const inWork = youthList.filter(
+    (y) => !y.employmentStatus.includes("Unemployed"),
+  ).length;
 
   const handleEnroll = () => {
-    const newYouth = {
-      id: `Y${String(youthList.length + 1).padStart(3, '0')}`,
-      fullName: form.fullName || `New Youth ${youthList.length + 1}`,
-      dob: '2003-01-01',
-      gender: form.gender as 'Male' | 'Female',
-      nationality: 'Kenyan',
-      region: 'Nairobi',
-      district: 'Nairobi',
-      partner: form.partner || 'Unknown Partner',
-      programType: form.programType as 'In-School' | 'Out-of-School',
-      cohort: form.cohort,
-      enrollmentDate: form.enrollmentDate,
-      employmentStatus: 'Unemployed' as const,
-      baselineIncome: 0,
-      currentIncome: 0,
-      aboveIPL: false,
-      educationLevel: 'Secondary',
-      hasBusiness: false,
-      businessPlan: 'Not Started' as const,
-      cv: 'Not Started' as const,
-      applicationLetter: 'Not Started' as const,
-      attendanceRate: 0,
-      mentorshipStatus: 'Active' as const,
-      riskFlag: false,
-    };
-    setYouthList([newYouth, ...youthList]);
-    setAddOpen(false);
-    setForm({
-      fullName: '',
-      gender: 'Female',
-      partner: '',
-      programType: 'In-School',
-      cohort: 'Cohort 2024-1',
-      enrollmentDate: new Date().toISOString().slice(0, 10),
-    });
+    const errs = validateYouthForm();
+    if (Object.keys(errs).length > 0) {
+      setFieldErrors(errs);
+      return;
+    }
+    (async () => {
+      try {
+        const payload: any = {
+          full_name: form.fullName,
+          date_of_birth: form.dateOfBirth,
+          gender: form.gender,
+          district: form.district,
+        };
+        if (form.partnerId) payload.partner_institution_id = form.partnerId;
+        else if (form.partner) payload.partner = form.partner;
+
+        // prefer sending cohort_id when we can resolve it from loaded cohorts
+        const selectedCohort = cohorts.find(
+          (c) => c.label === form.cohort && c.partnerId === form.partnerId,
+        );
+        if (selectedCohort) payload.cohort_id = selectedCohort.id;
+        else if (form.cohort) payload.cohort = form.cohort;
+        const created = await createYouth(payload);
+        const newYouth = normalizeYouth({
+          ...created,
+          partner_name: created.partner_name || form.partner,
+          cohort_name: created.cohort_name || form.cohort,
+          baseline_income: created.baseline_income || 0,
+          current_income: created.current_income || 0,
+          above_ipl: created.above_ipl || false,
+          education_level: created.education_level || "Secondary",
+          has_business: created.has_business || false,
+          employment_status: created.employment_status || "Unemployed",
+          attendance_rate: created.attendance_rate || 0,
+          business_plan_status: created.business_plan_status || "Not Started",
+          cv_status: created.cv_status || "Not Started",
+          application_letter_status: created.application_letter_status || "Not Started",
+          risk_flag: created.risk_flag || false,
+        });
+        setYouthList([newYouth, ...youthList]);
+        setAddOpen(false);
+        setForm({
+          fullName: "",
+          gender: "Female",
+          partner: "",
+          partnerId: "",
+          programType: "In-School",
+          cohort: "",
+          enrollmentDate: new Date().toISOString().slice(0, 10),
+          dateOfBirth: "",
+          district: "",
+        });
+      } catch (err: any) {
+        setFieldErrors({
+          ...fieldErrors,
+          fullName: err?.message || "Failed to create youth",
+        });
+      }
+    })();
   };
 
   return (
@@ -164,12 +450,16 @@ export default function Youth() {
       <div className="page-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="page-title">Youth Enrollment & Profiling</h1>
-          <p className="page-description">Manage youth registration and baseline data</p>
+          <p className="page-description">
+            Manage youth registration and baseline data
+          </p>
         </div>
         {canEnroll && (
           <Dialog open={addOpen} onOpenChange={setAddOpen}>
             <DialogTrigger asChild>
-              <Button><Plus className="h-4 w-4 mr-1" /> Enroll Youth</Button>
+              <Button>
+                <Plus className="h-4 w-4 mr-1" /> Enroll Youth
+              </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-lg">
               <DialogHeader>
@@ -181,9 +471,53 @@ export default function Youth() {
                   <Input
                     id="youth-name"
                     value={form.fullName}
-                    onChange={e => setForm({ ...form, fullName: e.target.value })}
+                    onChange={(e) => {
+                      setForm({ ...form, fullName: e.target.value });
+                      setFieldErrors({ ...fieldErrors, fullName: "" });
+                    }}
                     placeholder="Alice Wanjiru"
                   />
+                  {fieldErrors.fullName && (
+                    <p className="text-sm text-destructive mt-1">
+                      {fieldErrors.fullName}
+                    </p>
+                  )}
+                </div>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="youth-dob">Date of Birth</Label>
+                    <Input
+                      id="youth-dob"
+                      type="date"
+                      value={form.dateOfBirth}
+                      onChange={(e) => {
+                        setForm({ ...form, dateOfBirth: e.target.value });
+                        setFieldErrors({ ...fieldErrors, dateOfBirth: "" });
+                      }}
+                    />
+                    {fieldErrors.dateOfBirth && (
+                      <p className="text-sm text-destructive mt-1">
+                        {fieldErrors.dateOfBirth}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <Label htmlFor="youth-district">District</Label>
+                    <Input
+                      id="youth-district"
+                      value={form.district}
+                      onChange={(e) => {
+                        setForm({ ...form, district: e.target.value });
+                        setFieldErrors({ ...fieldErrors, district: "" });
+                      }}
+                      placeholder="Mukono"
+                    />
+                    {fieldErrors.district && (
+                      <p className="text-sm text-destructive mt-1">
+                        {fieldErrors.district}
+                      </p>
+                    )}
+                  </div>
                 </div>
                 <div className="grid sm:grid-cols-2 gap-4">
                   <div>
@@ -191,7 +525,12 @@ export default function Youth() {
                     <select
                       id="youth-gender"
                       value={form.gender}
-                      onChange={e => setForm({ ...form, gender: e.target.value as 'Male' | 'Female' })}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          gender: e.target.value as "Male" | "Female",
+                        })
+                      }
                       className="w-full rounded-lg border bg-card px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
                     >
                       <option value="Female">Female</option>
@@ -200,12 +539,42 @@ export default function Youth() {
                   </div>
                   <div>
                     <Label htmlFor="youth-partner">Partner Institution</Label>
-                    <Input
-                      id="youth-partner"
-                      value={form.partner}
-                      onChange={e => setForm({ ...form, partner: e.target.value })}
-                      placeholder="Nairobi Technical Institute"
-                    />
+                    {partners.length > 0 ? (
+                      <Select
+                        value={form.partnerId}
+                        onValueChange={(value) => {
+                          const sel = partners.find((p) => p.id === value) || { name: "", id: value };
+                          setForm({ ...form, partner: sel.name, partnerId: sel.id });
+                          setFieldErrors({ ...fieldErrors, partner: "" });
+                        }}
+                      >
+                        <SelectTrigger id="youth-partner">
+                          <SelectValue placeholder="Select a partner" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {partners.map((partner) => (
+                            <SelectItem key={partner.id} value={partner.id}>
+                              {partner.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        id="youth-partner"
+                        value={form.partner}
+                        onChange={(e) => {
+                          setForm({ ...form, partner: e.target.value });
+                          setFieldErrors({ ...fieldErrors, partner: "" });
+                        }}
+                        placeholder="YMCA Technical Institute"
+                      />
+                    )}
+                    {fieldErrors.partner && (
+                      <p className="text-sm text-destructive mt-1">
+                        {fieldErrors.partner}
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="grid sm:grid-cols-2 gap-4">
@@ -214,7 +583,14 @@ export default function Youth() {
                     <select
                       id="youth-program"
                       value={form.programType}
-                      onChange={e => setForm({ ...form, programType: e.target.value as 'In-School' | 'Out-of-School' })}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          programType: e.target.value as
+                            | "In-School"
+                            | "Out-of-School",
+                        })
+                      }
                       className="w-full rounded-lg border bg-card px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
                     >
                       <option value="In-School">In-School</option>
@@ -223,12 +599,41 @@ export default function Youth() {
                   </div>
                   <div>
                     <Label htmlFor="youth-cohort">Cohort</Label>
-                    <Input
-                      id="youth-cohort"
-                      value={form.cohort}
-                      onChange={e => setForm({ ...form, cohort: e.target.value })}
-                      placeholder="Cohort 2024-1"
-                    />
+                    {filteredCohorts.length > 0 ? (
+                      <Select
+                        value={form.cohort}
+                        onValueChange={(value) => {
+                          setForm({ ...form, cohort: value });
+                          setFieldErrors({ ...fieldErrors, cohort: "" });
+                        }}
+                      >
+                        <SelectTrigger id="youth-cohort">
+                          <SelectValue placeholder="Select a cohort" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {filteredCohorts.map((cohort) => (
+                            <SelectItem key={cohort.id} value={cohort.label}>
+                              {cohort.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        id="youth-cohort"
+                        value={form.cohort}
+                        onChange={(e) => {
+                          setForm({ ...form, cohort: e.target.value });
+                          setFieldErrors({ ...fieldErrors, cohort: "" });
+                        }}
+                        placeholder="Cohort 2024"
+                      />
+                    )}
+                    {fieldErrors.cohort && (
+                      <p className="text-sm text-destructive mt-1">
+                        {fieldErrors.cohort}
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="grid sm:grid-cols-2 gap-4">
@@ -238,13 +643,35 @@ export default function Youth() {
                       id="youth-enroll-date"
                       type="date"
                       value={form.enrollmentDate}
-                      onChange={e => setForm({ ...form, enrollmentDate: e.target.value })}
+                      onChange={(e) =>
+                        setForm({ ...form, enrollmentDate: e.target.value })
+                      }
                     />
                   </div>
                 </div>
                 <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
-                  <Button onClick={handleEnroll}>Enroll Youth</Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setAddOpen(false);
+                      setFieldErrors({});
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      const errs = validateYouthForm();
+                      if (Object.keys(errs).length > 0) {
+                        setFieldErrors(errs);
+                        return;
+                      }
+                      handleEnroll();
+                    }}
+                    disabled={!formValid}
+                  >
+                    Enroll Youth
+                  </Button>
                 </div>
               </div>
             </DialogContent>
@@ -253,23 +680,42 @@ export default function Youth() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard title="Total Youth" value={youthList.length} icon={Users} variant="primary" />
-        <StatCard title="At Risk (<80%)" value={atRisk} icon={AlertTriangle} variant="warning" />
-        <StatCard title="In Work" value={inWork} subtitle={`${Math.round(inWork / Math.max(youthList.length, 1))}% of total`} icon={Briefcase} variant="success" />
+        <StatCard
+          title="Total Youth"
+          value={youthList.length}
+          icon={Users}
+          variant="primary"
+        />
+        <StatCard
+          title="At Risk (<80%)"
+          value={atRisk}
+          icon={AlertTriangle}
+          variant="warning"
+        />
+        <StatCard
+          title="In Work"
+          value={inWork}
+          subtitle={`${Math.round(inWork / Math.max(youthList.length, 1))}% of total`}
+          icon={Briefcase}
+          variant="success"
+        />
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3">
-        <input
-          type="text"
-          placeholder="Search youth by name or partner..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="flex-1 sm:max-w-xs px-3 py-2 rounded-lg border bg-card text-sm outline-none focus:ring-2 focus:ring-ring"
-        />
-        <div className="flex gap-2">
-          <Button variant={filter === 'all' ? 'default' : 'outline'} size="sm" onClick={() => setFilter('all')}>All</Button>
-          <Button variant={filter === 'at-risk' ? 'destructive' : 'outline'} size="sm" onClick={() => setFilter('at-risk')}>At Risk</Button>
-        </div>
+      <div className="flex gap-2">
+        <Button
+          variant={filter === "all" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setFilter("all")}
+        >
+          All
+        </Button>
+        <Button
+          variant={filter === "at-risk" ? "destructive" : "outline"}
+          size="sm"
+          onClick={() => setFilter("at-risk")}
+        >
+          At Risk
+        </Button>
       </div>
 
       <Card>
@@ -288,7 +734,9 @@ export default function Youth() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map(y => <YouthDetailDialog key={y.id} y={y} />)}
+              {filtered.map((y) => (
+                <YouthDetailDialog key={y.id} y={y} />
+              ))}
             </TableBody>
           </Table>
         </CardContent>

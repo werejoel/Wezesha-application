@@ -30,11 +30,19 @@ async function seed() {
     ];
 
     for (const p of partners) {
+      const existingPartner = await client.query(
+        `SELECT id FROM partner_institution WHERE name = $1 LIMIT 1`,
+        [p.name]
+      );
+      if (existingPartner.rows[0]) {
+        partnerMap[p.name] = existingPartner.rows[0].id;
+        continue;
+      }
+
       const res = await client.query(
         `INSERT INTO partner_institution (name, type, location, district, contact_name, contact_phone, contact_email, status, partnership_date)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-         ON CONFLICT DO NOTHING
-         RETURNING id, name`,
+         RETURNING id`,
         [p.name, p.type, p.location, p.district, p.contact_name, p.contact_phone, p.contact_email, p.status, p.partnership_date]
       );
       if (res.rows[0]) partnerMap[p.name] = res.rows[0].id;
@@ -51,10 +59,15 @@ async function seed() {
     ];
 
     for (const y of ybfs) {
+      const existingYbf = await client.query(
+        `SELECT id FROM youth_business_fellow WHERE contact_email = $1 LIMIT 1`,
+        [y.contact_email]
+      );
+      if (existingYbf.rows[0]) continue;
+
       await client.query(
         `INSERT INTO youth_business_fellow (name, contact_phone, contact_email)
-         VALUES ($1, $2, $3)
-         ON CONFLICT DO NOTHING`,
+         VALUES ($1, $2, $3)`,
         [y.name, y.contact_phone, y.contact_email]
       );
     }
@@ -75,10 +88,19 @@ async function seed() {
     for (const c of cohortDefs) {
       const partnerId = partnerMap[c.partnerName];
       if (!partnerId) continue;
+
+      const existingCohort = await client.query(
+        `SELECT id FROM cohort WHERE partner_institution_id = $1 AND program_year = $2 LIMIT 1`,
+        [partnerId, c.program_year]
+      );
+      if (existingCohort.rows[0]) {
+        cohortMap[`${c.partnerName}-${c.program_year}`] = existingCohort.rows[0].id;
+        continue;
+      }
+
       const res = await client.query(
         `INSERT INTO cohort (partner_institution_id, program_year)
          VALUES ($1, $2)
-         ON CONFLICT DO NOTHING
          RETURNING id`,
         [partnerId, c.program_year]
       );
@@ -156,14 +178,67 @@ for (const s of sessionDefs) {
   );
   if (!cohortRes.rows[0]) continue;
 
+  const existingSession = await client.query(
+    `SELECT id FROM session WHERE cohort_id = $1 AND session_number = $2 AND term_number = $3 LIMIT 1`,
+    [cohortRes.rows[0].id, s.session_number, s.term_number]
+  );
+  if (existingSession.rows[0]) continue;
+
   await client.query(
     `INSERT INTO session (cohort_id, topic, session_date, venue, term_number, session_number)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     ON CONFLICT DO NOTHING`,
+     VALUES ($1, $2, $3, $4, $5, $6)`,
     [cohortRes.rows[0].id, s.topic, s.date, s.venue, s.term_number, s.session_number]
   );
 }
 console.log(`✅ ${sessionDefs.length} sessions added`);
+
+// 5.5 Attendance records for at-risk youth
+console.log('Adding attendance records...');
+const atRiskNames = new Set(['Brian Odhiambo', 'Henry Oloo', 'Queen Achieng', 'Victor Ouma', 'Susan Chepkoech']);
+const sessionRes = await client.query(
+  `SELECT s.id, s.cohort_id
+   FROM session s
+   JOIN cohort c ON c.id = s.cohort_id`
+);
+const sessionsByCohort = sessionRes.rows.reduce((acc, row) => {
+  acc[row.cohort_id] = acc[row.cohort_id] || [];
+  acc[row.cohort_id].push(row.id);
+  return acc;
+}, {});
+
+for (const [youthName, youthId] of Object.entries(youthMap)) {
+  const youthDataRes = await client.query(
+    `SELECT cohort_id FROM youth WHERE id = $1`,
+    [youthId]
+  );
+  if (!youthDataRes.rows[0]) continue;
+
+  const cohortId = youthDataRes.rows[0].cohort_id;
+  const sessionIds = sessionsByCohort[cohortId] || [];
+  if (sessionIds.length === 0) continue;
+
+  const isAtRisk = atRiskNames.has(youthName);
+  const totalSessions = sessionIds.length;
+  const presentCount = isAtRisk
+    ? totalSessions <= 2
+      ? 0
+      : Math.max(1, Math.floor(totalSessions * 0.3))
+    : Math.max(1, Math.round(totalSessions * 0.8));
+
+  let presents = 0;
+  for (const sessionId of sessionIds) {
+    const status = presents < presentCount ? 'Present' : 'Absent';
+    if (status === 'Present') presents += 1;
+
+    await client.query(
+      `INSERT INTO attendance_record (session_id, youth_id, status)
+       VALUES ($1, $2, $3)`,
+      [sessionId, youthId, status]
+    );
+  }
+}
+console.log('✅ Attendance records added');
+
 // 6. Create system users
 console.log('Adding system users...');
 const users = [
@@ -208,10 +283,15 @@ const caseNotes = [
 for (const cn of caseNotes) {
   const youthId = youthMap[cn.youthName];
   if (!youthId) continue;
+  const existingCaseNote = await client.query(
+    `SELECT id FROM case_note WHERE youth_id = $1 AND category = $2 AND note_text = $3 LIMIT 1`,
+    [youthId, cn.category, cn.note]
+  );
+  if (existingCaseNote.rows[0]) continue;
+
   await client.query(
     `INSERT INTO case_note (youth_id, author_id, category, note_text, follow_up_due, follow_up_required)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     ON CONFLICT DO NOTHING`,
+     VALUES ($1, $2, $3, $4, $5, $6)`,
     [youthId, adminUserId, cn.category, cn.note, cn.followUp || null, !!cn.followUp]
   );
 }

@@ -12,6 +12,7 @@ import Sessions from "./pages/Sessions";
 import Cases from "./pages/Cases";
 import Outcomes from "./pages/Outcomes";
 import Reports from "./pages/Reports";
+import AdminUsers from "./pages/admin/Users";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
@@ -39,11 +40,11 @@ const RoleProtectedRoute = ({
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <UserProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
+    <BrowserRouter>
+      <UserProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
@@ -55,6 +56,14 @@ const App = () => (
                     <Routes>
                       <Route path="/" element={<Navigate to="/dashboard" replace />} />
                       <Route path="/dashboard" element={<Dashboard />} />
+                      <Route
+                        path="/users"
+                        element={
+                          <RoleProtectedRoute allowedRoles={["admin"]}>
+                            <AdminUsers />
+                          </RoleProtectedRoute>
+                        }
+                      />
                       <Route
                         path="/partners"
                         element={
@@ -82,7 +91,7 @@ const App = () => (
                       <Route
                         path="/cases"
                         element={
-                          <RoleProtectedRoute allowedRoles={['admin', 'program_manager', 'enumerator']}>
+                          <RoleProtectedRoute allowedRoles={['admin', 'program_manager', 'ybf', 'enumerator']}>
                             <Cases />
                           </RoleProtectedRoute>
                         }
@@ -110,9 +119,9 @@ const App = () => (
               }
             />
           </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
-    </UserProvider>
+        </TooltipProvider>
+      </UserProvider>
+    </BrowserRouter>
   </QueryClientProvider>
 );
 export default App;
