@@ -34,10 +34,7 @@ import {
 } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Dialog,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { Dialog, DialogTrigger } from "@/components/ui/dialog";
 import {
   FormActions,
   FormDialogShell,
@@ -502,7 +499,10 @@ export default function Partners() {
           {canManagePersonnel && (
             <Dialog open={personnelAddOpen} onOpenChange={setPersonnelAddOpen}>
               <DialogTrigger asChild>
-                <Button variant="secondary" className="bg-sky-100 text-sky-900 hover:bg-sky-200 border border-sky-200">
+                <Button
+                  variant="secondary"
+                  className="bg-sky-100 text-sky-900 hover:bg-sky-200 border border-sky-200"
+                >
                   <Plus className="h-4 w-4 mr-1" /> Add Personnel
                 </Button>
               </DialogTrigger>
@@ -539,7 +539,7 @@ export default function Partners() {
                           });
                         }}
                         maxLength={MAX.name}
-                        placeholder="Jane Doe"
+                        placeholder="Kabanda James"
                         className="bg-white/80"
                       />
                       <FormFieldError message={personnelFieldErrors.name} />
@@ -629,7 +629,9 @@ export default function Partners() {
                           placeholder="+254700000000"
                           className="bg-white/80"
                         />
-                        <FormFieldError message={personnelFieldErrors.contact} />
+                        <FormFieldError
+                          message={personnelFieldErrors.contact}
+                        />
                       </div>
                     </div>
                     <div>
@@ -649,7 +651,9 @@ export default function Partners() {
                     </div>
                     {personnelForm.role === "YBF" && (
                       <div>
-                        <Label htmlFor="personnel-year">Program Year Start</Label>
+                        <Label htmlFor="personnel-year">
+                          Program Year Start
+                        </Label>
                         <Input
                           id="personnel-year"
                           value={personnelForm.programYearStart}
@@ -695,7 +699,7 @@ export default function Partners() {
                               geographicArea: e.target.value,
                             })
                           }
-                          placeholder="Nairobi, Kisumu"
+                          placeholder="Kampala , Uganda or Cohort 2024"
                           className="bg-white/80"
                         />
                       </div>
@@ -708,7 +712,9 @@ export default function Partners() {
                       setPersonnelFieldErrors({});
                     }}
                     onSubmit={handleSavePersonnel}
-                    submitLabel={editingPersonnel ? "Update Personnel" : "Save Personnel"}
+                    submitLabel={
+                      editingPersonnel ? "Update Personnel" : "Save Personnel"
+                    }
                     disabled={!personnelFormValid}
                   />
                 </div>
@@ -719,7 +725,7 @@ export default function Partners() {
             <Dialog open={partnerAddOpen} onOpenChange={setPartnerAddOpen}>
               <DialogTrigger asChild>
                 <Button className="bg-secondary text-secondary-foreground hover:bg-secondary/90">
-                  <Plus className="h-4 w-4 mr-1" /> Add Partner
+                  <Plus className="h-4 w-4 mr-1" /> Add Partner Institution
                 </Button>
               </DialogTrigger>
               <FormDialogShell
@@ -741,8 +747,14 @@ export default function Partners() {
                         id="partner-name"
                         value={partnerForm.name}
                         onChange={(e) => {
-                          setPartnerForm({ ...partnerForm, name: e.target.value });
-                          setPartnerFieldErrors({ ...partnerFieldErrors, name: "" });
+                          setPartnerForm({
+                            ...partnerForm,
+                            name: e.target.value,
+                          });
+                          setPartnerFieldErrors({
+                            ...partnerFieldErrors,
+                            name: "",
+                          });
                         }}
                         maxLength={MAX.name}
                         placeholder="E.g. City Youth Centre"
@@ -752,7 +764,9 @@ export default function Partners() {
                     </div>
                     <div className="grid sm:grid-cols-2 gap-4">
                       <div>
-                        <Label htmlFor="partner-location">Physical Location</Label>
+                        <Label htmlFor="partner-location">
+                          Physical Location
+                        </Label>
                         <Input
                           id="partner-location"
                           value={partnerForm.location}
@@ -763,7 +777,7 @@ export default function Partners() {
                             })
                           }
                           maxLength={MAX.location}
-                          placeholder="Nairobi CBD"
+                          placeholder="Kampala YMCA Building"
                           className="bg-white/80"
                         />
                       </div>
@@ -783,7 +797,7 @@ export default function Partners() {
                             });
                           }}
                           maxLength={MAX.district}
-                          placeholder="Nairobi"
+                          placeholder=" Kampala"
                           className="bg-white/80"
                         />
                         <FormFieldError message={partnerFieldErrors.district} />
@@ -845,10 +859,12 @@ export default function Partners() {
                             });
                           }}
                           maxLength={MAX.contactName}
-                          placeholder="James Mwangi"
+                          placeholder="Were Joel"
                           className="bg-white/80"
                         />
-                        <FormFieldError message={partnerFieldErrors.contactName} />
+                        <FormFieldError
+                          message={partnerFieldErrors.contactName}
+                        />
                       </div>
                       <div>
                         <Label htmlFor="partner-phone">Contact Phone</Label>
@@ -866,10 +882,12 @@ export default function Partners() {
                             });
                           }}
                           maxLength={MAX.contactPhone}
-                          placeholder="+254712345678"
+                          placeholder="+256705672545"
                           className="bg-white/80"
                         />
-                        <FormFieldError message={partnerFieldErrors.contactPhone} />
+                        <FormFieldError
+                          message={partnerFieldErrors.contactPhone}
+                        />
                       </div>
                     </div>
                     <div>
@@ -888,10 +906,12 @@ export default function Partners() {
                           });
                         }}
                         maxLength={MAX.contactEmail}
-                        placeholder="partner@domain.com"
+                        placeholder="partner@ndu.com"
                         className="bg-white/80"
                       />
-                      <FormFieldError message={partnerFieldErrors.contactEmail} />
+                      <FormFieldError
+                        message={partnerFieldErrors.contactEmail}
+                      />
                     </div>
                   </FormSection>
 
@@ -924,7 +944,9 @@ export default function Partners() {
                           <p className="text-xs text-muted-foreground mt-1">
                             Creates an initial cohort for this partner.
                           </p>
-                          <FormFieldError message={partnerFieldErrors.programYear} />
+                          <FormFieldError
+                            message={partnerFieldErrors.programYear}
+                          />
                         </div>
                       ) : null}
                       <div>
@@ -1053,7 +1075,7 @@ export default function Partners() {
                         colSpan={partnerColumnCount}
                         className="text-center py-10 text-sm text-muted-foreground"
                       >
-                        Loading partners from backend...
+                        Loading partners please wait...
                       </TableCell>
                     </TableRow>
                   ) : filteredPartners.length > 0 ? (
@@ -1142,8 +1164,7 @@ export default function Partners() {
               <div>
                 <CardTitle>Personnel Records</CardTitle>
                 <p className="text-sm text-muted-foreground">
-                  Youth Business Fellows, instructors and enumerators loaded
-                  from the backend.
+                  Youth Business Fellows, instructors and enumerators loaded.
                 </p>
               </div>
             </CardHeader>
@@ -1167,7 +1188,7 @@ export default function Partners() {
                         colSpan={personnelColumnCount}
                         className="text-center py-10 text-sm text-muted-foreground"
                       >
-                        Loading personnel from backend...
+                        Loading personnel please wait...
                       </TableCell>
                     </TableRow>
                   ) : filteredPersonnel.length > 0 ? (
