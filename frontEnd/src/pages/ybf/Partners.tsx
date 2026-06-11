@@ -210,7 +210,7 @@ export default function YBFPartners() {
                           location: e.target.value,
                         })
                       }
-                      placeholder="Nairobi CBD"
+                      placeholder="Kampala YMCA Building"
                       className="bg-white/80"
                     />
                   </div>
@@ -226,7 +226,7 @@ export default function YBFPartners() {
                         });
                         setFieldErrors((p) => ({ ...p, district: "" }));
                       }}
-                      placeholder="Nairobi"
+                      placeholder="Kampala"
                       className="bg-white/80"
                     />
                     <FormFieldError message={fieldErrors.district} />
@@ -285,7 +285,7 @@ export default function YBFPartners() {
                           contactName: e.target.value,
                         })
                       }
-                      placeholder="James Mwangi"
+                      placeholder="Were Joel"
                       className="bg-white/80"
                     />
                   </div>

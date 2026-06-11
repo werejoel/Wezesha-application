@@ -906,7 +906,7 @@ export default function Partners() {
                           });
                         }}
                         maxLength={MAX.contactEmail}
-                        placeholder="partner@ndu.com"
+                        placeholder="partner@institution.org"
                         className="bg-white/80"
                       />
                       <FormFieldError
