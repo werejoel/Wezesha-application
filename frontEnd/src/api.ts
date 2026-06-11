@@ -218,6 +218,16 @@ export const deleteUser = (id: string) =>
     headers: getAuthHeaders(),
   }).then(handleResponse);
 
+export const updateUserStatus = (
+  id: string,
+  status: "active" | "inactive" | "blocked",
+) =>
+  fetch(`${BASE_URL}/users/${id}/status`, {
+    method: "PATCH",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ status }),
+  }).then(handleResponse);
+
 export const downloadExport = (resource: string = "all") =>
   fetch(`${BASE_URL}/export?resource=${encodeURIComponent(resource)}`, {
     headers: getAuthHeaders(),

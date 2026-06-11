@@ -10,6 +10,30 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+const ensureSchema = async () => {
+  await pool.query(
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active'`,
+  );
+  await pool.query(
+    `UPDATE users SET status = 'active' WHERE status IS NULL OR status = ''`,
+  );
+};
+ensureSchema().catch((err) =>
+  console.error("Schema bootstrap failed:", err.message),
+);
+
+const USER_STATUSES = ["active", "inactive", "blocked"];
+
+const getAccountStatusMessage = (status) => {
+  if (status === "blocked") {
+    return "This account has been blocked. Contact your administrator.";
+  }
+  if (status === "inactive") {
+    return "This account is deactivated. Contact your administrator.";
+  }
+  return null;
+};
+
 // Input validation middleware
 const validateRequired = (fields) => {
   return (req, res, next) => {
@@ -88,8 +112,8 @@ const getUserCohorts = async (userId) => {
     // Strategy 1: explicit assignment table `ybf_assignment(user_id, cohort_id)`
     try {
       const res = await pool.query(
-        `SELECT cohort_id FROM ybf_assignment WHERE user_id = $1`,
-        [userId],
+        `SELECT cohort_id FROM ybf_assignment WHERE user_id::text = $1::text`,
+        [String(userId)],
       );
       if (res.rows.length > 0) return res.rows.map((r) => r.cohort_id);
     } catch (err) {
@@ -222,6 +246,11 @@ app.post(
         return res.status(400).json({ error: "User not found" });
 
       const user = result.rows[0];
+      const statusMessage = getAccountStatusMessage(user.status || "active");
+      if (statusMessage) {
+        return res.status(403).json({ error: statusMessage });
+      }
+
       const validPassword = await bcrypt.compare(password, user.password_hash);
       if (!validPassword)
         return res.status(400).json({ error: "Invalid password" });
@@ -236,6 +265,7 @@ app.post(
           name: user.name,
           email: user.email,
           role: user.role,
+          status: user.status || "active",
         },
         token,
       });
@@ -1391,22 +1421,50 @@ app.post(
       session_number,
     } = req.body;
     try {
-      if (!(await ensureYbfCohortAccess(req, res, cohort_id))) return;
+      if (!cohort_id) {
+        return res.status(400).json({ error: "cohort_id is required" });
+      }
 
-      const result = await pool.query(
+      if (req.user && req.user.role === "ybf") {
+        if (!(await ensureYbfCohortAccess(req, res, cohort_id))) return;
+      }
+
+      const resolvedTerm = Number(term_number) > 0 ? Number(term_number) : 1;
+      const resolvedSessionNumber =
+        Number(session_number) > 0 ? Number(session_number) : 1;
+
+      const insertResult = await pool.query(
         `INSERT INTO session (cohort_id, topic, session_date, venue, term_number, session_number)
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
         [
           cohort_id,
-          topic,
+          String(topic).trim(),
           session_date,
-          venue,
-          term_number,
-          session_number,
+          venue || null,
+          resolvedTerm,
+          resolvedSessionNumber,
         ],
       );
-      res.status(201).json(result.rows[0]);
+
+      const enriched = await pool.query(
+        `SELECT s.*, p.name AS partner_name, CONCAT('Term ', s.term_number) AS term,
+                (SELECT COUNT(*) FROM youth y WHERE y.cohort_id = s.cohort_id AND y.deleted_by IS NULL) AS total_youth,
+                0 AS attendance_count
+         FROM session s
+         LEFT JOIN cohort c ON c.id = s.cohort_id
+         LEFT JOIN partner_institution p ON p.id = c.partner_institution_id
+         WHERE s.id = $1`,
+        [insertResult.rows[0].id],
+      );
+
+      res.status(201).json(enriched.rows[0] || insertResult.rows[0]);
     } catch (err) {
+      if (err.code === "23505") {
+        return res.status(400).json({
+          error:
+            "A session with this number already exists for this cohort and term.",
+        });
+      }
       res.status(500).json({ error: err.message });
     }
   },
@@ -1950,7 +2008,7 @@ app.get(
         where = `WHERE name ILIKE $${params.length - 1} OR email ILIKE $${params.length}`;
       }
 
-      const dataQuery = `SELECT id, name, email, role, created_at FROM users ${where} ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+      const dataQuery = `SELECT id, name, email, role, COALESCE(status, 'active') AS status, created_at FROM users ${where} ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
       params.push(lim, offset);
 
       const result = await pool.query(dataQuery, params);
@@ -1976,16 +2034,56 @@ app.put(
   authorizeRoles("admin", "program_manager"),
   async (req, res) => {
     const { id } = req.params;
-    const { name, email, role } = req.body;
+    const { name, email, role, status } = req.body;
     try {
+      if (status && !USER_STATUSES.includes(status)) {
+        return res.status(400).json({
+          error: "Invalid status. Use active, inactive, or blocked.",
+        });
+      }
       const result = await pool.query(
         `UPDATE users
-       SET name = COALESCE($1, name), email = COALESCE($2, email), role = COALESCE($3, role), updated_at = NOW()
-       WHERE id = $4 RETURNING id, name, email, role`,
-        [name, email, role, id],
+       SET name = COALESCE($1, name), email = COALESCE($2, email), role = COALESCE($3, role),
+           status = COALESCE($4, status), updated_at = NOW()
+       WHERE id = $5 RETURNING id, name, email, role, COALESCE(status, 'active') AS status`,
+        [name, email, role, status || null, id],
       );
       if (result.rows.length === 0)
         return res.status(404).json({ error: "User not found" });
+      res.json(result.rows[0]);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  },
+);
+
+app.patch(
+  "/api/users/:id/status",
+  authenticateToken,
+  authorizeRoles("admin"),
+  async (req, res) => {
+    const { id } = req.params;
+    const { status } = req.body;
+    if (!status || !USER_STATUSES.includes(status)) {
+      return res.status(400).json({
+        error: "Invalid status. Use active, inactive, or blocked.",
+      });
+    }
+    try {
+      if (req.user && String(req.user.id) === String(id) && status !== "active") {
+        return res.status(400).json({
+          error: "You cannot deactivate or block your own account.",
+        });
+      }
+      const result = await pool.query(
+        `UPDATE users SET status = $1, updated_at = NOW()
+         WHERE id = $2
+         RETURNING id, name, email, role, status`,
+        [status, id],
+      );
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: "User not found" });
+      }
       res.json(result.rows[0]);
     } catch (err) {
       res.status(500).json({ error: err.message });

@@ -243,6 +243,13 @@ export default function YBFSessions() {
         cohortId: cohorts[0]?.id ?? "",
       });
       setSessionErrors({});
+      return;
+    }
+    if (cohorts.length > 0) {
+      setSessionForm((prev) => ({
+        ...prev,
+        cohortId: prev.cohortId || cohorts[0].id,
+      }));
     }
   }, [addOpen, cohorts]);
 
@@ -266,34 +273,32 @@ export default function YBFSessions() {
     }
     setCreating(true);
     try {
-      const created = await createSession({
+      await createSession({
         cohort_id: sessionForm.cohortId,
-        topic: sessionForm.topic,
+        topic: sessionForm.topic.trim(),
         session_date: sessionForm.session_date,
-        venue: sessionForm.venue,
+        venue: sessionForm.venue || "",
         term_number: sessionForm.term === "Term 1" ? 1 : 2,
-        session_number: sessionForm.sessionNumber,
+        session_number: Number(sessionForm.sessionNumber) || 1,
       });
+      const refreshed = await getSessions();
+      setSessions(
+        Array.isArray(refreshed) ? refreshed.map(normalizeSessionRow) : [],
+      );
       const cohortLabel =
         cohorts.find((c) => c.id === sessionForm.cohortId)?.label ?? "";
-      setSessions((prev) => [
-        normalizeSessionRow({
-          ...created,
-          partner_name: created.partner_name || "",
-          term: sessionForm.term,
-          total_youth: 0,
-          attendance_count: 0,
-        }),
-        ...prev,
-      ]);
       setAddOpen(false);
       toast({
         title: "Session scheduled",
         description: `"${sessionForm.topic}" added for ${cohortLabel}.`,
       });
     } catch (err: any) {
-      setSessionErrors({
-        submit: err?.message || "Failed to create session",
+      const message = err?.message || "Failed to create session";
+      setSessionErrors({ submit: message });
+      toast({
+        title: "Could not create session",
+        description: message,
+        variant: "destructive",
       });
     } finally {
       setCreating(false);

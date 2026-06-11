@@ -23,7 +23,9 @@ import { StatCard } from "@/components/StatCard";
 import { useEffect, useState } from "react";
 import { createSession, getCohorts, getSessions } from "@/api";
 import { useUser } from "@/hooks/use-user";
+import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogTrigger } from "@/components/ui/dialog";
+import { normalizeSessionRow } from "@/pages/ybf/utils";
 import {
   FormActions,
   FormDialogShell,
@@ -46,6 +48,7 @@ const defaultForm = () => ({
 
 export default function Sessions() {
   const { isProgramManager, isYBF } = useUser();
+  const { toast } = useToast();
   const [termFilter, setTermFilter] = useState<string>("all");
   const [sessionsList, setSessionsList] = useState<any[]>([]);
   const [cohorts, setCohorts] = useState<{ id: string; label: string }[]>([]);
@@ -63,6 +66,7 @@ export default function Sessions() {
   const [newOpen, setNewOpen] = useState(false);
   const [form, setForm] = useState(defaultForm);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [creating, setCreating] = useState(false);
 
   const validateSessionForm = () => {
     const errs: Record<string, string> = {};
@@ -91,7 +95,9 @@ export default function Sessions() {
           getCohorts(),
         ]);
         if (!mounted) return;
-        setSessionsList(Array.isArray(rows) ? rows : []);
+        setSessionsList(
+          Array.isArray(rows) ? rows.map(normalizeSessionRow) : [],
+        );
         const options = Array.isArray(cohortRows)
           ? cohortRows.map((c: any) => ({
               id: String(c.id),
@@ -129,6 +135,13 @@ export default function Sessions() {
     if (!newOpen) {
       setForm({ ...defaultForm(), cohortId: cohorts[0]?.id ?? "" });
       setFieldErrors({});
+      return;
+    }
+    if (cohorts.length > 0) {
+      setForm((prev) => ({
+        ...prev,
+        cohortId: prev.cohortId || cohorts[0].id,
+      }));
     }
   }, [newOpen, cohorts]);
 
@@ -138,36 +151,35 @@ export default function Sessions() {
       setFieldErrors(errs);
       return;
     }
+    setCreating(true);
     try {
-      const payload = {
+      await createSession({
         cohort_id: form.cohortId,
-        topic: form.topic,
+        topic: form.topic.trim(),
         session_date: form.session_date,
-        venue: form.venue,
+        venue: form.venue || "",
         term_number: form.term === "Term 1" ? 1 : 2,
-        session_number: Number(form.sessionNumber),
-      };
-      const created = await createSession(payload);
-      const cohortLabel =
-        cohorts.find((c) => c.id === form.cohortId)?.label ?? "";
-      setSessionsList((prev) => [
-        {
-          id: created.id,
-          cohort: cohortLabel,
-          partner: created.partner_name || "",
-          term: form.term,
-          sessionNumber: created.session_number || Number(form.sessionNumber),
-          topic: created.topic || form.topic,
-          date: created.session_date || form.session_date,
-          venue: created.venue || form.venue,
-          attendanceCount: 0,
-          totalYouth: 0,
-        },
-        ...prev,
-      ]);
+        session_number: Number(form.sessionNumber) || 1,
+      });
+      const refreshed = await getSessions();
+      setSessionsList(
+        Array.isArray(refreshed) ? refreshed.map(normalizeSessionRow) : [],
+      );
       setNewOpen(false);
+      toast({
+        title: "Session scheduled",
+        description: `"${form.topic}" was added successfully.`,
+      });
     } catch (err: any) {
-      setFieldErrors({ submit: err?.message || "Failed to create session" });
+      const message = err?.message || "Failed to create session";
+      setFieldErrors({ submit: message });
+      toast({
+        title: "Could not create session",
+        description: message,
+        variant: "destructive",
+      });
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -311,8 +323,8 @@ export default function Sessions() {
                   theme="session"
                   onCancel={() => setNewOpen(false)}
                   onSubmit={handleCreate}
-                  submitLabel="Save Session"
-                  disabled={!formValid || cohorts.length === 0}
+                  submitLabel={creating ? "Saving…" : "Save Session"}
+                  disabled={!formValid || cohorts.length === 0 || creating}
                 />
               </div>
             </FormDialogShell>

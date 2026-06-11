@@ -1,5 +1,14 @@
 import React, { useEffect, useState } from "react";
-import { getUsers, createUser, updateUser, deleteUser } from "@/api";
+import {
+  getUsers,
+  createUser,
+  updateUser,
+  deleteUser,
+  updateUserStatus,
+} from "@/api";
+import { useUser } from "@/hooks/use-user";
+import { Badge } from "@/components/ui/badge";
+import { Ban, UserCheck, UserX } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -22,7 +31,28 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 
+type UserStatus = "active" | "inactive" | "blocked";
+
+const statusBadge = (status: UserStatus) => {
+  if (status === "active") {
+    return (
+      <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+        Active
+      </Badge>
+    );
+  }
+  if (status === "inactive") {
+    return (
+      <Badge variant="secondary" className="bg-amber-100 text-amber-900">
+        Inactive
+      </Badge>
+    );
+  }
+  return <Badge variant="destructive">Blocked</Badge>;
+};
+
 export default function AdminUsers() {
+  const { user: currentUser } = useUser();
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,6 +87,7 @@ export default function AdminUsers() {
   const [createFieldErrors, setCreateFieldErrors] = useState<
     Record<string, string>
   >({});
+  const [statusUpdating, setStatusUpdating] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -210,6 +241,43 @@ export default function AdminUsers() {
     setEditOpen(true);
   };
 
+  const handleStatusChange = async (
+    target: any,
+    status: UserStatus,
+  ) => {
+    if (String(target.id) === String(currentUser?.id) && status !== "active") {
+      toast({
+        title: "Action not allowed",
+        description: "You cannot deactivate or block your own account.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setStatusUpdating(String(target.id));
+    try {
+      const updated = await updateUserStatus(String(target.id), status);
+      setUsers(
+        users.map((u) =>
+          String(u.id) === String(target.id)
+            ? { ...u, status: updated.status || status }
+            : u,
+        ),
+      );
+      toast({
+        title: "Account updated",
+        description: `${target.email} is now ${status}.`,
+      });
+    } catch (err: any) {
+      toast({
+        title: "Update failed",
+        description: err?.message || "Could not update account status.",
+        variant: "destructive",
+      });
+    } finally {
+      setStatusUpdating(null);
+    }
+  };
+
   const handleSaveEdit = async () => {
     if (!editingUser) return;
     setEditError(null);
@@ -260,6 +328,11 @@ export default function AdminUsers() {
   const ybfCount = users.filter((u) => u.role === "ybf").length;
   const instructorCount = users.filter((u) => u.role === "instructor").length;
   const enumeratorCount = users.filter((u) => u.role === "enumerator").length;
+  const activeCount = users.filter(
+    (u) => (u.status || "active") === "active",
+  ).length;
+  const inactiveCount = users.filter((u) => u.status === "inactive").length;
+  const blockedCount = users.filter((u) => u.status === "blocked").length;
   const distributionTotal = Math.max(usersCount, 1);
   const roleDistribution = [
     { role: "admin", label: "Admins", count: adminCount, color: "bg-sky-500" },
@@ -535,6 +608,33 @@ export default function AdminUsers() {
         </div>
       </div>
 
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm">
+          <p className="text-xs uppercase tracking-[0.2em] text-emerald-700">
+            Active accounts
+          </p>
+          <p className="mt-2 text-3xl font-semibold text-emerald-900">
+            {activeCount}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
+          <p className="text-xs uppercase tracking-[0.2em] text-amber-700">
+            Inactive
+          </p>
+          <p className="mt-2 text-3xl font-semibold text-amber-900">
+            {inactiveCount}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 shadow-sm">
+          <p className="text-xs uppercase tracking-[0.2em] text-red-700">
+            Blocked
+          </p>
+          <p className="mt-2 text-3xl font-semibold text-red-900">
+            {blockedCount}
+          </p>
+        </div>
+      </div>
+
       <Card className="overflow-hidden border border-slate-200 bg-white shadow-sm">
         <CardHeader className="bg-slate-50">
           <CardTitle>Role distribution</CardTitle>
@@ -629,6 +729,9 @@ export default function AdminUsers() {
                   Role
                 </TableHead>
                 <TableHead className="text-xs uppercase tracking-[0.12em] text-slate-500">
+                  Status
+                </TableHead>
+                <TableHead className="text-xs uppercase tracking-[0.12em] text-slate-500">
                   Created
                 </TableHead>
                 <TableHead className="text-xs uppercase tracking-[0.12em] text-slate-500">
@@ -640,7 +743,7 @@ export default function AdminUsers() {
               {loading ? (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={6}
                     className="text-center py-10 text-sm text-muted-foreground"
                   >
                     Loading users...
@@ -649,7 +752,7 @@ export default function AdminUsers() {
               ) : users.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={6}
                     className="text-center py-10 text-sm text-muted-foreground"
                   >
                     No users found.
@@ -672,6 +775,9 @@ export default function AdminUsers() {
                         {u.role}
                       </span>
                     </TableCell>
+                    <TableCell className="py-4">
+                      {statusBadge((u.status || "active") as UserStatus)}
+                    </TableCell>
                     <TableCell className="py-4 text-sm text-slate-500">
                       {u.created_at
                         ? new Date(u.created_at).toLocaleDateString()
@@ -679,6 +785,45 @@ export default function AdminUsers() {
                     </TableCell>
                     <TableCell className="py-4">
                       <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+                          disabled={
+                            statusUpdating === String(u.id) ||
+                            (u.status || "active") === "active"
+                          }
+                          onClick={() => handleStatusChange(u, "active")}
+                        >
+                          <UserCheck className="h-3.5 w-3.5 mr-1" />
+                          Activate
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-amber-700 border-amber-200 hover:bg-amber-50"
+                          disabled={
+                            statusUpdating === String(u.id) ||
+                            u.status === "inactive"
+                          }
+                          onClick={() => handleStatusChange(u, "inactive")}
+                        >
+                          <UserX className="h-3.5 w-3.5 mr-1" />
+                          Deactivate
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-red-700 border-red-200 hover:bg-red-50"
+                          disabled={
+                            statusUpdating === String(u.id) ||
+                            u.status === "blocked"
+                          }
+                          onClick={() => handleStatusChange(u, "blocked")}
+                        >
+                          <Ban className="h-3.5 w-3.5 mr-1" />
+                          Block
+                        </Button>
                         <Button
                           className="bg-sky-600 text-white hover:bg-sky-700"
                           size="sm"
