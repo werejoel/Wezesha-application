@@ -1,5 +1,6 @@
 import { useUser } from "@/hooks/use-user";
 import AdminCases from "@/pages/admin/Cases";
+import YBFCases from "@/pages/ybf/Cases";
 import EnumeratorCases from "@/pages/enumerator/Cases";
 
 const Cases = () => {
@@ -13,6 +14,8 @@ const Cases = () => {
     case 'admin':
     case 'program_manager':
       return <AdminCases />;
+    case 'ybf':
+      return <YBFCases />;
     case 'enumerator':
       return <EnumeratorCases />;
     default:

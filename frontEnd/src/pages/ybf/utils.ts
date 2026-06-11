@@ -1,0 +1,102 @@
+export const MILESTONE_TYPES = [
+  "Business Plan",
+  "CV",
+  "Application Letter",
+] as const;
+
+export const MILESTONE_STATUSES = [
+  "Not Started",
+  "In Progress",
+  "Completed",
+] as const;
+
+export const ATTENDANCE_STATUSES = ["Present", "Absent", "Excused"] as const;
+
+export const YBF_CASE_CATEGORIES = [
+  "General Update",
+  "At-Risk Flag",
+  "Business Support",
+  "Field Visit",
+  "Employment Lead",
+  "Other",
+] as const;
+
+export type MilestoneType = (typeof MILESTONE_TYPES)[number];
+export type MilestoneStatus = (typeof MILESTONE_STATUSES)[number];
+export type AttendanceStatus = (typeof ATTENDANCE_STATUSES)[number];
+
+export const categoryColors: Record<string, string> = {
+  "General Update": "bg-info text-info-foreground",
+  "At-Risk Flag": "bg-destructive text-destructive-foreground",
+  "Business Support": "bg-success text-success-foreground",
+  "Field Visit": "bg-primary text-primary-foreground",
+  "Employment Lead": "bg-warning text-warning-foreground",
+  Other: "bg-muted text-muted-foreground",
+};
+
+export const milestoneStatusColor = (status: string) => {
+  if (status === "Completed") return "bg-success";
+  if (status === "In Progress") return "bg-warning";
+  return "bg-muted";
+};
+
+export function normalizeYouthRow(item: any) {
+  return {
+    id: String(item.id ?? ""),
+    fullName: item.full_name || item.fullName || "Unknown",
+    dob: item.date_of_birth || item.dob || "",
+    gender: item.gender || "",
+    district: item.district || item.district_of_residence || "",
+    partner: item.partner_name || item.partner || "",
+    cohort: item.cohort_year
+      ? `Cohort ${item.cohort_year}`
+      : item.cohort || "",
+    programType: item.program_type || item.programType || "",
+    attendanceRate: Number(item.attendance_rate ?? item.attendanceRate ?? 0),
+    riskFlag: Boolean(item.risk_flag ?? item.riskFlag ?? false),
+    cohortId: String(item.cohort_id ?? ""),
+  };
+}
+
+export function normalizeSessionRow(item: any) {
+  const total = Number(item.total_youth ?? item.totalYouth ?? 0);
+  const present = Number(item.attendance_count ?? item.attendanceCount ?? 0);
+  return {
+    id: String(item.id),
+    topic: item.topic || "",
+    date: item.session_date
+      ? String(item.session_date).split("T")[0]
+      : item.date || "",
+    partner: item.partner_name || item.partner || "",
+    facilitator: item.facilitator || "",
+    venue: item.venue || "",
+    term: item.term || `Term ${item.term_number || 1}`,
+    sessionNumber: Number(item.session_number ?? item.sessionNumber ?? 0),
+    cohortId: String(item.cohort_id ?? ""),
+    attendanceCount: present,
+    totalYouth: total,
+    attendancePct: total > 0 ? Math.round((present / total) * 100) : 0,
+  };
+}
+
+export function normalizeCaseNote(item: any) {
+  return {
+    id: String(item.id),
+    youthId: String(item.youth_id || item.youthId || ""),
+    youthName:
+      item.youth_name ||
+      item.youth_full_name ||
+      item.youthName ||
+      `Youth ${item.youth_id || ""}`,
+    author: item.author_name || item.author || "Unknown",
+    date: item.created_at
+      ? new Date(item.created_at).toLocaleDateString()
+      : item.date || "",
+    category: item.category || "Other",
+    note: item.note_text || item.note || "",
+    followUpDate: item.follow_up_due
+      ? String(item.follow_up_due).split("T")[0]
+      : undefined,
+    followUpRequired: Boolean(item.follow_up_required),
+  };
+}

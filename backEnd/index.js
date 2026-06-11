@@ -119,6 +119,25 @@ const getUserCohorts = async (userId) => {
   }
 };
 
+const getPartnerIdsForCohorts = async (cohortIds) => {
+  if (!cohortIds || cohortIds.length === 0) return [];
+  const res = await pool.query(
+    `SELECT DISTINCT partner_institution_id FROM cohort WHERE id = ANY($1)`,
+    [cohortIds],
+  );
+  return res.rows.map((r) => r.partner_institution_id);
+};
+
+const ensureYbfCohortAccess = async (req, res, cohortId) => {
+  if (!req.user || req.user.role !== "ybf") return true;
+  const allowed = await getUserCohorts(req.user.id);
+  if (!allowed.includes(Number(cohortId))) {
+    res.status(403).json({ error: "You do not have access to this cohort" });
+    return false;
+  }
+  return true;
+};
+
 // JWT Middleware
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers["authorization"];
@@ -230,12 +249,38 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "Backend is running" });
 });
 
-// Dashboard — summary counts
+// Dashboard — summary counts (scoped for YBF cohorts)
 app.get("/api/dashboard", authenticateToken, async (req, res) => {
   try {
-    // Summary counts
-    // Compute attendance-based metrics from attendance_record instead of using
-    // non-existent columns on the youth table (attendance_rate, risk_flag).
+    const isYbf = req.user && req.user.role === "ybf";
+    const allowedCohorts = isYbf ? await getUserCohorts(req.user.id) : null;
+
+    if (isYbf && (!allowedCohorts || allowedCohorts.length === 0)) {
+      return res.json({
+        totalYouth: 0,
+        totalPartners: 0,
+        totalSessions: 0,
+        totalCases: 0,
+        atRiskCount: 0,
+        avgAttendance: null,
+        outputProgress: {
+          businessPlan: { completed: 0, inProgress: 0, notStarted: 0 },
+          cv: { completed: 0, inProgress: 0, notStarted: 0 },
+          applicationLetter: { completed: 0, inProgress: 0, notStarted: 0 },
+        },
+        sessionAttendance: [],
+        cohorts: [],
+        scoped: true,
+      });
+    }
+
+    const cohortFilter = isYbf ? "AND y.cohort_id = ANY($1)" : "";
+    const sessionCohortFilter = isYbf ? "WHERE s.cohort_id = ANY($1)" : "";
+    const caseCohortFilter = isYbf
+      ? "WHERE y.cohort_id = ANY($1)"
+      : "";
+    const params = isYbf ? [allowedCohorts] : [];
+
     const [
       youthRes,
       partnersRes,
@@ -245,38 +290,99 @@ app.get("/api/dashboard", authenticateToken, async (req, res) => {
       pendingSyncsRes,
       atRiskRes,
       avgAttendanceRes,
+      outputRes,
+      sessionAttendanceRes,
+      cohortsRes,
     ] = await Promise.all([
-      pool.query("SELECT COUNT(*) FROM youth WHERE deleted_by IS NULL"),
       pool.query(
-        "SELECT COUNT(*) FROM partner_institution WHERE deleted_by IS NULL",
+        `SELECT COUNT(*) FROM youth y WHERE y.deleted_by IS NULL ${cohortFilter}`,
+        params,
       ),
-      pool.query("SELECT COUNT(*) FROM session"),
-      pool.query("SELECT COUNT(*) FROM case_note"),
-      pool.query("SELECT COUNT(*) FROM users"),
-      // pendingSyncs: youth with no attendance records (possible missing sync)
+      isYbf
+        ? pool.query(
+            `SELECT COUNT(DISTINCT p.id) FROM partner_institution p
+             JOIN cohort c ON c.partner_institution_id = p.id
+             WHERE p.deleted_by IS NULL AND c.id = ANY($1)`,
+            [allowedCohorts],
+          )
+        : pool.query(
+            "SELECT COUNT(*) FROM partner_institution WHERE deleted_by IS NULL",
+          ),
       pool.query(
-        `SELECT COUNT(*) FROM youth y LEFT JOIN attendance_record a ON a.youth_id = y.id WHERE a.id IS NULL AND y.deleted_by IS NULL`,
+        `SELECT COUNT(*) FROM session s ${sessionCohortFilter}`,
+        isYbf ? [allowedCohorts] : [],
       ),
-      // atRisk: youth whose computed attendance percentage across records is < 70
+      pool.query(
+        `SELECT COUNT(*) FROM case_note cn
+         JOIN youth y ON y.id = cn.youth_id
+         ${caseCohortFilter}`,
+        isYbf ? [allowedCohorts] : [],
+      ),
+      isYbf
+        ? Promise.resolve({ rows: [{ count: 0 }] })
+        : pool.query("SELECT COUNT(*) FROM users"),
+      pool.query(
+        `SELECT COUNT(*) FROM youth y
+         LEFT JOIN attendance_record a ON a.youth_id = y.id
+         WHERE a.id IS NULL AND y.deleted_by IS NULL ${cohortFilter}`,
+        params,
+      ),
       pool.query(
         `SELECT COUNT(*) FROM (
            SELECT y.id,
                   CASE WHEN COUNT(a.id)=0 THEN 0 ELSE (COUNT(a.id) FILTER (WHERE a.status='Present')::float / NULLIF(COUNT(a.id),0)::float) * 100 END AS pct
            FROM youth y
            LEFT JOIN attendance_record a ON a.youth_id = y.id
-           WHERE y.deleted_by IS NULL
+           WHERE y.deleted_by IS NULL ${cohortFilter}
            GROUP BY y.id
          ) t
          WHERE t.pct < 70`,
+        params,
       ),
-      // avgAttendance: overall attendance percentage across attendance_record
       pool.query(
         `SELECT
            CASE WHEN COUNT(a.id)=0 THEN NULL ELSE (SUM(CASE WHEN a.status='Present' THEN 1 ELSE 0 END)::float / COUNT(a.id)::float) * 100 END AS avg_attendance
          FROM attendance_record a
          JOIN youth y ON y.id = a.youth_id
-         WHERE y.deleted_by IS NULL`,
+         WHERE y.deleted_by IS NULL ${cohortFilter}`,
+        params,
       ),
+      isYbf
+        ? pool.query(
+            `SELECT milestone_type, status, COUNT(*) AS count
+             FROM output_milestone om
+             JOIN youth y ON y.id = om.youth_id
+             WHERE y.deleted_by IS NULL AND y.cohort_id = ANY($1)
+             GROUP BY milestone_type, status`,
+            [allowedCohorts],
+          )
+        : Promise.resolve({ rows: [] }),
+      isYbf
+        ? pool.query(
+            `SELECT s.id, s.topic, s.session_date,
+                    CASE WHEN COUNT(a.id)=0 THEN 0 ELSE ROUND(((COUNT(a.id) FILTER (WHERE a.status='Present')::float / NULLIF(COUNT(a.id),0)::float) * 100)::numeric, 1) END AS attendance_pct
+             FROM session s
+             LEFT JOIN attendance_record a ON a.session_id = s.id
+             WHERE s.cohort_id = ANY($1)
+             GROUP BY s.id, s.topic, s.session_date
+             ORDER BY s.session_date DESC
+             LIMIT 6`,
+            [allowedCohorts],
+          )
+        : Promise.resolve({ rows: [] }),
+      isYbf
+        ? pool.query(
+            `SELECT c.id, c.program_year, p.name AS partner_name,
+                    COUNT(DISTINCT y.id) AS youth_count
+             FROM cohort c
+             LEFT JOIN partner_institution p ON p.id = c.partner_institution_id
+             LEFT JOIN youth y ON y.cohort_id = c.id AND y.deleted_by IS NULL
+             WHERE c.id = ANY($1)
+             GROUP BY c.id, c.program_year, p.name
+             ORDER BY c.program_year DESC`,
+            [allowedCohorts],
+          )
+        : Promise.resolve({ rows: [] }),
     ]);
 
     const totalYouth = Number(youthRes.rows[0].count || 0);
@@ -291,7 +397,7 @@ app.get("/api/dashboard", authenticateToken, async (req, res) => {
         ? Number(avgAttendanceRes.rows[0].avg_attendance)
         : null;
 
-    res.json({
+    const response = {
       totalYouth,
       totalPartners,
       totalSessions,
@@ -300,7 +406,46 @@ app.get("/api/dashboard", authenticateToken, async (req, res) => {
       pendingSyncs,
       atRiskCount,
       avgAttendance,
-    });
+    };
+
+    if (isYbf) {
+      const progress = {
+        businessPlan: { completed: 0, inProgress: 0, notStarted: 0 },
+        cv: { completed: 0, inProgress: 0, notStarted: 0 },
+        applicationLetter: { completed: 0, inProgress: 0, notStarted: 0 },
+      };
+      const typeMap = {
+        "Business Plan": "businessPlan",
+        CV: "cv",
+        "Application Letter": "applicationLetter",
+        "Cover Letter": "applicationLetter",
+      };
+      for (const row of outputRes.rows) {
+        const key = typeMap[row.milestone_type];
+        if (!key) continue;
+        const status = String(row.status || "Not Started");
+        const count = Number(row.count || 0);
+        if (status === "Completed") progress[key].completed += count;
+        else if (status === "In Progress") progress[key].inProgress += count;
+        else progress[key].notStarted += count;
+      }
+      response.outputProgress = progress;
+      response.sessionAttendance = sessionAttendanceRes.rows.map((r) => ({
+        session: r.topic,
+        date: r.session_date,
+        attendance: Number(r.attendance_pct || 0),
+      }));
+      response.cohorts = cohortsRes.rows.map((r) => ({
+        id: r.id,
+        label: r.partner_name
+          ? `Cohort ${r.program_year} — ${r.partner_name}`
+          : `Cohort ${r.program_year}`,
+        youthCount: Number(r.youth_count || 0),
+      }));
+      response.scoped = true;
+    }
+
+    res.json(response);
   } catch (err) {
     console.error("Dashboard error:", err);
     res.status(500).json({ error: err.message });
@@ -314,6 +459,27 @@ app.get(
   authorizeRoles("admin", "program_manager", "ybf", "instructor", "enumerator"),
   async (req, res) => {
     try {
+      if (req.user && req.user.role === "ybf") {
+        const allowed = await getUserCohorts(req.user.id);
+        if (!allowed || allowed.length === 0) return res.json([]);
+        const partnerIds = await getPartnerIdsForCohorts(allowed);
+        if (!partnerIds.length) return res.json([]);
+        const result = await pool.query(
+          `SELECT p.*, COALESCE(c.cohort_count, 0) AS cohorts_count
+           FROM partner_institution p
+           LEFT JOIN (
+             SELECT partner_institution_id, COUNT(*) AS cohort_count
+             FROM cohort
+             WHERE id = ANY($1)
+             GROUP BY partner_institution_id
+           ) c ON p.id = c.partner_institution_id
+           WHERE p.deleted_by IS NULL AND p.id = ANY($2)
+           ORDER BY p.name ASC`,
+          [allowed, partnerIds],
+        );
+        return res.json(result.rows);
+      }
+
       const result = await pool.query(
         `SELECT p.*, COALESCE(c.cohort_count, 0) AS cohorts_count
        FROM partner_institution p
@@ -858,22 +1024,44 @@ app.get(
   async (req, res) => {
     try {
       // If the user is a YBF, scope youth to their assigned cohorts
+      const youthSelect = `
+        SELECT y.id, y.full_name, y.date_of_birth, y.gender,
+               y.district_of_residence AS district, y.partner_institution_id,
+               y.cohort_id, y.program_type, y.program_year, y.region, y.nationality,
+               y.created_at, y.updated_at, y.deleted_at, y.deleted_by, y.created_by, y.youth_code,
+               p.name AS partner_name,
+               c.program_year AS cohort_year,
+               CASE WHEN COUNT(a.id)=0 THEN 0
+                    ELSE ROUND(((COUNT(a.id) FILTER (WHERE a.status='Present')::float / NULLIF(COUNT(a.id),0)::float) * 100)::numeric, 1)
+               END AS attendance_rate,
+               EXISTS (
+                 SELECT 1 FROM case_note cn
+                 WHERE cn.youth_id = y.id AND cn.category = 'At-Risk Flag'
+               ) AS risk_flag
+        FROM youth y
+        LEFT JOIN partner_institution p ON p.id = y.partner_institution_id
+        LEFT JOIN cohort c ON c.id = y.cohort_id
+        LEFT JOIN attendance_record a ON a.youth_id = y.id
+        WHERE y.deleted_by IS NULL`;
+
       if (req.user && req.user.role === "ybf") {
         const allowed = await getUserCohorts(req.user.id);
         if (!allowed || allowed.length === 0) {
           return res.json([]);
         }
         const result = await pool.query(
-          `SELECT id, full_name, date_of_birth, gender, district_of_residence AS district, partner_institution_id, cohort_id, program_type, program_year, region, nationality, created_at, updated_at, deleted_at, deleted_by, created_by, youth_code
-         FROM youth WHERE deleted_by IS NULL AND cohort_id = ANY($1) ORDER BY created_at DESC`,
+          `${youthSelect} AND y.cohort_id = ANY($1)
+           GROUP BY y.id, p.name, c.program_year
+           ORDER BY y.full_name ASC`,
           [allowed],
         );
         return res.json(result.rows);
       }
 
       const result = await pool.query(
-        `SELECT id, full_name, date_of_birth, gender, district_of_residence AS district, partner_institution_id, cohort_id, program_type, program_year, region, nationality, created_at, updated_at, deleted_at, deleted_by, created_by, youth_code
-       FROM youth WHERE deleted_by IS NULL ORDER BY created_at DESC`,
+        `${youthSelect}
+         GROUP BY y.id, p.name, c.program_year
+         ORDER BY y.created_at DESC`,
       );
       res.json(result.rows);
     } catch (err) {
@@ -1098,12 +1286,32 @@ app.get(
   authorizeRoles("admin", "program_manager", "ybf", "instructor"),
   async (req, res) => {
     try {
+      const baseQuery = `
+        SELECT s.*, p.name AS partner_name, CONCAT('Term ', s.term_number) AS term,
+               COUNT(a.id) FILTER (WHERE a.status = 'Present') AS attendance_count,
+               (SELECT COUNT(*) FROM youth y WHERE y.cohort_id = s.cohort_id AND y.deleted_by IS NULL) AS total_youth
+        FROM session s
+        LEFT JOIN cohort c ON c.id = s.cohort_id
+        LEFT JOIN partner_institution p ON p.id = c.partner_institution_id
+        LEFT JOIN attendance_record a ON a.session_id = s.id`;
+
+      if (req.user && req.user.role === "ybf") {
+        const allowed = await getUserCohorts(req.user.id);
+        if (!allowed || allowed.length === 0) return res.json([]);
+        const result = await pool.query(
+          `${baseQuery}
+           WHERE s.cohort_id = ANY($1)
+           GROUP BY s.id, p.name
+           ORDER BY s.session_date DESC`,
+          [allowed],
+        );
+        return res.json(result.rows);
+      }
+
       const result = await pool.query(
-        `SELECT s.*, p.name AS partner_name, CONCAT('Term ', s.term_number) AS term
-       FROM session s
-       LEFT JOIN cohort c ON c.id = s.cohort_id
-       LEFT JOIN partner_institution p ON p.id = c.partner_institution_id
-       ORDER BY s.session_date DESC`,
+        `${baseQuery}
+         GROUP BY s.id, p.name
+         ORDER BY s.session_date DESC`,
       );
       res.json(result.rows);
     } catch (err) {
@@ -1215,12 +1423,27 @@ app.get(
   authorizeRoles("admin", "program_manager", "ybf"),
   async (req, res) => {
     try {
+      const baseQuery = `
+        SELECT cn.*, y.full_name AS youth_name, u.name AS author_name
+        FROM case_note cn
+        LEFT JOIN youth y ON y.id = cn.youth_id
+        LEFT JOIN users u ON u.id = cn.author_id`;
+
+      if (req.user && req.user.role === "ybf") {
+        const allowed = await getUserCohorts(req.user.id);
+        if (!allowed || allowed.length === 0) return res.json([]);
+        const result = await pool.query(
+          `${baseQuery}
+           WHERE y.cohort_id = ANY($1)
+           ORDER BY cn.created_at DESC`,
+          [allowed],
+        );
+        return res.json(result.rows);
+      }
+
       const result = await pool.query(
-        `SELECT cn.*, y.full_name AS youth_name, u.name AS author_name
-       FROM case_note cn
-       LEFT JOIN youth y ON y.id = cn.youth_id
-       LEFT JOIN users u ON u.id = cn.author_id
-       ORDER BY cn.created_at DESC`,
+        `${baseQuery}
+         ORDER BY cn.created_at DESC`,
       );
       res.json(result.rows);
     } catch (err) {
@@ -1238,6 +1461,20 @@ app.post(
     const { youth_id, category, note_text, follow_up_due, follow_up_required } =
       req.body;
     try {
+      if (req.user && req.user.role === "ybf") {
+        const youthRes = await pool.query(
+          `SELECT cohort_id FROM youth WHERE id = $1 AND deleted_by IS NULL`,
+          [youth_id],
+        );
+        if (!youthRes.rows[0]) {
+          return res.status(404).json({ error: "Youth not found" });
+        }
+        const allowed = await getUserCohorts(req.user.id);
+        if (!allowed.includes(youthRes.rows[0].cohort_id)) {
+          return res.status(403).json({ error: "You do not have access to this youth" });
+        }
+      }
+
       const result = await pool.query(
         `INSERT INTO case_note (youth_id, author_id, category, note_text, follow_up_due, follow_up_required)
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
@@ -1304,11 +1541,29 @@ app.delete(
 app.get(
   "/api/outcomes",
   authenticateToken,
-  authorizeRoles("admin", "program_manager", "enumerator"),
+  authorizeRoles("admin", "program_manager", "ybf", "enumerator"),
   async (req, res) => {
     try {
+      const baseQuery = `
+        SELECT om.*, y.full_name AS youth_name, y.cohort_id
+        FROM output_milestone om
+        JOIN youth y ON y.id = om.youth_id
+        WHERE y.deleted_by IS NULL`;
+
+      if (req.user && req.user.role === "ybf") {
+        const allowed = await getUserCohorts(req.user.id);
+        if (!allowed || allowed.length === 0) return res.json([]);
+        const result = await pool.query(
+          `${baseQuery} AND y.cohort_id = ANY($1)
+           ORDER BY om.updated_at DESC NULLS LAST, om.created_at DESC`,
+          [allowed],
+        );
+        return res.json(result.rows);
+      }
+
       const result = await pool.query(
-        "SELECT * FROM output_milestone ORDER BY created_at DESC",
+        `${baseQuery}
+         ORDER BY om.created_at DESC`,
       );
       res.json(result.rows);
     } catch (err) {
@@ -1320,14 +1575,43 @@ app.get(
 app.post(
   "/api/outcomes",
   authenticateToken,
-  authorizeRoles("admin", "program_manager", "enumerator"),
+  authorizeRoles("admin", "program_manager", "ybf", "enumerator"),
   validateRequired(["youth_id", "milestone_type", "status"]),
   async (req, res) => {
     const { youth_id, milestone_type, status } = req.body;
     try {
+      if (req.user && req.user.role === "ybf") {
+        const youthRes = await pool.query(
+          `SELECT cohort_id FROM youth WHERE id = $1 AND deleted_by IS NULL`,
+          [youth_id],
+        );
+        if (!youthRes.rows[0]) {
+          return res.status(404).json({ error: "Youth not found" });
+        }
+        const allowed = await getUserCohorts(req.user.id);
+        if (!allowed.includes(youthRes.rows[0].cohort_id)) {
+          return res.status(403).json({ error: "You do not have access to this youth" });
+        }
+      }
+
+      const existing = await pool.query(
+        `SELECT id FROM output_milestone WHERE youth_id = $1 AND milestone_type = $2 LIMIT 1`,
+        [youth_id, milestone_type],
+      );
+
+      if (existing.rows[0]) {
+        const result = await pool.query(
+          `UPDATE output_milestone
+           SET status = $1, updated_at = NOW()
+           WHERE id = $2 RETURNING *`,
+          [status, existing.rows[0].id],
+        );
+        return res.json(result.rows[0]);
+      }
+
       const result = await pool.query(
         `INSERT INTO output_milestone (youth_id, milestone_type, status)
-       VALUES ($1, $2, $3) RETURNING *`,
+         VALUES ($1, $2, $3) RETURNING *`,
         [youth_id, milestone_type, status],
       );
       res.status(201).json(result.rows[0]);
@@ -1340,14 +1624,30 @@ app.post(
 app.put(
   "/api/outcomes/:id",
   authenticateToken,
-  authorizeRoles("admin", "program_manager", "enumerator"),
+  authorizeRoles("admin", "program_manager", "ybf", "enumerator"),
   async (req, res) => {
     const { id } = req.params;
     const { milestone_type, status } = req.body;
     try {
+      if (req.user && req.user.role === "ybf") {
+        const accessRes = await pool.query(
+          `SELECT y.cohort_id FROM output_milestone om
+           JOIN youth y ON y.id = om.youth_id
+           WHERE om.id = $1`,
+          [id],
+        );
+        if (!accessRes.rows[0]) {
+          return res.status(404).json({ error: "Output milestone not found" });
+        }
+        const allowed = await getUserCohorts(req.user.id);
+        if (!allowed.includes(accessRes.rows[0].cohort_id)) {
+          return res.status(403).json({ error: "You do not have access to this record" });
+        }
+      }
+
       const result = await pool.query(
         `UPDATE output_milestone 
-       SET milestone_type = $1, status = $2, updated_at = NOW()
+       SET milestone_type = COALESCE($1, milestone_type), status = COALESCE($2, status), updated_at = NOW()
        WHERE id = $3 RETURNING *`,
         [milestone_type, status, id],
       );
@@ -1414,13 +1714,28 @@ app.get(
   authorizeRoles("admin", "program_manager", "ybf", "instructor"),
   async (req, res) => {
     try {
-      const result = await pool.query(`
-      SELECT a.*, s.topic, s.session_date, y.full_name as youth_name
-      FROM attendance_record a
-      JOIN session s ON a.session_id = s.id
-      JOIN youth y ON a.youth_id = y.id
-      ORDER BY s.session_date DESC, y.full_name
-    `);
+      const baseQuery = `
+        SELECT a.*, s.topic, s.session_date, s.cohort_id, y.full_name AS youth_name
+        FROM attendance_record a
+        JOIN session s ON a.session_id = s.id
+        JOIN youth y ON a.youth_id = y.id`;
+
+      if (req.user && req.user.role === "ybf") {
+        const allowed = await getUserCohorts(req.user.id);
+        if (!allowed || allowed.length === 0) return res.json([]);
+        const result = await pool.query(
+          `${baseQuery}
+           WHERE s.cohort_id = ANY($1)
+           ORDER BY s.session_date DESC, y.full_name`,
+          [allowed],
+        );
+        return res.json(result.rows);
+      }
+
+      const result = await pool.query(
+        `${baseQuery}
+         ORDER BY s.session_date DESC, y.full_name`,
+      );
       res.json(result.rows);
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -1436,6 +1751,31 @@ app.post(
   async (req, res) => {
     const { session_id, youth_id, status } = req.body;
     try {
+      if (req.user && req.user.role === "ybf") {
+        const sessionRes = await pool.query(
+          `SELECT cohort_id FROM session WHERE id = $1`,
+          [session_id],
+        );
+        if (!sessionRes.rows[0]) {
+          return res.status(404).json({ error: "Session not found" });
+        }
+        if (!(await ensureYbfCohortAccess(req, res, sessionRes.rows[0].cohort_id))) {
+          return;
+        }
+      }
+
+      const existing = await pool.query(
+        `SELECT id FROM attendance_record WHERE session_id = $1 AND youth_id = $2`,
+        [session_id, youth_id],
+      );
+      if (existing.rows[0]) {
+        const result = await pool.query(
+          `UPDATE attendance_record SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+          [status, existing.rows[0].id],
+        );
+        return res.json(result.rows[0]);
+      }
+
       const result = await pool.query(
         `INSERT INTO attendance_record (session_id, youth_id, status)
          VALUES ($1, $2, $3) RETURNING *`,
@@ -1444,6 +1784,74 @@ app.post(
       res.status(201).json(result.rows[0]);
     } catch (err) {
       res.status(500).json({ error: err.message });
+    }
+  },
+);
+
+app.post(
+  "/api/attendance/bulk",
+  authenticateToken,
+  authorizeRoles("admin", "program_manager", "ybf", "instructor"),
+  validateRequired(["records"]),
+  async (req, res) => {
+    const { records } = req.body;
+    if (!Array.isArray(records) || records.length === 0) {
+      return res.status(400).json({ error: "records must be a non-empty array" });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const saved = [];
+
+      for (const record of records) {
+        const { session_id, youth_id, status } = record;
+        if (!session_id || !youth_id || !status) {
+          throw new Error("Each record requires session_id, youth_id, and status");
+        }
+
+        if (req.user && req.user.role === "ybf") {
+          const sessionRes = await client.query(
+            `SELECT cohort_id FROM session WHERE id = $1`,
+            [session_id],
+          );
+          if (!sessionRes.rows[0]) {
+            throw new Error(`Session not found: ${session_id}`);
+          }
+          const allowed = await getUserCohorts(req.user.id);
+          if (!allowed.includes(sessionRes.rows[0].cohort_id)) {
+            throw new Error("You do not have access to one or more sessions");
+          }
+        }
+
+        const existing = await client.query(
+          `SELECT id FROM attendance_record WHERE session_id = $1 AND youth_id = $2`,
+          [session_id, youth_id],
+        );
+
+        if (existing.rows[0]) {
+          const updated = await client.query(
+            `UPDATE attendance_record SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+            [status, existing.rows[0].id],
+          );
+          saved.push(updated.rows[0]);
+        } else {
+          const inserted = await client.query(
+            `INSERT INTO attendance_record (session_id, youth_id, status)
+             VALUES ($1, $2, $3) RETURNING *`,
+            [session_id, youth_id, status],
+          );
+          saved.push(inserted.rows[0]);
+        }
+      }
+
+      await client.query("COMMIT");
+      res.json({ message: "Attendance saved", count: saved.length, records: saved });
+    } catch (err) {
+      await client.query("ROLLBACK");
+      res.status(500).json({ error: err.message });
+    } finally {
+      client.release();
     }
   },
 );

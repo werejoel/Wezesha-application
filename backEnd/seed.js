@@ -258,6 +258,69 @@ for (const user of users) {
 }
 console.log(`✅ ${users.length} users added`);
 
+// 6.5 Assign YBF user to Nairobi Technical Institute cohort
+console.log('Assigning YBF to cohort...');
+await client.query(`
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS assigned_to UUID
+`);
+await client.query(`
+  CREATE TABLE IF NOT EXISTS ybf_assignment (
+    user_id UUID NOT NULL,
+    cohort_id UUID NOT NULL,
+    PRIMARY KEY (user_id, cohort_id)
+  )
+`);
+
+const ybfUserRes = await client.query(
+  `SELECT id FROM users WHERE email = $1`,
+  ['ybf@wezesha.org']
+);
+const nairobiPartnerId = partnerMap['Nairobi Technical Institute'];
+const nairobiCohortId = cohortMap['Nairobi Technical Institute-2024'];
+
+if (ybfUserRes.rows[0] && nairobiPartnerId) {
+  await client.query(
+    `UPDATE users SET assigned_to = $1 WHERE id = $2`,
+    [nairobiPartnerId, ybfUserRes.rows[0].id]
+  );
+}
+if (ybfUserRes.rows[0] && nairobiCohortId) {
+  await client.query(
+    `INSERT INTO ybf_assignment (user_id, cohort_id)
+     VALUES ($1, $2)
+     ON CONFLICT DO NOTHING`,
+    [ybfUserRes.rows[0].id, nairobiCohortId]
+  );
+}
+console.log('✅ YBF cohort assignment added');
+
+// 6.6 Output milestones for sample youth
+console.log('Adding output milestones...');
+const milestoneYouth = ['Alice Wanjiru', 'Brian Odhiambo', 'Catherine Njeri', 'James Kiptoo'];
+const milestoneDefs = [
+  { type: 'Business Plan', statuses: ['Completed', 'In Progress', 'Not Started', 'Completed'] },
+  { type: 'CV', statuses: ['In Progress', 'Not Started', 'Completed', 'Completed'] },
+  { type: 'Application Letter', statuses: ['Not Started', 'Not Started', 'In Progress', 'Completed'] },
+];
+
+for (let i = 0; i < milestoneYouth.length; i++) {
+  const youthId = youthMap[milestoneYouth[i]];
+  if (!youthId) continue;
+  for (const def of milestoneDefs) {
+    const existing = await client.query(
+      `SELECT id FROM output_milestone WHERE youth_id = $1 AND milestone_type = $2 LIMIT 1`,
+      [youthId, def.type]
+    );
+    if (existing.rows[0]) continue;
+    await client.query(
+      `INSERT INTO output_milestone (youth_id, milestone_type, status)
+       VALUES ($1, $2, $3)`,
+      [youthId, def.type, def.statuses[i]]
+    );
+  }
+}
+console.log('✅ Output milestones added');
+
 // Get admin user id for case notes
 const adminUserRes = await client.query(
   `SELECT id FROM users WHERE email = $1`,

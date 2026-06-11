@@ -249,6 +249,13 @@ export const updateAttendance = (id: string, data: object) =>
     body: JSON.stringify(data),
   }).then(handleResponse);
 
+export const createBulkAttendance = (records: {
+  session_id: string | number;
+  youth_id: string | number;
+  status: string;
+}[]) =>
+  post("/attendance/bulk", { records });
+
 //Risk endpoints
 export const getAtRiskYouth = (
   opts: { limit?: number; page?: number } = { limit: 20, page: 1 },

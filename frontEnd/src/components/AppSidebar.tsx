@@ -51,10 +51,12 @@ const roleSidebarItems: Record<string, typeof mainItems> = {
     mainItems[7],
   ],
   ybf: [
-    mainItems[0],
-    mainItems[1],
-    mainItems[3],
-    mainItems[5],
+    { title: "My Dashboard", url: "/", icon: LayoutDashboard },
+    { title: "My Institutions", url: "/partners", icon: Building2 },
+    { title: "Youth Roster", url: "/youth", icon: Users },
+    { title: "Session Schedule", url: "/sessions", icon: CalendarCheck },
+    { title: "Case Management", url: "/cases", icon: FolderOpen },
+    { title: "Output Tracking", url: "/outcomes", icon: TrendingUp },
   ],
   instructor: [
     mainItems[0],
