@@ -131,7 +131,8 @@ const getPartnerIdsForCohorts = async (cohortIds) => {
 const ensureYbfCohortAccess = async (req, res, cohortId) => {
   if (!req.user || req.user.role !== "ybf") return true;
   const allowed = await getUserCohorts(req.user.id);
-  if (!allowed.includes(Number(cohortId))) {
+  const allowedIds = allowed.map(String);
+  if (!allowedIds.includes(String(cohortId))) {
     res.status(403).json({ error: "You do not have access to this cohort" });
     return false;
   }
@@ -504,6 +505,29 @@ app.get(
   authorizeRoles("admin", "program_manager", "ybf", "instructor", "enumerator"),
   async (req, res) => {
     try {
+      if (req.user && req.user.role === "ybf") {
+        const allowed = await getUserCohorts(req.user.id);
+        if (!allowed || allowed.length === 0) return res.json([]);
+        const result = await pool.query(
+          `SELECT c.id, c.program_year, c.partner_institution_id, p.name AS partner_name
+         FROM cohort c
+         LEFT JOIN partner_institution p ON p.id = c.partner_institution_id
+         WHERE c.id = ANY($1)
+         ORDER BY c.program_year DESC, p.name ASC`,
+          [allowed],
+        );
+        const formatted = result.rows.map((row) => ({
+          id: row.id,
+          program_year: row.program_year,
+          partner_name: row.partner_name,
+          partner_institution_id: row.partner_institution_id,
+          label: row.partner_name
+            ? `Cohort ${row.program_year} — ${row.partner_name}`
+            : `Cohort ${row.program_year}`,
+        }));
+        return res.json(formatted);
+      }
+
       const result = await pool.query(
         `SELECT c.id, c.program_year, c.partner_institution_id, p.name AS partner_name
        FROM cohort c
@@ -933,14 +957,26 @@ app.post(
       contact_email,
       partnership_date,
       startDate,
+      program_year,
+      programYear,
     } = req.body;
 
     const partnerType = institution_type || type;
     const partnershipDate = partnership_date || startDate || null;
+    const cohortYear = program_year ?? programYear;
     if (!name || !district || !partnerType) {
       return res.status(400).json({
         error: "Missing required fields: name, district, type",
       });
+    }
+
+    if (cohortYear !== undefined && cohortYear !== null && cohortYear !== "") {
+      const year = Number(cohortYear);
+      if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+        return res.status(400).json({
+          error: "Invalid program year for cohort (use 2000–2100)",
+        });
+      }
     }
 
     try {
@@ -958,7 +994,23 @@ app.post(
           partnershipDate,
         ],
       );
-      res.status(201).json(result.rows[0]);
+      const partner = result.rows[0];
+
+      if (cohortYear !== undefined && cohortYear !== null && cohortYear !== "") {
+        const year = Number(cohortYear);
+        const existingCohort = await pool.query(
+          `SELECT id FROM cohort WHERE partner_institution_id = $1 AND program_year = $2 LIMIT 1`,
+          [partner.id, year],
+        );
+        if (!existingCohort.rows[0]) {
+          await pool.query(
+            `INSERT INTO cohort (partner_institution_id, program_year) VALUES ($1, $2)`,
+            [partner.id, year],
+          );
+        }
+      }
+
+      res.status(201).json(partner);
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -1116,6 +1168,8 @@ app.post(
           .json({ error: "partner_institution_id and cohort_id are required" });
       }
 
+      if (!(await ensureYbfCohortAccess(req, res, cohortId))) return;
+
       const rawProgramType = program_type || programType;
       const resolvedProgramType = rawProgramType
         ? normalizeProgramType(rawProgramType)
@@ -1158,7 +1212,7 @@ app.post(
 app.put(
   "/api/youth/:id",
   authenticateToken,
-  authorizeRoles("admin", "program_manager"),
+  authorizeRoles("admin", "program_manager", "ybf"),
   async (req, res) => {
     const { id } = req.params;
     const {
@@ -1214,6 +1268,8 @@ app.put(
         }
       }
 
+      if (!(await ensureYbfCohortAccess(req, res, resolvedCohortId))) return;
+
       let programYear = null;
       if (resolvedCohortId) {
         const cohortRes = await pool.query(
@@ -1263,7 +1319,7 @@ app.put(
 app.delete(
   "/api/youth/:id",
   authenticateToken,
-  authorizeRoles("admin"),
+  authorizeRoles("admin", "program_manager"),
   async (req, res) => {
     const { id } = req.params;
     try {
