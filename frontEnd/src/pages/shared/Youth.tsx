@@ -256,6 +256,7 @@ export default function Youth() {
     partnerId: "",
     programType: "In-School",
     cohort: "",
+    cohortId: "",
     enrollmentDate: new Date().toISOString().slice(0, 10),
     dateOfBirth: "",
     district: "",
@@ -319,12 +320,18 @@ export default function Youth() {
         if (matching.length > 0 && !matching.some((c) => c.label === form.cohort)) {
           setForm((prev) => ({
             ...prev,
-            partner: prev.partner || (partners.find(p => p.id === matching[0].partnerId)?.name ?? ""),
+            partner: prev.partner || (partners.find((p) => p.id === matching[0].partnerId)?.name ?? ""),
             partnerId: prev.partnerId || matching[0].partnerId,
             cohort: matching[0].label,
+            cohortId: matching[0].id,
           }));
         } else if (!form.cohort && options.length > 0) {
-          setForm((prev) => ({ ...prev, cohort: options[0].label, partnerId: prev.partnerId || options[0].partnerId }));
+          setForm((prev) => ({
+            ...prev,
+            cohort: options[0].label,
+            cohortId: options[0].id,
+            partnerId: prev.partnerId || options[0].partnerId,
+          }));
         }
       } catch (err) {
         console.error("Failed to load cohorts", err);
@@ -374,7 +381,13 @@ export default function Youth() {
   useEffect(() => {
     const matching = cohorts.filter((cohort) => cohort.partnerId === form.partnerId);
     if (matching.length > 0 && !matching.some((cohort) => cohort.label === form.cohort)) {
-      setForm((prev) => ({ ...prev, cohort: matching[0].label }));
+      setForm((prev) => ({
+        ...prev,
+        cohort: matching[0].label,
+        cohortId: matching[0].id,
+      }));
+    } else if (matching.length === 0) {
+      setForm((prev) => ({ ...prev, cohortId: "" }));
     }
   }, [form.partnerId, cohorts]);
 
@@ -396,16 +409,20 @@ export default function Youth() {
           date_of_birth: form.dateOfBirth,
           gender: form.gender,
           district: form.district,
+          program_type: form.programType,
         };
         if (form.partnerId) payload.partner_institution_id = form.partnerId;
         else if (form.partner) payload.partner = form.partner;
 
-        // prefer sending cohort_id when we can resolve it from loaded cohorts
-        const selectedCohort = cohorts.find(
-          (c) => c.label === form.cohort && c.partnerId === form.partnerId,
-        );
-        if (selectedCohort) payload.cohort_id = selectedCohort.id;
-        else if (form.cohort) payload.cohort = form.cohort;
+        if (form.cohortId) {
+          payload.cohort_id = form.cohortId;
+        } else {
+          const selectedCohort = cohorts.find(
+            (c) => c.label === form.cohort && c.partnerId === form.partnerId,
+          );
+          if (selectedCohort) payload.cohort_id = selectedCohort.id;
+          else if (form.cohort) payload.cohort = form.cohort;
+        }
         const created = await createYouth(payload);
         const newYouth = normalizeYouth({
           ...created,
@@ -432,6 +449,7 @@ export default function Youth() {
           partnerId: "",
           programType: "In-School",
           cohort: "",
+          cohortId: "",
           enrollmentDate: new Date().toISOString().slice(0, 10),
           dateOfBirth: "",
           district: "",
@@ -601,9 +619,14 @@ export default function Youth() {
                     <Label htmlFor="youth-cohort">Cohort</Label>
                     {filteredCohorts.length > 0 ? (
                       <Select
-                        value={form.cohort}
+                        value={form.cohortId}
                         onValueChange={(value) => {
-                          setForm({ ...form, cohort: value });
+                          const selected = filteredCohorts.find((c) => c.id === value);
+                          setForm({
+                            ...form,
+                            cohortId: value,
+                            cohort: selected ? selected.label : form.cohort,
+                          });
                           setFieldErrors({ ...fieldErrors, cohort: "" });
                         }}
                       >
@@ -612,7 +635,7 @@ export default function Youth() {
                         </SelectTrigger>
                         <SelectContent>
                           {filteredCohorts.map((cohort) => (
-                            <SelectItem key={cohort.id} value={cohort.label}>
+                            <SelectItem key={cohort.id} value={cohort.id}>
                               {cohort.label}
                             </SelectItem>
                           ))}

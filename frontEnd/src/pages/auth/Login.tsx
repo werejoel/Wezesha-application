@@ -255,7 +255,6 @@ const Login = () => {
             </div>
           </div>
 
-          {/* Demo credentials */}
           <div className="rounded-xl border border-gray-100 bg-gray-50 divide-y divide-gray-100 text-xs overflow-hidden">
             {[
               {

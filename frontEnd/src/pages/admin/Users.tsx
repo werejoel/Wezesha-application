@@ -263,10 +263,25 @@ export default function AdminUsers() {
   const distributionTotal = Math.max(usersCount, 1);
   const roleDistribution = [
     { role: "admin", label: "Admins", count: adminCount, color: "bg-sky-500" },
-    { role: "program_manager", label: "Program Managers", count: managerCount, color: "bg-emerald-500" },
+    {
+      role: "program_manager",
+      label: "Program Managers",
+      count: managerCount,
+      color: "bg-emerald-500",
+    },
     { role: "ybf", label: "YBF", count: ybfCount, color: "bg-fuchsia-500" },
-    { role: "instructor", label: "Instructors", count: instructorCount, color: "bg-violet-500" },
-    { role: "enumerator", label: "Enumerators", count: enumeratorCount, color: "bg-slate-500" },
+    {
+      role: "instructor",
+      label: "Instructors",
+      count: instructorCount,
+      color: "bg-violet-500",
+    },
+    {
+      role: "enumerator",
+      label: "Enumerators",
+      count: enumeratorCount,
+      color: "bg-slate-500",
+    },
   ];
 
   return (
@@ -487,20 +502,36 @@ export default function AdminUsers() {
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
-          <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Total users</p>
-          <p className="mt-2 text-3xl font-semibold text-slate-900">{usersCount}</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+            Total users
+          </p>
+          <p className="mt-2 text-3xl font-semibold text-slate-900">
+            {usersCount}
+          </p>
         </div>
         <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 shadow-sm">
-          <p className="text-xs uppercase tracking-[0.2em] text-sky-700">Admins</p>
-          <p className="mt-2 text-3xl font-semibold text-sky-900">{adminCount}</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-sky-700">
+            Admins
+          </p>
+          <p className="mt-2 text-3xl font-semibold text-sky-900">
+            {adminCount}
+          </p>
         </div>
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm">
-          <p className="text-xs uppercase tracking-[0.2em] text-emerald-700">Program managers</p>
-          <p className="mt-2 text-3xl font-semibold text-emerald-900">{managerCount}</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-emerald-700">
+            Program managers
+          </p>
+          <p className="mt-2 text-3xl font-semibold text-emerald-900">
+            {managerCount}
+          </p>
         </div>
         <div className="rounded-2xl border border-fuchsia-200 bg-fuchsia-50 p-4 shadow-sm">
-          <p className="text-xs uppercase tracking-[0.2em] text-fuchsia-700">YBF</p>
-          <p className="mt-2 text-3xl font-semibold text-fuchsia-900">{ybfCount}</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-fuchsia-700">
+            YBF
+          </p>
+          <p className="mt-2 text-3xl font-semibold text-fuchsia-900">
+            {ybfCount}
+          </p>
         </div>
       </div>
 
@@ -514,8 +545,12 @@ export default function AdminUsers() {
             return (
               <div key={item.role} className="space-y-2">
                 <div className="flex items-center justify-between text-sm text-slate-700">
-                  <span className="font-medium text-slate-900">{item.label}</span>
-                  <span className="font-semibold text-slate-900">{item.count} ({percent}%)</span>
+                  <span className="font-medium text-slate-900">
+                    {item.label}
+                  </span>
+                  <span className="font-semibold text-slate-900">
+                    {item.count} ({percent}%)
+                  </span>
                 </div>
                 <div className="h-3 overflow-hidden rounded-full bg-slate-100">
                   <div

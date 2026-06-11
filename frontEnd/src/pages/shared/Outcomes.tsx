@@ -29,7 +29,8 @@ function normalizeOutcomeYouth(item: any): OutcomeYouth {
   return {
     baselineIncome: Number(item.baseline_income ?? item.baselineIncome ?? 0),
     currentIncome: Number(item.current_income ?? item.currentIncome ?? 0),
-    employmentStatus: item.employment_status || item.employmentStatus || "Unemployed",
+    employmentStatus:
+      item.employment_status || item.employmentStatus || "Unemployed",
     hasBusiness: Boolean(item.has_business ?? item.hasBusiness ?? false),
     aboveIPL: Boolean(item.above_ipl ?? item.aboveIPL ?? false),
   };
@@ -69,10 +70,14 @@ export default function Outcomes() {
 
   const totalYouth = youth.length;
   const avgIncome = totalYouth
-    ? Math.round(youth.reduce((sum, y) => sum + y.currentIncome, 0) / totalYouth)
+    ? Math.round(
+        youth.reduce((sum, y) => sum + y.currentIncome, 0) / totalYouth,
+      )
     : 0;
   const avgBaselineIncome = totalYouth
-    ? Math.round(youth.reduce((sum, y) => sum + y.baselineIncome, 0) / totalYouth)
+    ? Math.round(
+        youth.reduce((sum, y) => sum + y.baselineIncome, 0) / totalYouth,
+      )
     : 0;
   const aboveIPL = youth.filter((y) => y.aboveIPL).length;
   const businessStarted = youth.filter((y) => y.hasBusiness).length;
@@ -81,15 +86,18 @@ export default function Outcomes() {
     () => [
       {
         name: "Full-time",
-        value: youth.filter((y) => y.employmentStatus === "Employed Full-time").length,
+        value: youth.filter((y) => y.employmentStatus === "Employed Full-time")
+          .length,
       },
       {
         name: "Part-time",
-        value: youth.filter((y) => y.employmentStatus === "Employed Part-time").length,
+        value: youth.filter((y) => y.employmentStatus === "Employed Part-time")
+          .length,
       },
       {
         name: "Self-employed",
-        value: youth.filter((y) => y.employmentStatus === "Self-employed").length,
+        value: youth.filter((y) => y.employmentStatus === "Self-employed")
+          .length,
       },
       {
         name: "Unemployed",
@@ -128,14 +136,17 @@ export default function Outcomes() {
       },
       {
         range: "10K+",
-        count: youth.filter((y) => y.currentIncome - y.baselineIncome >= 10000).length,
+        count: youth.filter((y) => y.currentIncome - y.baselineIncome >= 10000)
+          .length,
       },
     ],
     [youth],
   );
 
   const safeTotal = Math.max(totalYouth, 1);
-  const inWorkPercentage = Math.round(((totalYouth - employmentData[3].value) / safeTotal) * 100);
+  const inWorkPercentage = Math.round(
+    ((totalYouth - employmentData[3].value) / safeTotal) * 100,
+  );
   const abovePLPercentage = Math.round((aboveIPL / safeTotal) * 100);
   const businessPercentage = Math.round((businessStarted / safeTotal) * 100);
 
@@ -151,7 +162,11 @@ export default function Outcomes() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Avg Income Change"
-          value={totalYouth ? `+${Math.round(((avgIncome - avgBaselineIncome) / Math.max(avgBaselineIncome, 1)) * 100)}%` : "0%"}
+          value={
+            totalYouth
+              ? `+${Math.round(((avgIncome - avgBaselineIncome) / Math.max(avgBaselineIncome, 1)) * 100)}%`
+              : "0%"
+          }
           subtitle={`${formatMoney(avgBaselineIncome)} → ${formatMoney(avgIncome)}`}
           icon={TrendingUp}
           variant="success"
@@ -193,7 +208,9 @@ export default function Outcomes() {
                   cy="50%"
                   outerRadius={90}
                   dataKey="value"
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  label={({ name, percent }) =>
+                    `${name} ${(percent * 100).toFixed(0)}%`
+                  }
                 >
                   {employmentData.map((_, i) => (
                     <Cell key={i} fill={COLORS[i]} />
@@ -214,11 +231,18 @@ export default function Outcomes() {
           <CardContent>
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={incomeChangeData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(40, 15%, 89%)" />
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="hsl(40, 15%, 89%)"
+                />
                 <XAxis dataKey="range" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} />
                 <Tooltip />
-                <Bar dataKey="count" fill="hsl(152, 55%, 33%)" radius={[4, 4, 0, 0]} />
+                <Bar
+                  dataKey="count"
+                  fill="hsl(152, 55%, 33%)"
+                  radius={[4, 4, 0, 0]}
+                />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -255,10 +279,15 @@ export default function Outcomes() {
                 desc: "Since enrollment in program",
               },
             ].map((item) => (
-              <div key={item.label} className="text-center p-4 rounded-xl bg-muted/50">
+              <div
+                key={item.label}
+                className="text-center p-4 rounded-xl bg-muted/50"
+              >
                 <p className="text-2xl font-bold font-heading">{item.value}</p>
                 <p className="text-sm font-medium mt-1">{item.label}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{item.desc}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {item.desc}
+                </p>
               </div>
             ))}
           </div>

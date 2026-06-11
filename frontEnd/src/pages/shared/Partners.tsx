@@ -22,7 +22,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Building2, Plus, Users, UserCheck, Phone, Mail, Edit3, Trash2 } from "lucide-react";
+import {
+  Building2,
+  Plus,
+  Users,
+  UserCheck,
+  Phone,
+  Mail,
+  Edit3,
+  Trash2,
+} from "lucide-react";
 import { StatCard } from "@/components/StatCard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -174,7 +183,9 @@ export default function Partners() {
   const [personnelForm, setPersonnelForm] =
     useState<PersonnelForm>(defaultPersonnelForm);
   const [editingPartner, setEditingPartner] = useState<Partner | null>(null);
-  const [editingPersonnel, setEditingPersonnel] = useState<Personnel | null>(null);
+  const [editingPersonnel, setEditingPersonnel] = useState<Personnel | null>(
+    null,
+  );
   const [deleteTarget, setDeleteTarget] = useState<{
     type: "partner" | "personnel";
     id: string;
@@ -312,8 +323,8 @@ export default function Partners() {
         person.role === "YBF"
           ? "YBF"
           : person.role === "Instructor"
-          ? "Instructor"
-          : "Enumerator",
+            ? "Instructor"
+            : "Enumerator",
       contact: person.contact === "-" ? "" : person.contact,
       email: person.email === "-" ? "" : person.email,
       assignedTo: person.assignedTo === "-" ? "" : person.assignedTo,
@@ -478,7 +489,9 @@ export default function Partners() {
               <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
                   <DialogTitle>
-                    {editingPersonnel ? "Edit Personnel Record" : "Add Personnel Record"}
+                    {editingPersonnel
+                      ? "Edit Personnel Record"
+                      : "Add Personnel Record"}
                   </DialogTitle>
                 </DialogHeader>
                 {personnelFormError ? (
@@ -1000,7 +1013,9 @@ export default function Partners() {
                     <TableHead>Cohorts</TableHead>
                     <TableHead>YBF</TableHead>
                     <TableHead>Status</TableHead>
-                    {(canEditPartner || canDeletePartner) && <TableHead>Actions</TableHead>}
+                    {(canEditPartner || canDeletePartner) && (
+                      <TableHead>Actions</TableHead>
+                    )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>

@@ -73,6 +73,14 @@ const resolveYouthIdentifiers = async (body) => {
   return { partnerId, cohortId };
 };
 
+const normalizeProgramType = (value) => {
+  if (!value || typeof value !== "string") return null;
+  const compact = value.trim().toLowerCase().replace(/[-_\s]/g, "");
+  if (compact === "inschool") return "In-school";
+  if (compact === "outofschool") return "Out-of-school";
+  return null;
+};
+
 // Helper: get cohorts assigned to a user (YBF). Tries multiple strategies and
 // returns an array of cohort ids (may be empty).
 const getUserCohorts = async (userId) => {
@@ -331,7 +339,7 @@ app.get(
   async (req, res) => {
     try {
       const result = await pool.query(
-        `SELECT c.id, c.program_year, p.name AS partner_name
+        `SELECT c.id, c.program_year, c.partner_institution_id, p.name AS partner_name
        FROM cohort c
        LEFT JOIN partner_institution p ON p.id = c.partner_institution_id
        ORDER BY c.program_year DESC, p.name ASC`,
@@ -877,7 +885,7 @@ app.get(
 app.post(
   "/api/youth",
   authenticateToken,
-  authorizeRoles("admin", "program_manager"),
+  authorizeRoles("admin", "program_manager", "ybf"),
   validateRequired(["full_name", "date_of_birth", "gender", "district"]),
   async (req, res) => {
     const {
@@ -920,12 +928,38 @@ app.post(
           .json({ error: "partner_institution_id and cohort_id are required" });
       }
 
-      const resolvedProgramType = program_type || programType || 'In-School';
+      const rawProgramType = program_type || programType;
+      const resolvedProgramType = rawProgramType
+        ? normalizeProgramType(rawProgramType)
+        : "In-school";
+      if (!resolvedProgramType) {
+        return res
+          .status(400)
+          .json({ error: "Invalid program type. Use In-school or Out-of-school." });
+      }
+
+      const cohortRes = await pool.query(
+        `SELECT program_year FROM cohort WHERE id = $1 LIMIT 1`,
+        [cohortId],
+      );
+      const programYear = cohortRes.rows[0]?.program_year;
+      if (!programYear) {
+        return res.status(400).json({ error: "Invalid cohort selected" });
+      }
 
       const result = await pool.query(
-        `INSERT INTO youth (full_name, date_of_birth, gender, district_of_residence, partner_institution_id, cohort_id, program_type)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-        [full_name, date_of_birth, gender, district, partnerId, cohortId, resolvedProgramType],
+        `INSERT INTO youth (full_name, date_of_birth, gender, district_of_residence, partner_institution_id, cohort_id, program_type, program_year)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+        [
+          full_name,
+          date_of_birth,
+          gender,
+          district,
+          partnerId,
+          cohortId,
+          resolvedProgramType,
+          programYear,
+        ],
       );
       res.status(201).json(result.rows[0]);
     } catch (err) {
@@ -992,10 +1026,30 @@ app.put(
         }
       }
 
+      let programYear = null;
+      if (resolvedCohortId) {
+        const cohortRes = await pool.query(
+          `SELECT program_year FROM cohort WHERE id = $1 LIMIT 1`,
+          [resolvedCohortId],
+        );
+        programYear = cohortRes.rows[0]?.program_year || null;
+      }
+
+      let resolvedProgramType =
+        typeof program_type === "string"
+          ? normalizeProgramType(program_type)
+          : existing.rows[0]?.program_type;
+      if (typeof program_type === "string" && !resolvedProgramType) {
+        return res
+          .status(400)
+          .json({ error: "Invalid program type. Use In-school or Out-of-school." });
+      }
+      if (!resolvedProgramType) resolvedProgramType = "In-school";
+
       const result = await pool.query(
         `UPDATE youth 
-       SET full_name = $1, date_of_birth = $2, gender = $3, district_of_residence = $4, partner_institution_id = $5, cohort_id = $6, program_type = $7, updated_at = NOW()
-       WHERE id = $8 AND deleted_by IS NULL RETURNING *`,
+       SET full_name = $1, date_of_birth = $2, gender = $3, district_of_residence = $4, partner_institution_id = $5, cohort_id = $6, program_type = $7, program_year = $8, updated_at = NOW()
+       WHERE id = $9 AND deleted_by IS NULL RETURNING *`,
         [
           full_name,
           date_of_birth,
@@ -1003,7 +1057,8 @@ app.put(
           district,
           resolvedPartnerId,
           resolvedCohortId,
-          program_type,
+          resolvedProgramType,
+          programYear,
           id,
         ],
       );
