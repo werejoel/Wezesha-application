@@ -1,9 +1,17 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
-import { Bell, Search } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useUser } from "@/hooks/use-user";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
+  const { user } = useUser();
+  const initials = user?.name
+    ?.split(" ")
+    .map((n) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase() || "WI";
+
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full">
@@ -23,14 +31,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               */}
             </div>
             <div className="flex items-center gap-2">
-             {/* <Button variant="ghost" size="icon" className="relative">
-                <Bell className="h-4 w-4" />
-                <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-destructive" />
-              </Button>
-              */}
+              <ThemeToggle compact />
               <div className="flex items-center gap-2 ml-2">
                 <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xs font-semibold">
-                  WI
+                  {initials}
                 </div>
               </div>
             </div>

@@ -5,6 +5,7 @@ import { useUser } from '@/hooks/use-user';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 
 const Login = () => {
@@ -35,7 +36,10 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col lg:flex-row font-sans">
+    <div className="min-h-screen flex flex-col lg:flex-row font-sans relative">
+      <div className="absolute top-4 right-4 z-20">
+        <ThemeToggle />
+      </div>
       {/* ── Left brand panel ── */}
       <div
         className="hidden lg:flex lg:w-5/12 xl:w-2/5 flex-col justify-between p-12 relative overflow-hidden"
@@ -243,71 +247,10 @@ const Login = () => {
             </Button>
           </form>
 
-          {/* Divider */}
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-200" />
-            </div>
-            <div className="relative flex justify-center">
-              <span className="px-3 bg-white text-xs text-gray-400 uppercase tracking-widest">
-                Demo accounts
-              </span>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-gray-100 bg-gray-50 divide-y divide-gray-100 text-xs overflow-hidden">
-            {[
-              {
-                role: "Admin",
-                email: "admin@wezesha.org",
-                pass: "admin123",
-                color: "#7c3aed",
-              },
-              {
-                role: "Program Manager",
-                email: "manager@wezesha.org",
-                pass: "manager123",
-                color: "#059669",
-              },
-              {
-                role: "YBF",
-                email: "ybf@wezesha.org",
-                pass: "ybf123",
-                color: "#0f4c3a",
-              },
-              {
-                role: "Instructor",
-                email: "instructor@wezesha.org",
-                pass: "instructor123",
-                color: "#dc2626",
-              },
-              {
-                role: "Enumerator",
-                email: "enumerator@wezesha.org",
-                pass: "enum123",
-                color: "#b45309",
-              },
-            ].map(({ role, email: demoEmail, pass, color }) => (
-              <button
-                key={role}
-                type="button"
-                onClick={() => {
-                  setEmail(demoEmail);
-                  setPassword(pass);
-                }}
-                className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white transition-colors text-left group"
-              >
-                <span
-                  className="w-2 h-2 rounded-full shrink-0"
-                  style={{ background: color }}
-                />
-                <span className="font-semibold text-gray-700 w-20">{role}</span>
-                <span className="text-gray-400 truncate group-hover:text-gray-600 transition-colors">
-                  {demoEmail}
-                </span>
-              </button>
-            ))}
-          </div>
+          <p className="rounded-lg border border-emerald-100 bg-emerald-50/80 px-4 py-3 text-center text-xs text-emerald-800">
+            Use your organization credentials. Contact your system administrator
+            if you need an account.
+          </p>
 
           <p className="text-center text-sm text-gray-500">
             No account?{" "}

@@ -239,27 +239,8 @@ for (const [youthName, youthId] of Object.entries(youthMap)) {
 }
 console.log('✅ Attendance records added');
 
-// 6. Create system users
-console.log('Adding system users...');
-const users = [
-  { name: 'System Admin', email: 'admin@wezesha.org', password: 'admin123', role: 'admin' },
-  { name: 'Youth Business Fellow', email: 'ybf@wezesha.org', password: 'ybf123', role: 'ybf' },
-  { name: 'Enumerator', email: 'enumerator@wezesha.org', password: 'enum123', role: 'enumerator' },
-];
-
-for (const user of users) {
-  const hashedPassword = await bcrypt.hash(user.password, 10);
-  await client.query(
-    `INSERT INTO users (name, email, password_hash, role)
-     VALUES ($1, $2, $3, $4)
-     ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email`,
-    [user.name, user.email, hashedPassword, user.role]
-  );
-}
-console.log(`✅ ${users.length} users added`);
-
-// 6.5 Assign YBF user to Nairobi Technical Institute cohort
-console.log('Assigning YBF to cohort...');
+// 6. Default system accounts (admin + program manager only)
+console.log('Adding default system accounts...');
 await client.query(`
   ALTER TABLE users ADD COLUMN IF NOT EXISTS assigned_to UUID
 `);
@@ -271,28 +252,34 @@ await client.query(`
   )
 `);
 
-const ybfUserRes = await client.query(
-  `SELECT id FROM users WHERE email = $1`,
-  ['ybf@wezesha.org']
-);
-const nairobiPartnerId = partnerMap['Nairobi Technical Institute'];
-const nairobiCohortId = cohortMap['Nairobi Technical Institute-2024'];
+const defaultUsers = [
+  {
+    name: 'System Administrator',
+    email: 'admin@wezesha.org',
+    password: 'Admin@Wezesha2026',
+    role: 'admin',
+  },
+  {
+    name: 'Program Manager',
+    email: 'manager@wezesha.org',
+    password: 'Manager@Wezesha2026',
+    role: 'program_manager',
+  },
+];
 
-if (ybfUserRes.rows[0] && nairobiPartnerId) {
+for (const user of defaultUsers) {
+  const hashedPassword = await bcrypt.hash(user.password, 10);
   await client.query(
-    `UPDATE users SET assigned_to = $1 WHERE id = $2`,
-    [nairobiPartnerId, ybfUserRes.rows[0].id]
+    `INSERT INTO users (name, email, password_hash, role)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (email) DO UPDATE SET
+       name = EXCLUDED.name,
+       password_hash = EXCLUDED.password_hash,
+       role = EXCLUDED.role`,
+    [user.name, user.email, hashedPassword, user.role]
   );
 }
-if (ybfUserRes.rows[0] && nairobiCohortId) {
-  await client.query(
-    `INSERT INTO ybf_assignment (user_id, cohort_id)
-     VALUES ($1, $2)
-     ON CONFLICT DO NOTHING`,
-    [ybfUserRes.rows[0].id, nairobiCohortId]
-  );
-}
-console.log('✅ YBF cohort assignment added');
+console.log(`✅ ${defaultUsers.length} default accounts ready (admin + program manager)`);
 
 // 6.6 Output milestones for sample youth
 console.log('Adding output milestones...');

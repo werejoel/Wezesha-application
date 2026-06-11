@@ -4,6 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { UserProvider, useUser } from "@/hooks/use-user";
+import { ThemeProvider } from "@/hooks/use-theme";
 import { AppLayout } from "@/components/AppLayout";
 import Dashboard from "./pages/Dashboard";
 import Partners from "./pages/Partners";
@@ -13,6 +14,7 @@ import Cases from "./pages/Cases";
 import Outcomes from "./pages/Outcomes";
 import Reports from "./pages/Reports";
 import AdminUsers from "./pages/admin/Users";
+import AdminSettings from "./pages/admin/Settings";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
@@ -40,6 +42,7 @@ const RoleProtectedRoute = ({
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
+    <ThemeProvider>
     <BrowserRouter>
       <UserProvider>
         <TooltipProvider>
@@ -61,6 +64,14 @@ const App = () => (
                         element={
                           <RoleProtectedRoute allowedRoles={["admin"]}>
                             <AdminUsers />
+                          </RoleProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/settings"
+                        element={
+                          <RoleProtectedRoute allowedRoles={["admin"]}>
+                            <AdminSettings />
                           </RoleProtectedRoute>
                         }
                       />
@@ -122,6 +133,7 @@ const App = () => (
         </TooltipProvider>
       </UserProvider>
     </BrowserRouter>
+    </ThemeProvider>
   </QueryClientProvider>
 );
 export default App;

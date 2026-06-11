@@ -944,7 +944,7 @@ app.post(
 app.post(
   "/api/partners",
   authenticateToken,
-  authorizeRoles("admin", "program_manager"),
+  authorizeRoles("admin", "program_manager", "ybf"),
   async (req, res) => {
     const {
       name,
@@ -1389,12 +1389,13 @@ app.post(
       venue,
       term_number,
       session_number,
-      facilitator,
     } = req.body;
     try {
+      if (!(await ensureYbfCohortAccess(req, res, cohort_id))) return;
+
       const result = await pool.query(
-        `INSERT INTO session (cohort_id, topic, session_date, venue, term_number, session_number, facilitator)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+        `INSERT INTO session (cohort_id, topic, session_date, venue, term_number, session_number)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
         [
           cohort_id,
           topic,
@@ -1402,7 +1403,6 @@ app.post(
           venue,
           term_number,
           session_number,
-          facilitator,
         ],
       );
       res.status(201).json(result.rows[0]);
@@ -1425,13 +1425,12 @@ app.put(
       venue,
       term_number,
       session_number,
-      facilitator,
     } = req.body;
     try {
       const result = await pool.query(
         `UPDATE session 
-       SET cohort_id = $1, topic = $2, session_date = $3, venue = $4, term_number = $5, session_number = $6, facilitator = $7, updated_at = NOW()
-       WHERE id = $8 RETURNING *`,
+       SET cohort_id = $1, topic = $2, session_date = $3, venue = $4, term_number = $5, session_number = $6, updated_at = NOW()
+       WHERE id = $7 RETURNING *`,
         [
           cohort_id,
           topic,
@@ -1439,7 +1438,6 @@ app.put(
           venue,
           term_number,
           session_number,
-          facilitator,
           id,
         ],
       );

@@ -8,7 +8,12 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { LucideIcon } from "lucide-react";
 
-export type FormTheme = "youth" | "partner" | "personnel";
+export type FormTheme =
+  | "youth"
+  | "partner"
+  | "personnel"
+  | "session"
+  | "outcomes";
 
 const themes: Record<
   FormTheme,
@@ -44,6 +49,22 @@ const themes: Record<
     section: "border-l-4 border-sky-500 bg-sky-50/80 rounded-r-lg",
     submit: "bg-sky-600 hover:bg-sky-700 text-white",
     iconWrap: "bg-sky-100 text-sky-700",
+  },
+  session: {
+    header: "bg-gradient-to-br from-violet-100 via-purple-50 to-fuchsia-50",
+    border: "border-violet-200",
+    title: "text-violet-900",
+    section: "border-l-4 border-violet-500 bg-violet-50/80 rounded-r-lg",
+    submit: "bg-violet-600 hover:bg-violet-700 text-white",
+    iconWrap: "bg-violet-100 text-violet-700",
+  },
+  outcomes: {
+    header: "bg-gradient-to-br from-emerald-100 via-teal-50 to-cyan-50",
+    border: "border-emerald-200",
+    title: "text-emerald-900",
+    section: "border-l-4 border-emerald-500 bg-emerald-50/60 rounded-r-lg",
+    submit: "bg-emerald-600 hover:bg-emerald-700 text-white",
+    iconWrap: "bg-emerald-100 text-emerald-700",
   },
 };
 

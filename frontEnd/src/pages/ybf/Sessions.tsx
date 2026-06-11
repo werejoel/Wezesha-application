@@ -3,11 +3,15 @@ import {
   getSessions,
   getYouth,
   getAttendance,
+  getCohorts,
+  createSession,
   createBulkAttendance,
 } from "@/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -21,7 +25,15 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  FormActions,
+  FormDialogShell,
+  FormFieldError,
+  FormSection,
+  formSelectClass,
+} from "@/components/FormDialogShell";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,7 +51,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CalendarCheck, CheckCircle2, ClipboardCheck } from "lucide-react";
+import {
+  CalendarCheck,
+  CheckCircle2,
+  ClipboardCheck,
+  Plus,
+} from "lucide-react";
 import { StatCard } from "@/components/StatCard";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -50,6 +67,17 @@ import {
 } from "./utils";
 
 type AttendanceMap = Record<string, AttendanceStatus>;
+
+const SESSION_TERMS = ["Term 1", "Term 2"] as const;
+
+const defaultSessionForm = () => ({
+  cohortId: "",
+  topic: "",
+  session_date: new Date().toISOString().slice(0, 10),
+  venue: "",
+  term: "Term 1" as (typeof SESSION_TERMS)[number],
+  sessionNumber: 1,
+});
 
 export default function YBFSessions() {
   const { toast } = useToast();
@@ -69,11 +97,20 @@ export default function YBFSessions() {
     ReturnType<typeof normalizeSessionRow> | null
   >(null);
   const [attendanceDraft, setAttendanceDraft] = useState<AttendanceMap>({});
+  const [addOpen, setAddOpen] = useState(false);
+  const [cohorts, setCohorts] = useState<
+    { id: string; label: string }[]
+  >([]);
+  const [sessionForm, setSessionForm] = useState(defaultSessionForm);
+  const [sessionErrors, setSessionErrors] = useState<Record<string, string>>(
+    {},
+  );
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     let mounted = true;
-    Promise.all([getSessions(), getYouth(), getAttendance()])
-      .then(([sessionRows, youthRows, attRows]) => {
+    Promise.all([getSessions(), getYouth(), getAttendance(), getCohorts()])
+      .then(([sessionRows, youthRows, attRows, cohortRows]) => {
         if (!mounted) return;
         setSessions(
           Array.isArray(sessionRows)
@@ -84,6 +121,23 @@ export default function YBFSessions() {
           Array.isArray(youthRows) ? youthRows.map(normalizeYouthRow) : [],
         );
         setAttendanceRows(Array.isArray(attRows) ? attRows : []);
+        const cohortOptions = Array.isArray(cohortRows)
+          ? cohortRows.map((c: any) => ({
+              id: String(c.id),
+              label:
+                c.label ||
+                (c.partner_name
+                  ? `Cohort ${c.program_year} — ${c.partner_name}`
+                  : `Cohort ${c.program_year}`),
+            }))
+          : [];
+        setCohorts(cohortOptions);
+        if (cohortOptions.length > 0) {
+          setSessionForm((prev) => ({
+            ...prev,
+            cohortId: prev.cohortId || cohortOptions[0].id,
+          }));
+        }
       })
       .catch(() => {
         if (mounted) {
@@ -182,6 +236,70 @@ export default function YBFSessions() {
     }
   };
 
+  useEffect(() => {
+    if (!addOpen) {
+      setSessionForm({
+        ...defaultSessionForm(),
+        cohortId: cohorts[0]?.id ?? "",
+      });
+      setSessionErrors({});
+    }
+  }, [addOpen, cohorts]);
+
+  const validateSessionForm = () => {
+    const errs: Record<string, string> = {};
+    if (!sessionForm.cohortId) errs.cohortId = "Select a cohort";
+    if (!sessionForm.topic.trim()) errs.topic = "Topic is required";
+    if (!sessionForm.session_date) errs.session_date = "Date is required";
+    if (!sessionForm.sessionNumber || sessionForm.sessionNumber <= 0)
+      errs.sessionNumber = "Session number must be greater than 0";
+    return errs;
+  };
+
+  const sessionFormValid = Object.keys(validateSessionForm()).length === 0;
+
+  const handleCreateSession = async () => {
+    const errs = validateSessionForm();
+    if (Object.keys(errs).length > 0) {
+      setSessionErrors(errs);
+      return;
+    }
+    setCreating(true);
+    try {
+      const created = await createSession({
+        cohort_id: sessionForm.cohortId,
+        topic: sessionForm.topic,
+        session_date: sessionForm.session_date,
+        venue: sessionForm.venue,
+        term_number: sessionForm.term === "Term 1" ? 1 : 2,
+        session_number: sessionForm.sessionNumber,
+      });
+      const cohortLabel =
+        cohorts.find((c) => c.id === sessionForm.cohortId)?.label ?? "";
+      setSessions((prev) => [
+        normalizeSessionRow({
+          ...created,
+          partner_name: created.partner_name || "",
+          term: sessionForm.term,
+          total_youth: 0,
+          attendance_count: 0,
+        }),
+        ...prev,
+      ]);
+      setAddOpen(false);
+      toast({
+        title: "Session scheduled",
+        description: `"${sessionForm.topic}" added for ${cohortLabel}.`,
+      });
+    } catch (err: any) {
+      setSessionErrors({
+        submit: err?.message || "Failed to create session",
+      });
+    } finally {
+      setCreating(false);
+    }
+  };
+
   const markAll = (status: AttendanceStatus) => {
     const next: AttendanceMap = {};
     for (const y of cohortYouth) next[y.id] = status;
@@ -194,12 +312,161 @@ export default function YBFSessions() {
 
   return (
     <div className="space-y-6">
-      <div className="page-header">
-        <h1 className="page-title">Session Schedule</h1>
-        <p className="page-description">
-          View your cohort session plan and mark attendance per session — bulk
-          or individual.
-        </p>
+      <div className="page-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h1 className="page-title">Session Schedule</h1>
+          <p className="page-description">
+            Schedule sessions for your cohorts and mark attendance — bulk or
+            individual.
+          </p>
+        </div>
+        <Dialog open={addOpen} onOpenChange={setAddOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-violet-600 hover:bg-violet-700 text-white shadow-sm">
+              <Plus className="h-4 w-4 mr-1" /> Add Session
+            </Button>
+          </DialogTrigger>
+          <FormDialogShell
+            theme="session"
+            icon={CalendarCheck}
+            title="Schedule New Session"
+            subtitle="Plan a session for one of your assigned cohorts"
+          >
+            <div className="space-y-4">
+              <FormSection theme="session" title="Session details">
+                <div>
+                  <Label htmlFor="ybf-session-cohort">Cohort</Label>
+                  {cohorts.length > 0 ? (
+                    <Select
+                      value={sessionForm.cohortId || undefined}
+                      onValueChange={(v) => {
+                        setSessionForm({ ...sessionForm, cohortId: v });
+                        setSessionErrors((p) => ({ ...p, cohortId: "" }));
+                      }}
+                    >
+                      <SelectTrigger
+                        id="ybf-session-cohort"
+                        className="bg-white/80"
+                      >
+                        <SelectValue placeholder="Select cohort" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {cohorts.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="text-sm text-muted-foreground border border-dashed rounded-lg p-3">
+                      No cohorts assigned. Add a partner institution first.
+                    </p>
+                  )}
+                  <FormFieldError message={sessionErrors.cohortId} />
+                </div>
+                <div>
+                  <Label htmlFor="ybf-session-topic">Topic</Label>
+                  <Input
+                    id="ybf-session-topic"
+                    value={sessionForm.topic}
+                    onChange={(e) => {
+                      setSessionForm({
+                        ...sessionForm,
+                        topic: e.target.value,
+                      });
+                      setSessionErrors((p) => ({ ...p, topic: "" }));
+                    }}
+                    placeholder="Business planning workshop"
+                    className="bg-white/80"
+                  />
+                  <FormFieldError message={sessionErrors.topic} />
+                </div>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="ybf-session-date">Date</Label>
+                    <Input
+                      id="ybf-session-date"
+                      type="date"
+                      value={sessionForm.session_date}
+                      onChange={(e) =>
+                        setSessionForm({
+                          ...sessionForm,
+                          session_date: e.target.value,
+                        })
+                      }
+                      className="bg-white/80"
+                    />
+                    <FormFieldError message={sessionErrors.session_date} />
+                  </div>
+                  <div>
+                    <Label htmlFor="ybf-session-number">Session #</Label>
+                    <Input
+                      id="ybf-session-number"
+                      type="number"
+                      min={1}
+                      value={String(sessionForm.sessionNumber)}
+                      onChange={(e) =>
+                        setSessionForm({
+                          ...sessionForm,
+                          sessionNumber: Number(e.target.value),
+                        })
+                      }
+                      className="bg-white/80"
+                    />
+                    <FormFieldError message={sessionErrors.sessionNumber} />
+                  </div>
+                </div>
+              </FormSection>
+
+              <FormSection theme="session" title="Logistics">
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="ybf-session-term">Term</Label>
+                    <select
+                      id="ybf-session-term"
+                      value={sessionForm.term}
+                      onChange={(e) =>
+                        setSessionForm({
+                          ...sessionForm,
+                          term: e.target.value as (typeof SESSION_TERMS)[number],
+                        })
+                      }
+                      className={formSelectClass}
+                    >
+                      {SESSION_TERMS.map((t) => (
+                        <option key={t} value={t}>
+                          {t}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <Label htmlFor="ybf-session-venue">Venue</Label>
+                    <Input
+                      id="ybf-session-venue"
+                      value={sessionForm.venue}
+                      onChange={(e) =>
+                        setSessionForm({ ...sessionForm, venue: e.target.value })
+                      }
+                      placeholder="Main hall"
+                      className="bg-white/80"
+                    />
+                  </div>
+                </div>
+              </FormSection>
+
+              <FormFieldError message={sessionErrors.submit} />
+              <FormActions
+                theme="session"
+                onCancel={() => setAddOpen(false)}
+                onSubmit={handleCreateSession}
+                submitLabel={creating ? "Scheduling…" : "Schedule Session"}
+                disabled={!sessionFormValid || creating || cohorts.length === 0}
+              />
+            </div>
+          </FormDialogShell>
+        </Dialog>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

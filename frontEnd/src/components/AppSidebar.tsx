@@ -9,6 +9,7 @@ import {
   Leaf,
   LogOut,
   ChevronRight,
+  Settings,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -37,6 +38,7 @@ const mainItems = [
   { title: "Case Management", url: "/cases", icon: FolderOpen },
   { title: "Outcomes", url: "/outcomes", icon: TrendingUp },
   { title: "Reports", url: "/reports", icon: BarChart3 },
+  { title: "Settings", url: "/settings", icon: Settings },
 ];
 
 const roleSidebarItems: Record<string, typeof mainItems> = {
