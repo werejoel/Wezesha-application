@@ -6,14 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogTrigger } from "@/components/ui/dialog";
-import {
-  Building2,
-  MapPin,
-  Phone,
-  Mail,
-  User,
-  Plus,
-} from "lucide-react";
+import { Building2, MapPin, Phone, Mail, User, Plus } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
 import {
   FormActions,
@@ -167,7 +160,8 @@ export default function YBFPartners() {
         <div>
           <h1 className="page-title">My Institutions</h1>
           <p className="page-description">
-            Partner institutions linked to your cohorts — add new ones as needed.
+            Partner institutions linked to your cohorts — add new ones as
+            needed.
           </p>
         </div>
         <Dialog open={addOpen} onOpenChange={setAddOpen}>

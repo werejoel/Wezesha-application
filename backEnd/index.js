@@ -512,13 +512,17 @@ app.get(
       }
 
       const result = await pool.query(
-        `SELECT p.*, COALESCE(c.cohort_count, 0) AS cohorts_count
+        `SELECT p.*, COALESCE(c.cohort_count, 0) AS cohorts_count,
+                y.id AS assigned_ybf_id,
+                y.name AS assigned_ybf_name
        FROM partner_institution p
        LEFT JOIN (
          SELECT partner_institution_id, COUNT(*) AS cohort_count
          FROM cohort
          GROUP BY partner_institution_id
        ) c ON p.id = c.partner_institution_id
+       LEFT JOIN users y
+         ON y.assigned_to::text = p.id::text AND y.role = 'ybf'
        WHERE p.deleted_by IS NULL
        ORDER BY p.created_at DESC`,
       );
@@ -989,6 +993,8 @@ app.post(
       startDate,
       program_year,
       programYear,
+      assigned_ybf_id,
+      assignedYbfId,
     } = req.body;
 
     const partnerType = institution_type || type;
@@ -1026,6 +1032,24 @@ app.post(
       );
       const partner = result.rows[0];
 
+      const assignedYbf = assigned_ybf_id ?? assignedYbfId ?? null;
+      if (assignedYbf) {
+        const ybfUser = await pool.query(
+          `SELECT id, role FROM users WHERE id::text = $1::text`,
+          [String(assignedYbf)],
+        );
+        if (!ybfUser.rows[0]) {
+          return res.status(400).json({ error: "Assigned YBF user not found" });
+        }
+        if (String(ybfUser.rows[0].role).toLowerCase() !== "ybf") {
+          return res.status(400).json({ error: "Assigned user must be a YBF" });
+        }
+        await pool.query(
+          `UPDATE users SET assigned_to = $1 WHERE id::text = $2::text`,
+          [partner.id, String(assignedYbf)],
+        );
+      }
+
       if (cohortYear !== undefined && cohortYear !== null && cohortYear !== "") {
         const year = Number(cohortYear);
         const existingCohort = await pool.query(
@@ -1050,7 +1074,7 @@ app.post(
 app.put(
   "/api/partners/:id",
   authenticateToken,
-  authorizeRoles("admin", "program_manager"),
+  authorizeRoles("admin", "program_manager","ybf"),
   async (req, res) => {
     const { id } = req.params;
     const {
@@ -1065,6 +1089,8 @@ app.put(
       partnership_date,
       startDate,
       status,
+      assigned_ybf_id,
+      assignedYbfId,
     } = req.body;
 
     const partnerType = institution_type || type;
@@ -1091,7 +1117,34 @@ app.put(
 
       if (result.rows.length === 0)
         return res.status(404).json({ error: "Partner not found" });
-      res.json(result.rows[0]);
+
+      const partner = result.rows[0];
+      const assignedYbf = assigned_ybf_id ?? assignedYbfId ?? null;
+      if (assignedYbf !== undefined) {
+        if (assignedYbf) {
+          const ybfUser = await pool.query(
+            `SELECT id, role FROM users WHERE id::text = $1::text`,
+            [String(assignedYbf)],
+          );
+          if (!ybfUser.rows[0]) {
+            return res.status(400).json({ error: "Assigned YBF user not found" });
+          }
+          if (String(ybfUser.rows[0].role).toLowerCase() !== "ybf") {
+            return res.status(400).json({ error: "Assigned user must be a YBF" });
+          }
+          await pool.query(
+            `UPDATE users SET assigned_to = $1 WHERE id::text = $2::text`,
+            [id, String(assignedYbf)],
+          );
+        } else {
+          await pool.query(
+            `UPDATE users SET assigned_to = NULL WHERE assigned_to::text = $1::text AND role = 'ybf'`,
+            [id],
+          );
+        }
+      }
+
+      res.json(partner);
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -1102,7 +1155,7 @@ app.put(
 app.get(
   "/api/youth",
   authenticateToken,
-  authorizeRoles("admin", "program_manager", "ybf"),
+  authorizeRoles("admin", "program_manager","ybf"),
   async (req, res) => {
     try {
       // If the user is a YBF, scope youth to their assigned cohorts

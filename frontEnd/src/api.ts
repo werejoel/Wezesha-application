@@ -103,23 +103,27 @@ export const getCohorts = () => get("/cohorts");
 export const getPersonnel = () => get("/personnel");
 export const createPersonnel = (data: object) => post("/personnel", data);
 export const createPartner = (data: object) => post("/partners", data);
+
 export const updatePartner = (id: string, data: object) =>
   fetch(`${BASE_URL}/partners/${id}`, {
     method: "PUT",
     headers: getAuthHeaders(),
     body: JSON.stringify(data),
   }).then(handleResponse);
+
 export const deletePartner = (id: string) =>
   fetch(`${BASE_URL}/partners/${id}`, {
     method: "DELETE",
     headers: getAuthHeaders(),
   }).then(handleResponse);
+
 export const updatePersonnel = (id: string, data: object) =>
   fetch(`${BASE_URL}/personnel/${id}`, {
     method: "PUT",
     headers: getAuthHeaders(),
     body: JSON.stringify(data),
   }).then(handleResponse);
+
 export const deletePersonnel = (id: string) =>
   fetch(`${BASE_URL}/personnel/${id}`, {
     method: "DELETE",
@@ -259,12 +263,13 @@ export const updateAttendance = (id: string, data: object) =>
     body: JSON.stringify(data),
   }).then(handleResponse);
 
-export const createBulkAttendance = (records: {
-  session_id: string | number;
-  youth_id: string | number;
-  status: string;
-}[]) =>
-  post("/attendance/bulk", { records });
+export const createBulkAttendance = (
+  records: {
+    session_id: string | number;
+    youth_id: string | number;
+    status: string;
+  }[],
+) => post("/attendance/bulk", { records });
 
 //Risk endpoints
 export const getAtRiskYouth = (

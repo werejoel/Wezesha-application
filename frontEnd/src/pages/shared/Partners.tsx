@@ -67,6 +67,7 @@ type Partner = {
   startDate: string;
   cohortsCount: number;
   assignedYBF: string;
+  assignedYbfId?: string;
 };
 
 type Personnel = {
@@ -115,6 +116,7 @@ const defaultPartnerForm = {
   status: "Active",
   startDate: new Date().toISOString().slice(0, 10),
   programYear: String(new Date().getFullYear()),
+  assignedYbfId: "",
 };
 
 const PHONE_RE = /^\+?[0-9 \-]{7,20}$/;
@@ -149,7 +151,9 @@ const normalizePartner = (partner: any): Partner => ({
   status: partner.status || "Active",
   startDate: partner.partnership_date || partner.created_at || "",
   cohortsCount: partner.cohorts_count ?? 0,
-  assignedYBF: partner.assignedYBF || "-",
+  assignedYBF:
+    partner.assigned_ybf_name || partner.assignedYBF || partner.assigned_ybf || "-",
+  assignedYbfId: partner.assigned_ybf_id || partner.assignedYbfId || "",
 });
 
 const normalizePersonnel = (person: any): Personnel => ({
@@ -321,6 +325,7 @@ export default function Partners() {
         ? new Date(partner.startDate).toISOString().slice(0, 10)
         : new Date().toISOString().slice(0, 10),
       programYear: String(new Date().getFullYear()),
+      assignedYbfId: partner.assignedYbfId || "",
     });
     setPartnerAddOpen(true);
   };
@@ -391,6 +396,7 @@ export default function Partners() {
         contact_email: partnerForm.contactEmail,
         partnership_date: partnerForm.startDate,
         status: partnerForm.status,
+        assigned_ybf_id: partnerForm.assignedYbfId || null,
       };
 
       if (!editingPartner) {
@@ -917,6 +923,32 @@ export default function Partners() {
 
                   <FormSection theme="partner" title="Partnership & cohort">
                     <div className="grid sm:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="partner-ybf">Assigned YBF</Label>
+                        <select
+                          id="partner-ybf"
+                          value={partnerForm.assignedYbfId}
+                          onChange={(e) =>
+                            setPartnerForm({
+                              ...partnerForm,
+                              assignedYbfId: e.target.value,
+                            })
+                          }
+                          className={formSelectClass}
+                        >
+                          <option value="">No YBF assigned</option>
+                          {personnel
+                            .filter((person) => person.role === "YBF")
+                            .map((person) => (
+                              <option key={person.id} value={person.id}>
+                                {person.name} ({person.email})
+                              </option>
+                            ))}
+                        </select>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Assign a YBF to this partner so youth enrollment can be managed by the correct field officer.
+                        </p>
+                      </div>
                       {!editingPartner ? (
                         <div>
                           <Label htmlFor="partner-cohort-year">
