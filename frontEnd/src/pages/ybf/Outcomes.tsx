@@ -52,6 +52,22 @@ type YouthMilestones = {
   milestones: Record<MilestoneType, { id?: string; status: MilestoneStatus }>;
 };
 
+const MILESTONE_TYPE_ALIASES: Record<string, MilestoneType> = {
+  "Business Plan": "Business Plan",
+  CV: "CV",
+  "Application Letter": "Application Letter",
+  "Cover Letter": "Application Letter",
+};
+
+const normalizeMilestoneType = (value: string): MilestoneType | null => {
+  const direct = MILESTONE_TYPE_ALIASES[value];
+  if (direct) return direct;
+  const match = MILESTONE_TYPES.find(
+    (t) => t.toLowerCase() === String(value || "").toLowerCase(),
+  );
+  return match || null;
+};
+
 const defaultMilestones = (): Record<
   MilestoneType,
   { status: MilestoneStatus }
@@ -101,7 +117,10 @@ export default function YBFOutcomes() {
   } | null>(null);
   const [saving, setSaving] = useState(false);
 
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   const loadData = async () => {
+    setLoadError(null);
     const [youthRows, outcomeRows] = await Promise.all([
       getYouth(),
       getOutcomes(),
@@ -114,14 +133,13 @@ export default function YBFOutcomes() {
     const merged: YouthMilestones[] = youth.map((y) => {
       const milestones = defaultMilestones();
       for (const o of outcomes) {
-        if (String(o.youth_id) !== y.id) continue;
-        const type = o.milestone_type as MilestoneType;
-        if (MILESTONE_TYPES.includes(type)) {
-          milestones[type] = {
-            id: String(o.id),
-            status: (o.status as MilestoneStatus) || "Not Started",
-          };
-        }
+        if (String(o.youth_id) !== String(y.id)) continue;
+        const type = normalizeMilestoneType(String(o.milestone_type || ""));
+        if (!type) continue;
+        milestones[type] = {
+          id: String(o.id),
+          status: (o.status as MilestoneStatus) || "Not Started",
+        };
       }
       return { youth: y, milestones };
     });
@@ -131,7 +149,18 @@ export default function YBFOutcomes() {
   useEffect(() => {
     let mounted = true;
     loadData()
-      .catch(() => mounted && setRows([]))
+      .catch((err) => {
+        if (!mounted) return;
+        const message =
+          err instanceof Error ? err.message : "Failed to load output data";
+        setLoadError(message);
+        setRows([]);
+        toast({
+          title: "Could not load output data",
+          description: message,
+          variant: "destructive",
+        });
+      })
       .finally(() => mounted && setLoading(false));
     return () => {
       mounted = false;
@@ -378,6 +407,14 @@ export default function YBFOutcomes() {
           {loading ? (
             <div className="p-8 text-center text-sm text-muted-foreground">
               Loading output data…
+            </div>
+          ) : loadError ? (
+            <div className="p-10 text-center">
+              <FileText className="h-10 w-10 mx-auto text-destructive/70 mb-3" />
+              <p className="font-medium text-destructive">{loadError}</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Ensure you are assigned to partner institutions with enrolled youth.
+              </p>
             </div>
           ) : filtered.length === 0 ? (
             <div className="p-10 text-center">

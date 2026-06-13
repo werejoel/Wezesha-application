@@ -152,7 +152,11 @@ const normalizePartner = (partner: any): Partner => ({
   startDate: partner.partnership_date || partner.created_at || "",
   cohortsCount: partner.cohorts_count ?? 0,
   assignedYBF:
-    partner.assigned_ybf_name || partner.assignedYBF || partner.assigned_ybf || "-",
+    partner.assigned_ybf_names ||
+    partner.assigned_ybf_name ||
+    partner.assignedYBF ||
+    partner.assigned_ybf ||
+    "-",
   assignedYbfId: partner.assigned_ybf_id || partner.assignedYbfId || "",
 });
 
@@ -946,7 +950,8 @@ export default function Partners() {
                             ))}
                         </select>
                         <p className="text-xs text-muted-foreground mt-1">
-                          Assign a YBF to this partner so youth enrollment can be managed by the correct field officer.
+                          Assign a YBF to this partner. A YBF can be linked to
+                          multiple institutions without losing access to previous ones.
                         </p>
                       </div>
                       {!editingPartner ? (

@@ -17,6 +17,36 @@ const ensureSchema = async () => {
   await pool.query(
     `UPDATE users SET status = 'active' WHERE status IS NULL OR status = ''`,
   );
+  await pool.query(
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS assigned_to UUID`,
+  );
+  await pool.query(
+    `ALTER TABLE partner_institution ADD COLUMN IF NOT EXISTS deleted_by UUID`,
+  );
+  await pool.query(
+    `ALTER TABLE partner_institution ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`,
+  );
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS ybf_partner_assignment (
+      user_id UUID NOT NULL,
+      partner_institution_id UUID NOT NULL,
+      PRIMARY KEY (user_id, partner_institution_id)
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS ybf_assignment (
+      user_id UUID NOT NULL,
+      cohort_id UUID NOT NULL,
+      PRIMARY KEY (user_id, cohort_id)
+    )
+  `);
+  // Migrate legacy single-partner YBF links into the junction table
+  await pool.query(`
+    INSERT INTO ybf_partner_assignment (user_id, partner_institution_id)
+    SELECT id, assigned_to FROM users
+    WHERE role = 'ybf' AND assigned_to IS NOT NULL
+    ON CONFLICT DO NOTHING
+  `);
 };
 ensureSchema().catch((err) =>
   console.error("Schema bootstrap failed:", err.message),
@@ -105,40 +135,98 @@ const normalizeProgramType = (value) => {
   return null;
 };
 
-// Helper: get cohorts assigned to a user (YBF). Tries multiple strategies and
-// returns an array of cohort ids (may be empty).
+const syncYbfCohortsForPartner = async (userId, partnerId) => {
+  const cohorts = await pool.query(
+    `SELECT id FROM cohort WHERE partner_institution_id = $1`,
+    [partnerId],
+  );
+  for (const row of cohorts.rows) {
+    await pool.query(
+      `INSERT INTO ybf_assignment (user_id, cohort_id)
+       VALUES ($1, $2)
+       ON CONFLICT DO NOTHING`,
+      [userId, row.id],
+    );
+  }
+};
+
+const assignYbfToPartner = async (userId, partnerId) => {
+  await pool.query(
+    `INSERT INTO ybf_partner_assignment (user_id, partner_institution_id)
+     VALUES ($1, $2)
+     ON CONFLICT DO NOTHING`,
+    [userId, partnerId],
+  );
+  await syncYbfCohortsForPartner(userId, partnerId);
+};
+
+const unassignYbfFromPartner = async (userId, partnerId) => {
+  await pool.query(
+    `DELETE FROM ybf_partner_assignment
+     WHERE user_id = $1 AND partner_institution_id = $2`,
+    [userId, partnerId],
+  );
+  await pool.query(
+    `DELETE FROM ybf_assignment
+     WHERE user_id = $1
+       AND cohort_id IN (
+         SELECT id FROM cohort WHERE partner_institution_id = $2
+       )`,
+    [userId, partnerId],
+  );
+};
+
+const replacePartnerYbfAssignment = async (partnerId, newYbfId) => {
+  const existing = await pool.query(
+    `SELECT user_id FROM ybf_partner_assignment WHERE partner_institution_id = $1`,
+    [partnerId],
+  );
+  for (const row of existing.rows) {
+    if (newYbfId && String(row.user_id) === String(newYbfId)) continue;
+    await unassignYbfFromPartner(row.user_id, partnerId);
+  }
+  if (newYbfId) {
+    await assignYbfToPartner(newYbfId, partnerId);
+  }
+};
+
+// Helper: get cohorts assigned to a user (YBF). Supports multiple institutions.
 const getUserCohorts = async (userId) => {
   try {
-    // Strategy 1: explicit assignment table `ybf_assignment(user_id, cohort_id)`
-    try {
-      const res = await pool.query(
-        `SELECT cohort_id FROM ybf_assignment WHERE user_id::text = $1::text`,
-        [String(userId)],
+    const cohortIds = new Set();
+
+    const assignmentRes = await pool.query(
+      `SELECT cohort_id FROM ybf_assignment WHERE user_id::text = $1::text`,
+      [String(userId)],
+    );
+    assignmentRes.rows.forEach((r) => cohortIds.add(r.cohort_id));
+
+    const partnerRes = await pool.query(
+      `SELECT c.id
+       FROM cohort c
+       JOIN ybf_partner_assignment ypa
+         ON ypa.partner_institution_id = c.partner_institution_id
+       WHERE ypa.user_id::text = $1::text`,
+      [String(userId)],
+    );
+    partnerRes.rows.forEach((r) => cohortIds.add(r.id));
+
+    const userRes = await pool.query(
+      `SELECT assigned_to FROM users WHERE id = $1`,
+      [userId],
+    );
+    const assignedTo = userRes.rows[0]?.assigned_to;
+    if (assignedTo) {
+      const legacyRes = await pool.query(
+        `SELECT id FROM cohort WHERE partner_institution_id = $1`,
+        [assignedTo],
       );
-      if (res.rows.length > 0) return res.rows.map((r) => r.cohort_id);
-    } catch (err) {
-      // table may not exist; fall through to the next strategy
+      legacyRes.rows.forEach((r) => cohortIds.add(r.id));
     }
 
-    // Strategy 2: users.assigned_to references a partner_institution id
-    try {
-      const userRes = await pool.query(`SELECT assigned_to FROM users WHERE id = $1`, [userId]);
-      const assignedTo = userRes.rows[0]?.assigned_to;
-      if (assignedTo) {
-        const cRes = await pool.query(
-          `SELECT id FROM cohort WHERE partner_institution_id = $1`,
-          [assignedTo],
-        );
-        if (cRes.rows.length > 0) return cRes.rows.map((r) => r.id);
-      }
-    } catch (err) {
-      // ignore and continue
-    }
-
-    // Strategy 3: no explicit mapping available — return empty (no access)
-    return [];
+    return [...cohortIds];
   } catch (err) {
-    console.error('getUserCohorts error:', err);
+    console.error("getUserCohorts error:", err);
     return [];
   }
 };
@@ -151,6 +239,9 @@ const getPartnerIdsForCohorts = async (cohortIds) => {
   );
   return res.rows.map((r) => r.partner_institution_id);
 };
+
+const hasCohortAccess = (allowedCohorts, cohortId) =>
+  allowedCohorts.map(String).includes(String(cohortId));
 
 const ensureYbfCohortAccess = async (req, res, cohortId) => {
   if (!req.user || req.user.role !== "ybf") return true;
@@ -513,16 +604,23 @@ app.get(
 
       const result = await pool.query(
         `SELECT p.*, COALESCE(c.cohort_count, 0) AS cohorts_count,
-                y.id AS assigned_ybf_id,
-                y.name AS assigned_ybf_name
+                ybf.assigned_ybf_id,
+                ybf.assigned_ybf_name,
+                ybf.assigned_ybf_names
        FROM partner_institution p
        LEFT JOIN (
          SELECT partner_institution_id, COUNT(*) AS cohort_count
          FROM cohort
          GROUP BY partner_institution_id
        ) c ON p.id = c.partner_institution_id
-       LEFT JOIN users y
-         ON y.assigned_to::text = p.id::text AND y.role = 'ybf'
+       LEFT JOIN LATERAL (
+         SELECT (array_agg(u.id ORDER BY u.name))[1] AS assigned_ybf_id,
+                (array_agg(u.name ORDER BY u.name))[1] AS assigned_ybf_name,
+                string_agg(u.name, ', ' ORDER BY u.name) AS assigned_ybf_names
+         FROM ybf_partner_assignment ypa
+         JOIN users u ON u.id = ypa.user_id AND u.role = 'ybf'
+         WHERE ypa.partner_institution_id = p.id
+       ) ybf ON true
        WHERE p.deleted_by IS NULL
        ORDER BY p.created_at DESC`,
       );
@@ -1044,10 +1142,7 @@ app.post(
         if (String(ybfUser.rows[0].role).toLowerCase() !== "ybf") {
           return res.status(400).json({ error: "Assigned user must be a YBF" });
         }
-        await pool.query(
-          `UPDATE users SET assigned_to = $1 WHERE id::text = $2::text`,
-          [partner.id, String(assignedYbf)],
-        );
+        await assignYbfToPartner(String(assignedYbf), partner.id);
       }
 
       if (cohortYear !== undefined && cohortYear !== null && cohortYear !== "") {
@@ -1062,6 +1157,10 @@ app.post(
             [partner.id, year],
           );
         }
+      }
+
+      if (assignedYbf) {
+        await syncYbfCohortsForPartner(String(assignedYbf), partner.id);
       }
 
       res.status(201).json(partner);
@@ -1119,7 +1218,7 @@ app.put(
         return res.status(404).json({ error: "Partner not found" });
 
       const partner = result.rows[0];
-      const assignedYbf = assigned_ybf_id ?? assignedYbfId ?? null;
+      const assignedYbf = assigned_ybf_id ?? assignedYbfId;
       if (assignedYbf !== undefined) {
         if (assignedYbf) {
           const ybfUser = await pool.query(
@@ -1132,19 +1231,39 @@ app.put(
           if (String(ybfUser.rows[0].role).toLowerCase() !== "ybf") {
             return res.status(400).json({ error: "Assigned user must be a YBF" });
           }
-          await pool.query(
-            `UPDATE users SET assigned_to = $1 WHERE id::text = $2::text`,
-            [id, String(assignedYbf)],
-          );
-        } else {
-          await pool.query(
-            `UPDATE users SET assigned_to = NULL WHERE assigned_to::text = $1::text AND role = 'ybf'`,
-            [id],
-          );
         }
+        await replacePartnerYbfAssignment(id, assignedYbf || null);
       }
 
       res.json(partner);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  },
+);
+
+app.delete(
+  "/api/partners/:id",
+  authenticateToken,
+  authorizeRoles("admin"),
+  async (req, res) => {
+    const { id } = req.params;
+    try {
+      const result = await pool.query(
+        `UPDATE partner_institution
+         SET deleted_by = $1, deleted_at = NOW()
+         WHERE id = $2 AND deleted_by IS NULL
+         RETURNING id`,
+        [req.user.id, id],
+      );
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: "Partner not found" });
+      }
+      await pool.query(
+        `DELETE FROM ybf_partner_assignment WHERE partner_institution_id = $1`,
+        [id],
+      );
+      res.json({ message: "Partner deleted successfully" });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -1635,7 +1754,7 @@ app.post(
           return res.status(404).json({ error: "Youth not found" });
         }
         const allowed = await getUserCohorts(req.user.id);
-        if (!allowed.includes(youthRes.rows[0].cohort_id)) {
+        if (!hasCohortAccess(allowed, youthRes.rows[0].cohort_id)) {
           return res.status(403).json({ error: "You do not have access to this youth" });
         }
       }
@@ -1754,7 +1873,7 @@ app.post(
           return res.status(404).json({ error: "Youth not found" });
         }
         const allowed = await getUserCohorts(req.user.id);
-        if (!allowed.includes(youthRes.rows[0].cohort_id)) {
+        if (!hasCohortAccess(allowed, youthRes.rows[0].cohort_id)) {
           return res.status(403).json({ error: "You do not have access to this youth" });
         }
       }
@@ -1805,7 +1924,7 @@ app.put(
           return res.status(404).json({ error: "Output milestone not found" });
         }
         const allowed = await getUserCohorts(req.user.id);
-        if (!allowed.includes(accessRes.rows[0].cohort_id)) {
+        if (!hasCohortAccess(allowed, accessRes.rows[0].cohort_id)) {
           return res.status(403).json({ error: "You do not have access to this record" });
         }
       }
@@ -1984,7 +2103,7 @@ app.post(
             throw new Error(`Session not found: ${session_id}`);
           }
           const allowed = await getUserCohorts(req.user.id);
-          if (!allowed.includes(sessionRes.rows[0].cohort_id)) {
+          if (!hasCohortAccess(allowed, sessionRes.rows[0].cohort_id)) {
             throw new Error("You do not have access to one or more sessions");
           }
         }

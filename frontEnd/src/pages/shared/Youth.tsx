@@ -98,7 +98,7 @@ type YouthFormState = {
   gender: "Male" | "Female";
   partner: string;
   partnerId: string;
-  programType: "In-School" | "Out-of-School";
+  programType: "In-school" | "Out-of-school";
   cohort: string;
   cohortId: string;
   enrollmentDate: string;
@@ -113,7 +113,7 @@ const emptyForm = (): YouthFormState => ({
   gender: "Female",
   partner: "",
   partnerId: "",
-  programType: "In-School",
+  programType: "In-school",
   cohort: "",
   cohortId: "",
   enrollmentDate: new Date().toISOString().slice(0, 10),
@@ -133,7 +133,7 @@ function normalizeYouth(item: any): YouthData {
     partnerId: String(item.partner_institution_id ?? ""),
     cohort: item.cohort_name || item.cohort || "",
     cohortId: String(item.cohort_id ?? ""),
-    programType: item.program_type || item.programType || "In-School",
+    programType: item.program_type || item.programType || "In-school",
     educationLevel: item.education_level || item.educationLevel || "",
     attendanceRate: Number(item.attendance_rate ?? item.attendanceRate ?? 0),
     businessPlan:
@@ -340,20 +340,23 @@ function YouthFormFields({
           </div>
           <div>
             <Label htmlFor="youth-program">Program Type</Label>
-            <select
-              id="youth-program"
+            <Select
               value={form.programType}
-              onChange={(e) =>
+              onValueChange={(value) =>
                 setForm({
                   ...form,
-                  programType: e.target.value as "In-School" | "Out-of-School",
+                  programType: value as "In-school" | "Out-of-school",
                 })
               }
-              className={formSelectClass}
             >
-              <option value="In-School">In-School</option>
-              <option value="Out-of-School">Out-of-School</option>
-            </select>
+              <SelectTrigger id="youth-program" className="bg-white/80">
+                <SelectValue placeholder="Select program type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="In-school">In-school</SelectItem>
+                <SelectItem value="Out-of-school">Out-of-school</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <div className="grid sm:grid-cols-2 gap-4">
@@ -536,12 +539,15 @@ export default function Youth() {
   ).length;
 
   const buildPayload = () => {
+    const normalizedProgramType =
+      form.programType === "Out-of-school" ? "Out-of-school" : "In-school";
     const payload: Record<string, string> = {
       full_name: form.fullName,
       date_of_birth: form.dateOfBirth,
       gender: form.gender,
       district: form.district,
-      program_type: form.programType,
+      program_type: normalizedProgramType,
+      programType: normalizedProgramType,
     };
     if (form.partnerId) payload.partner_institution_id = form.partnerId;
     if (form.cohortId) payload.cohort_id = form.cohortId;
@@ -579,7 +585,9 @@ export default function Youth() {
       partner: y.partner || "",
       partnerId: y.partnerId || partners.find((p) => p.name === y.partner)?.id || "",
       programType:
-        (y.programType as "In-School" | "Out-of-School") || "In-School",
+        (y.programType === "Out-of-school"
+          ? "Out-of-school"
+          : "In-school") as "In-school" | "Out-of-school",
       cohort: y.cohort || "",
       cohortId: y.cohortId || cohorts.find((c) => c.label === y.cohort)?.id || "",
       enrollmentDate: new Date().toISOString().slice(0, 10),
