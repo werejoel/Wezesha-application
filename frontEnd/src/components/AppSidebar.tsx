@@ -60,15 +60,8 @@ const roleSidebarItems: Record<string, typeof mainItems> = {
     { title: "Case Management", url: "/cases", icon: FolderOpen },
     { title: "Output Tracking", url: "/outcomes", icon: TrendingUp },
   ],
-  instructor: [
-    mainItems[0],
-    mainItems[3],
-  ],
-  enumerator: [
-    mainItems[0],
-    mainItems[3],
-    mainItems[4],
-  ],
+  instructor: [mainItems[0], mainItems[3]],
+  enumerator: [mainItems[0], mainItems[3], mainItems[4]],
 };
 
 export function AppSidebar() {
@@ -81,24 +74,29 @@ export function AppSidebar() {
   const handleLogout = () => {
     logout();
     refreshUser();
-    navigate('/login');
+    navigate("/login");
   };
 
-  const menuItems = user ? roleSidebarItems[user.role] ?? roleSidebarItems.enumerator : [mainItems[0]];
+  const menuItems = user
+    ? (roleSidebarItems[user.role] ?? roleSidebarItems.enumerator)
+    : [mainItems[0]];
 
   return (
     <Sidebar collapsible="icon">
-
       {/* ── Header ── */}
       <SidebarHeader className="px-3 py-4 border-b border-sidebar-border/50">
         <div className="flex items-center gap-3">
           {/* Logo mark */}
           <div className="relative flex-shrink-0">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sidebar-primary shadow-sm">
-              <Leaf className="h-4.5 w-4.5 text-sidebar-primary-foreground" />
+            <div className="flex h-13 w-12 items-center justify-center rounded-xl shadow-sm">
+              <div className="relative flex-shrink-0">
+                <img
+                  src="/images/wezesha-impact-logo.png"
+                  alt="Wezesha Impact Logo"
+                  className="h-8 w-16 rounded-xl object-cover shadow-sm"
+                />
+              </div>
             </div>
-            {/* Live dot */}
-            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-sidebar" />
           </div>
 
           {!collapsed && (
@@ -118,7 +116,11 @@ export function AppSidebar() {
           <div className="mt-3 flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-sidebar-accent/40 border border-sidebar-border/40">
             <div className="w-5 h-5 rounded-full bg-sidebar-primary/20 flex items-center justify-center flex-shrink-0">
               <span className="text-[9px] font-bold text-sidebar-primary uppercase">
-                {user.name?.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
+                {user.name
+                  ?.split(" ")
+                  .map((n: string) => n[0])
+                  .join("")
+                  .slice(0, 2)}
               </span>
             </div>
             <div className="min-w-0 flex-1">
@@ -126,7 +128,7 @@ export function AppSidebar() {
                 {user.name}
               </p>
               <p className="text-[9px] text-sidebar-foreground/50 leading-none mt-0.5 truncate">
-                {user.role ?? 'Member'}
+                {user.role ?? "Member"}
               </p>
             </div>
           </div>
@@ -134,7 +136,6 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent className="flex flex-col justify-between h-full py-2">
-
         {/* ── Main Nav ── */}
         <SidebarGroup>
           {!collapsed && (
@@ -159,7 +160,8 @@ export function AppSidebar() {
                         className={cn(
                           "group relative flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-all duration-150",
                           "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50",
-                          isActive && "bg-sidebar-accent text-sidebar-primary font-medium shadow-sm"
+                          isActive &&
+                            "bg-sidebar-accent text-sidebar-primary font-medium shadow-sm",
                         )}
                         activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
                       >
@@ -171,13 +173,17 @@ export function AppSidebar() {
                         <item.icon
                           className={cn(
                             "h-4 w-4 flex-shrink-0 transition-colors",
-                            isActive ? "text-sidebar-primary" : "text-sidebar-foreground/50 group-hover:text-sidebar-foreground/80"
+                            isActive
+                              ? "text-sidebar-primary"
+                              : "text-sidebar-foreground/50 group-hover:text-sidebar-foreground/80",
                           )}
                         />
 
                         {!collapsed && (
                           <>
-                            <span className="flex-1 truncate">{item.title}</span>
+                            <span className="flex-1 truncate">
+                              {item.title}
+                            </span>
                             {isActive && (
                               <ChevronRight className="h-3 w-3 text-sidebar-primary/60 flex-shrink-0" />
                             )}
@@ -204,7 +210,7 @@ export function AppSidebar() {
                   onClick={handleLogout}
                   className={cn(
                     "group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm w-full transition-all duration-150",
-                    "text-sidebar-foreground/50 hover:text-red-500 hover:bg-red-500/10"
+                    "text-sidebar-foreground/50 hover:text-red-500 hover:bg-red-500/10",
                   )}
                 >
                   <LogOut className="h-4 w-4 flex-shrink-0 transition-colors group-hover:text-red-500" />
@@ -214,7 +220,6 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-
       </SidebarContent>
     </Sidebar>
   );
