@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { register, getCurrentUser } from "@/api";
 import { useUser } from "@/hooks/use-user";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,6 +34,7 @@ const Register = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { refreshUser } = useUser();
+  const { toast } = useToast();
 
   useEffect(() => {
     if (getCurrentUser()) navigate("/dashboard");
@@ -45,6 +47,13 @@ const Register = () => {
     try {
       await register(name, email, password, role.toLowerCase());
       refreshUser();
+      if (role === "YBF" || role === "Instructor") {
+        toast({
+          title: "Account submitted for review",
+          description:
+            "Your account is pending approval from a System Administrator or Program Manager. You can refresh your status from the pending approval modal.",
+        });
+      }
       navigate("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed");
@@ -268,6 +277,13 @@ const Register = () => {
                   </button>
                 ))}
               </div>
+              {['YBF', 'Instructor'].includes(role) && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  {role === 'YBF'
+                    ? 'YBF accounts are reviewed by a System Administrator or Program Manager and will be activated after approval.'
+                    : 'Instructor accounts are reviewed by a System Administrator or Program Manager and will be activated after approval.'}
+                </div>
+              )}
               {/* Hidden native select kept for form value */}
               <select
                 id="role"
