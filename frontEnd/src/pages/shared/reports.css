@@ -196,14 +196,28 @@
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
+    background: var(--background);
+}
+
+.reports-table td {
+    color: var(--foreground);
+}
+
+.reports-table tbody tr {
+    background: transparent;
 }
 
 .reports-table tbody tr:nth-child(odd) {
-    background: rgba(248, 250, 252, 0.8);
+    background: transparent;
 }
 
 .reports-table tbody tr:hover {
-    background: rgba(34, 197, 94, 0.08);
+    background: rgba(248, 250, 252, 0.9);
+}
+
+.reports-table tbody tr:hover td,
+.reports-table tbody tr:hover th {
+    color: var(--foreground);
 }
 
 .reports-panel {

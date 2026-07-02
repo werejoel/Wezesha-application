@@ -451,7 +451,7 @@ export default function Reports() {
             <CardContent>
               {selectedReport === "attendance" && (
                 <div className="space-y-4">
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto reports-table-wrapper">
                     <table className="reports-table w-full table-auto border-collapse">
                       <thead>
                         <tr className="text-left text-xs text-muted-foreground">
