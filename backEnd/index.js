@@ -1783,11 +1783,9 @@ app.post(
         ? normalizeProgramType(rawProgramType)
         : "In-school";
       if (!resolvedProgramType) {
-        return res
-          .status(400)
-          .json({
-            error: "Invalid program type. Use In-school or Out-of-school.",
-          });
+        return res.status(400).json({
+          error: "Invalid program type. Use In-school or Out-of-school.",
+        });
       }
 
       const cohortRes = await pool.query(
@@ -1909,11 +1907,9 @@ app.put(
           ? normalizeProgramType(program_type)
           : existing.rows[0]?.program_type;
       if (typeof program_type === "string" && !resolvedProgramType) {
-        return res
-          .status(400)
-          .json({
-            error: "Invalid program type. Use In-school or Out-of-school.",
-          });
+        return res.status(400).json({
+          error: "Invalid program type. Use In-school or Out-of-school.",
+        });
       }
       if (!resolvedProgramType) resolvedProgramType = "In-school";
 
@@ -2879,7 +2875,8 @@ app.delete(
       await pool.query("ROLLBACK").catch(() => null);
       if (err.code === "23503") {
         return res.status(409).json({
-          error: "Cannot delete user because related records still reference that user. Reassign or remove those records first.",
+          error:
+            "Cannot delete user because related records still reference that user. Reassign or remove those records first.",
         });
       }
       res.status(500).json({ error: err.message });

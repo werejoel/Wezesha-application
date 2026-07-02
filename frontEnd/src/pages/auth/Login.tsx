@@ -1,12 +1,11 @@
-import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { login } from '@/api';
-import { useUser } from '@/hooks/use-user';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { ThemeToggle } from '@/components/ThemeToggle';
-
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { login } from "@/api";
+import { useUser } from "@/hooks/use-user";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -142,7 +141,10 @@ const Login = () => {
           <div>
             <h2
               className="text-2xl font-bold text-gray-900 tracking-tight"
-              style={{ fontFamily: "'Georgia', serif" }}
+              style={{
+                fontFamily: "'Georgia', serif",
+                color: "hsl(152, 55%, 33%)",
+              }}
             >
               Welcome !
             </h2>
