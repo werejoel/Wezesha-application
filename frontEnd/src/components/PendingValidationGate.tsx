@@ -20,6 +20,7 @@ export function PendingValidationGate({
   const { user, refreshUser } = useUser();
   const navigate = useNavigate();
   const [checking, setChecking] = useState(false);
+  const [reloading, setReloading] = useState(false);
   const pending =
     user &&
     (user.role === "ybf" || user.role === "instructor") &&
@@ -78,16 +79,16 @@ export function PendingValidationGate({
               Account validation in progress
             </DialogTitle>
             <DialogDescription className="text-center space-y-3 pt-2">
-              <p>
+              <div>
                 Your {user?.role === "ybf" ? "YBF" : "Instructor"} account is
                 awaiting approval from a System Administrator or Program
                 Manager.
-              </p>
-              <p className="flex items-center justify-center gap-2 text-amber-700 font-medium">
+              </div>
+              <div className="flex items-center justify-center gap-2 text-amber-700 font-medium">
                 <Clock className="h-4 w-4" />
                 An institution must be assigned before you can access the
                 dashboard.
-              </p>
+              </div>
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-2 pt-2">
@@ -95,6 +96,7 @@ export function PendingValidationGate({
               variant="outline"
               disabled={checking}
               onClick={async () => {
+                setChecking(true);
                 try {
                   const fresh = await getMe();
                   localStorage.setItem(
@@ -104,15 +106,24 @@ export function PendingValidationGate({
                   refreshUser();
                 } catch {
                   /* ignore */
+                } finally {
+                  setChecking(false);
                 }
               }}
             >
               {checking ? "Checking status…" : "Refresh status"}
             </Button>
             <Button
+              variant="secondary"
+              onClick={() => window.location.reload()}
+            >
+              Reload page
+            </Button>
+            <Button
               variant="ghost"
               onClick={() => {
                 logout();
+                refreshUser();
                 navigate("/login");
               }}
             >
