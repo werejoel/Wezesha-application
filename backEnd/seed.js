@@ -113,11 +113,17 @@ console.log('Adding youth...');
 const names = ['Alice Wanjiru','Brian Odhiambo','Catherine Njeri','Daniel Kipchoge','Esther Auma','Francis Mutua','Grace Nyambura','Henry Oloo','Irene Wambui','James Kiptoo','Karen Muthoni','Leonard Onyango','Mercy Cherop','Nelson Maina','Olive Awuor','Patrick Mugo','Queen Achieng','Robert Njoroge','Susan Chepkoech','Timothy Wekesa','Ursula Mwende','Victor Ouma','Winnie Naliaka','Xavier Kibet','Yvonne Moraa','Zack Githae','Angela Wairimu','Ben Otieno','Clara Jepchirchir','Dennis Mwangi','Emily Nekesa','Fred Kamau','Gladys Atieno','Hugo Ndirangu','Ivy Jeptoo','Jack Musyoka','Kate Aoko','Liam Kigen','Monica Wafula','Noel Karanja'];
 const partnerNames = ['Nairobi Technical Institute','Kisumu Youth CBO','Mombasa Polytechnic','Nakuru Skills Centre','Thika Technical Training'];
 const districts = ['Nairobi','Kisumu','Mombasa','Nakuru','Kiambu'];
+const employmentStatuses = ['Employed Full-time', 'Employed Part-time', 'Self-employed', 'Unemployed'];
 const youthMap = {};
 
 for (let i = 0; i < names.length; i++) {
   const partnerName = partnerNames[i % 5];
   const partnerId = partnerMap[partnerName];
+  const employmentStatus = employmentStatuses[i % employmentStatuses.length];
+  const baselineIncome = 2500 + (i % 5) * 1500;
+  const currentIncome = baselineIncome + [0, 2000, 4000, 6000, 8000][i % 5];
+  const hasBusiness = i % 3 === 0;
+  const aboveIpl = currentIncome > 7500;
 
   // Find ANY cohort that belongs to this partner
   const cohortRes = await client.query(
@@ -141,16 +147,22 @@ for (let i = 0; i < names.length; i++) {
     `INSERT INTO youth (
        full_name, date_of_birth, gender, nationality,
        district_of_residence, region, partner_institution_id,
-       cohort_id, program_type, program_year, enrolment_date
+       cohort_id, program_type, program_year, enrolment_date,
+       employment_status, baseline_income, current_income, has_business, above_ipl
      )
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
      ON CONFLICT DO NOTHING
      RETURNING id, full_name`,
     [
       names[i], dob, gender, 'Kenyan',
       district, district, partnerId,
       cohortId, programType, programYear,
-      `2024-${String((i % 6) + 1).padStart(2, '0')}-${String((i % 28) + 1).padStart(2, '0')}`
+      `2024-${String((i % 6) + 1).padStart(2, '0')}-${String((i % 28) + 1).padStart(2, '0')}`,
+      employmentStatus,
+      baselineIncome,
+      currentIncome,
+      hasBusiness,
+      aboveIpl,
     ]
   );
   if (res.rows[0]) youthMap[names[i]] = res.rows[0].id;
@@ -256,13 +268,13 @@ const defaultUsers = [
   {
     name: 'System Administrator',
     email: 'admin@wezesha.org',
-    password: 'Admin@Wezesha2026',
+    password: 'admin@1234',
     role: 'admin',
   },
   {
     name: 'Program Manager',
     email: 'manager@wezesha.org',
-    password: 'Manager@Wezesha2026',
+    password: 'manager@1234',
     role: 'program_manager',
   },
 ];

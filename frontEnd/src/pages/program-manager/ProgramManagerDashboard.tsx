@@ -41,6 +41,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { DashboardFilterBreakdown } from "@/components/DashboardFilterBreakdown";
+import { INSTITUTIONAL_SESSION_TOTAL } from "@/constants/regions";
 
 const CHART_COLORS = [
   "hsl(152, 55%, 33%)",
@@ -365,11 +367,18 @@ const ProgramManagerDashboard = () => {
           description="Active partnerships"
         />
         <StatCard
-          title="Sessions Conducted"
-          value={stats?.totalSessions || 0}
+          title="Avg Sessions / Youth"
+          value={stats?.avgSessionsPerYouth ?? 0}
           icon={GraduationCap}
           trend={{ value: 15, label: "increase" }}
-          description="This month"
+          description={`Of ${stats?.expectedSessionTotal ?? INSTITUTIONAL_SESSION_TOTAL} program sessions`}
+        />
+        <StatCard
+          title="Youth at 80% Attendance"
+          value={stats?.youthAt80Percent ?? 0}
+          icon={Users}
+          trend={{ value: 5, label: "increase" }}
+          description="Attended ≥80% of sessions"
         />
         <StatCard
           title="Case Notes"
@@ -379,6 +388,8 @@ const ProgramManagerDashboard = () => {
           description="Active follow-ups"
         />
       </div>
+
+      <DashboardFilterBreakdown breakdown={stats?.filterBreakdown} />
 
       {/* ── Program Overview + Recent Activity ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

@@ -6,6 +6,10 @@ interface User {
   name: string;
   email: string;
   role: 'admin' | 'program_manager' | 'ybf' | 'instructor' | 'enumerator';
+  status?: 'active' | 'inactive' | 'blocked' | 'pending';
+  assigned_to?: string | null;
+  assigned_partner_name?: string | null;
+  pendingApproval?: boolean;
 }
 
 interface UserContextType {

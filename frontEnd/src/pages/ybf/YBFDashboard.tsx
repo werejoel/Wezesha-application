@@ -37,6 +37,9 @@ type DashboardData = {
   totalYouth: number;
   totalPartners: number;
   totalSessions: number;
+  avgSessionsPerYouth?: number;
+  youthAt80Percent?: number;
+  expectedSessionTotal?: number;
   totalCases: number;
   atRiskCount: number;
   avgAttendance: number | null;
@@ -238,10 +241,16 @@ export default function YBFDashboard() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <StatCard
-          title="Sessions"
-          value={dashboard.totalSessions}
-          subtitle="In your assigned cohorts"
+          title="Avg Sessions / Youth"
+          value={dashboard.avgSessionsPerYouth ?? 0}
+          subtitle={`Of ${dashboard.expectedSessionTotal ?? 18} sessions`}
           icon={CalendarCheck}
+        />
+        <StatCard
+          title="Youth at 80% Attendance"
+          value={dashboard.youthAt80Percent ?? 0}
+          subtitle="Met attendance threshold"
+          icon={Users}
         />
         <StatCard
           title="Case Notes"

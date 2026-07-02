@@ -119,7 +119,7 @@ const Login = () => {
       </div>
 
       {/* ── Right form panel ── */}
-      <div className="flex-1 flex flex-col justify-center items-center px-6 py-12 bg-gray-50 lg:bg-white">
+      <div className="flex-1 flex flex-col justify-center items-center px-6 py-12 bg-gray-50 lg:bg-white dark:bg-slate-950 dark:text-slate-100">
         {/* Mobile logo */}
         <div className="lg:hidden mb-8 text-center">
           <div className="flex items-center justify-center rounded-full border border-white/20 bg-white/10 px-4 py-2">
@@ -156,7 +156,7 @@ const Login = () => {
             <div className="space-y-1.5">
               <Label
                 htmlFor="email"
-                className="text-xs font-semibold uppercase tracking-widest text-gray-500"
+                className="text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-300"
               >
                 Email address
               </Label>
@@ -167,14 +167,14 @@ const Login = () => {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 placeholder="you@example.com"
-                className="h-11 rounded-lg border-gray-200 bg-gray-50 focus:bg-white focus:border-emerald-500 focus:ring-emerald-500 transition-colors"
+                className="h-11 rounded-lg border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-emerald-500 focus:ring-emerald-500 transition-colors dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
               />
             </div>
 
             <div className="space-y-1.5">
               <Label
                 htmlFor="password"
-                className="text-xs font-semibold uppercase tracking-widest text-gray-500"
+                className="text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-300"
               >
                 Password
               </Label>
@@ -185,7 +185,7 @@ const Login = () => {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 placeholder="••••••••"
-                className="h-11 rounded-lg border-gray-200 bg-gray-50 focus:bg-white focus:border-emerald-500 focus:ring-emerald-500 transition-colors"
+                className="h-11 rounded-lg border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-emerald-500 focus:ring-emerald-500 transition-colors dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
               />
             </div>
 

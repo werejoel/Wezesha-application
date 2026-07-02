@@ -76,6 +76,15 @@ export function normalizeSessionRow(item: any) {
     attendanceCount: present,
     totalYouth: total,
     attendancePct: total > 0 ? Math.round((present / total) * 100) : 0,
+    dataEntryDeadline: item.data_entry_deadline
+      ? String(item.data_entry_deadline).split("T")[0]
+      : null,
+    isLocked: Boolean(item.is_locked ?? item.isLocked),
+    daysRemaining:
+      item.days_remaining != null ? Number(item.days_remaining) : null,
+    expectedSessionTotal: Number(
+      item.expected_session_total ?? item.expectedSessionTotal ?? 18,
+    ),
   };
 }
 

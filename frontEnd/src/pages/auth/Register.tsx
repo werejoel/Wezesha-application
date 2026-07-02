@@ -43,7 +43,7 @@ const Register = () => {
     setLoading(true);
     setError("");
     try {
-      await register(name, email, password, role);
+      await register(name, email, password, role.toLowerCase());
       refreshUser();
       navigate("/dashboard");
     } catch (err) {

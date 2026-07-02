@@ -10,6 +10,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+const REGIONS = ["ITS", "Central", "Eastern", "Northern-Lira", "Northern-Gulu"];
+const INSTITUTIONAL_SESSION_TOTAL = 18;
+const DATA_ENTRY_DAYS = 5;
+
 const ensureSchema = async () => {
   await pool.query(
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active'`,
@@ -26,6 +30,57 @@ const ensureSchema = async () => {
   await pool.query(
     `ALTER TABLE partner_institution ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`,
   );
+  await pool.query(
+    `ALTER TABLE partner_institution ADD COLUMN IF NOT EXISTS region VARCHAR(50)`,
+  );
+  await pool.query(
+    `ALTER TABLE partner_institution ADD COLUMN IF NOT EXISTS program_type VARCHAR(30) DEFAULT 'In-school'`,
+  );
+  await pool.query(
+    `ALTER TABLE youth ADD COLUMN IF NOT EXISTS disability VARCHAR(100)`,
+  );
+  await pool.query(
+    `ALTER TABLE youth ADD COLUMN IF NOT EXISTS course VARCHAR(150)`,
+  );
+  await pool.query(
+    `ALTER TABLE youth ADD COLUMN IF NOT EXISTS employment_status VARCHAR(50)`,
+  );
+  await pool.query(
+    `ALTER TABLE youth ADD COLUMN IF NOT EXISTS roster_year INTEGER DEFAULT 1`,
+  );
+  await pool.query(
+    `ALTER TABLE youth ADD COLUMN IF NOT EXISTS school_name VARCHAR(200)`,
+  );
+  await pool.query(
+    `ALTER TABLE youth ADD COLUMN IF NOT EXISTS baseline_income INTEGER DEFAULT 0`,
+  );
+  await pool.query(
+    `ALTER TABLE youth ADD COLUMN IF NOT EXISTS current_income INTEGER DEFAULT 0`,
+  );
+  await pool.query(
+    `ALTER TABLE youth ADD COLUMN IF NOT EXISTS has_business BOOLEAN DEFAULT false`,
+  );
+  await pool.query(
+    `ALTER TABLE youth ADD COLUMN IF NOT EXISTS above_ipl BOOLEAN DEFAULT false`,
+  );
+  await pool.query(
+    `ALTER TABLE case_note ADD COLUMN IF NOT EXISTS follow_up_required BOOLEAN DEFAULT false`,
+  );
+  await pool.query(
+    `ALTER TABLE case_note ALTER COLUMN follow_up_required SET DEFAULT false`,
+  );
+  await pool.query(
+    `UPDATE case_note SET follow_up_required = false WHERE follow_up_required IS NULL`,
+  );
+  await pool.query(
+    `ALTER TABLE case_note ADD COLUMN IF NOT EXISTS is_done BOOLEAN DEFAULT false`,
+  );
+  await pool.query(
+    `ALTER TABLE session ADD COLUMN IF NOT EXISTS data_entry_deadline DATE`,
+  );
+  await pool.query(
+    `ALTER TABLE session ADD COLUMN IF NOT EXISTS is_locked BOOLEAN DEFAULT false`,
+  );
   await pool.query(`
     CREATE TABLE IF NOT EXISTS ybf_partner_assignment (
       user_id UUID NOT NULL,
@@ -40,6 +95,13 @@ const ensureSchema = async () => {
       PRIMARY KEY (user_id, cohort_id)
     )
   `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS instructor_partner_assignment (
+      user_id UUID NOT NULL,
+      partner_institution_id UUID NOT NULL,
+      PRIMARY KEY (user_id, partner_institution_id)
+    )
+  `);
   // Migrate legacy single-partner YBF links into the junction table
   await pool.query(`
     INSERT INTO ybf_partner_assignment (user_id, partner_institution_id)
@@ -47,21 +109,182 @@ const ensureSchema = async () => {
     WHERE role = 'ybf' AND assigned_to IS NOT NULL
     ON CONFLICT DO NOTHING
   `);
+  await pool.query(`
+    INSERT INTO instructor_partner_assignment (user_id, partner_institution_id)
+    SELECT id, assigned_to FROM users
+    WHERE role = 'instructor' AND assigned_to IS NOT NULL
+    ON CONFLICT DO NOTHING
+  `);
+  await pool.query(`
+    UPDATE partner_institution SET region = location
+    WHERE region IS NULL AND location IS NOT NULL AND location <> ''
+  `);
 };
 ensureSchema().catch((err) =>
   console.error("Schema bootstrap failed:", err.message),
 );
 
-const USER_STATUSES = ["active", "inactive", "blocked"];
+const USER_STATUSES = ["active", "inactive", "blocked", "pending"];
+
+const normalizeUserRole = (role) => {
+  if (!role || typeof role !== "string") return "enumerator";
+  const normalized = role.trim().toLowerCase().replace(/\s+/g, "_");
+  if (normalized === "program_manager" || normalized === "programmanager")
+    return "program_manager";
+  if (normalized === "ybf" || normalized === "youth_business_fellow")
+    return "ybf";
+  if (normalized === "instructor") return "instructor";
+  if (normalized === "enumerator") return "enumerator";
+  if (normalized === "admin" || normalized === "administrator") return "admin";
+  return normalized;
+};
+
+const addDays = (dateStr, days) => {
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+};
+
+const getMondayOfWeek = (dateStr) => {
+  const d = new Date(dateStr);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  return d.toISOString().slice(0, 10);
+};
+
+const validateSessionSchedule = (sessionDate) => {
+  const monday = getMondayOfWeek(sessionDate);
+  const today = new Date().toISOString().slice(0, 10);
+  if (today > monday) {
+    return {
+      ok: false,
+      error: `Sessions must be scheduled by Monday (${monday}) for that week.`,
+    };
+  }
+  return { ok: true };
+};
+
+const enrichSessionRow = (row) => {
+  const today = new Date().toISOString().slice(0, 10);
+  const sessionDate = row.session_date
+    ? String(row.session_date).slice(0, 10)
+    : null;
+  let deadline =
+    row.data_entry_deadline != null
+      ? String(row.data_entry_deadline).slice(0, 10)
+      : sessionDate
+        ? addDays(sessionDate, DATA_ENTRY_DAYS)
+        : null;
+  const locked =
+    Boolean(row.is_locked) || (deadline != null && today > deadline);
+  let daysRemaining = null;
+  if (sessionDate && today >= sessionDate && deadline && !locked) {
+    daysRemaining = Math.max(
+      0,
+      Math.ceil(
+        (new Date(deadline).getTime() - new Date(today).getTime()) /
+          (1000 * 60 * 60 * 24),
+      ),
+    );
+  }
+  return {
+    ...row,
+    data_entry_deadline: deadline,
+    is_locked: locked,
+    days_remaining: daysRemaining,
+    expected_session_total: INSTITUTIONAL_SESSION_TOTAL,
+  };
+};
+
+const getInstructorPartnerIds = async (userId) => {
+  const ids = new Set();
+  const assignmentRes = await pool.query(
+    `SELECT partner_institution_id FROM instructor_partner_assignment WHERE user_id::text = $1::text`,
+    [String(userId)],
+  );
+  assignmentRes.rows.forEach((r) => ids.add(r.partner_institution_id));
+  const userRes = await pool.query(
+    `SELECT assigned_to FROM users WHERE id = $1`,
+    [userId],
+  );
+  if (userRes.rows[0]?.assigned_to) ids.add(userRes.rows[0].assigned_to);
+  return [...ids];
+};
+
+const assignInstructorToPartner = async (userId, partnerId) => {
+  await pool.query(
+    `INSERT INTO instructor_partner_assignment (user_id, partner_institution_id)
+     VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+    [userId, partnerId],
+  );
+  await pool.query(`UPDATE users SET assigned_to = $1 WHERE id = $2`, [
+    partnerId,
+    userId,
+  ]);
+};
+
+const assertSessionUnlocked = async (sessionId, userRole) => {
+  if (userRole === "admin" || userRole === "program_manager") return null;
+  const sessionRes = await pool.query(`SELECT * FROM session WHERE id = $1`, [
+    sessionId,
+  ]);
+  if (!sessionRes.rows[0]) return "Session not found";
+  const enriched = enrichSessionRow(sessionRes.rows[0]);
+  if (enriched.is_locked) {
+    return "Attendance entry is locked. The 5-day data entry window has closed.";
+  }
+  return null;
+};
+
+const computeYouthAt80Percent = async (cohortFilter, params) => {
+  const res = await pool.query(
+    `SELECT COUNT(*) FROM (
+       SELECT y.id,
+              COUNT(DISTINCT s.id) AS total_sessions,
+              COUNT(a.id) FILTER (WHERE a.status = 'Present') AS present_count
+       FROM youth y
+       JOIN cohort c ON c.id = y.cohort_id
+       LEFT JOIN session s ON s.cohort_id = y.cohort_id
+       LEFT JOIN attendance_record a ON a.session_id = s.id AND a.youth_id = y.id
+       WHERE y.deleted_by IS NULL ${cohortFilter}
+       GROUP BY y.id
+     ) t
+     WHERE t.total_sessions > 0
+       AND t.present_count >= CEIL(t.total_sessions * 0.8)`,
+    params,
+  );
+  return Number(res.rows[0]?.count || 0);
+};
+
+const computeAvgSessionsPerYouth = async (cohortFilter, params) => {
+  const res = await pool.query(
+    `SELECT CASE WHEN COUNT(DISTINCT y.id) = 0 THEN 0
+            ELSE ROUND(COUNT(DISTINCT s.id)::numeric / COUNT(DISTINCT y.id), 1)
+       END AS avg_sessions
+     FROM youth y
+     LEFT JOIN session s ON s.cohort_id = y.cohort_id
+     WHERE y.deleted_by IS NULL ${cohortFilter}`,
+    params,
+  );
+  return Number(res.rows[0]?.avg_sessions || 0);
+};
 
 const getAccountStatusMessage = (status) => {
   if (status === "blocked") {
-    return "This account has been blocked. Contact your administrator.";
+    return "This account has been blocked. Contact your admin.";
   }
   if (status === "inactive") {
-    return "This account is deactivated. Contact your administrator.";
+    return "This account is deactivated. Contact your admin.";
   }
   return null;
+};
+
+const isPendingApproval = (user) => {
+  const role = String(user?.role || "").toLowerCase();
+  if (role !== "ybf" && role !== "instructor") return false;
+  if (user?.status === "blocked" || user?.status === "inactive") return false;
+  return user?.status === "pending" || !user?.assigned_to;
 };
 
 // Input validation middleware
@@ -129,7 +352,10 @@ const resolveYouthIdentifiers = async (body) => {
 
 const normalizeProgramType = (value) => {
   if (!value || typeof value !== "string") return null;
-  const compact = value.trim().toLowerCase().replace(/[-_\s]/g, "");
+  const compact = value
+    .trim()
+    .toLowerCase()
+    .replace(/[-_\s]/g, "");
   if (compact === "inschool") return "In-school";
   if (compact === "outofschool") return "Out-of-school";
   return null;
@@ -303,19 +529,29 @@ app.post(
   async (req, res) => {
     const { name, email, password, role } = req.body;
     try {
+      const normalizedRole = normalizeUserRole(role || "enumerator");
+      const needsApproval =
+        normalizedRole === "ybf" || normalizedRole === "instructor";
+      const status = needsApproval ? "pending" : "active";
       const hashedPassword = await bcrypt.hash(password, 10);
       const result = await pool.query(
-        "INSERT INTO users (name, email, password_hash, role) VALUES ($1, $2, $3, $4) RETURNING id, name, email, role",
-        [name, email, hashedPassword, role || "enumerator"],
+        "INSERT INTO users (name, email, password_hash, role, status) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, email, role, status, assigned_to",
+        [name, email, hashedPassword, normalizedRole, status],
       );
+      const user = result.rows[0];
       const token = jwt.sign(
-        { id: result.rows[0].id, role: result.rows[0].role },
+        { id: user.id, role: user.role },
         process.env.JWT_SECRET || "wezesha_secret_key",
       );
-      res.status(201).json({ user: result.rows[0], token });
+      res.status(201).json({
+        user: {
+          ...user,
+          pendingApproval: isPendingApproval(user),
+        },
+        token,
+      });
     } catch (err) {
       if (err.code === "23505") {
-        // unique violation
         res.status(400).json({ error: "Email already exists" });
       } else {
         res.status(500).json({ error: err.message });
@@ -357,6 +593,8 @@ app.post(
           email: user.email,
           role: user.role,
           status: user.status || "active",
+          assigned_to: user.assigned_to || null,
+          pendingApproval: isPendingApproval(user),
         },
         token,
       });
@@ -371,6 +609,29 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "Backend is running" });
 });
 
+app.get("/api/auth/me", authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT u.id, u.name, u.email, u.role, COALESCE(u.status, 'active') AS status,
+              u.assigned_to, p.name AS assigned_partner_name
+       FROM users u
+       LEFT JOIN partner_institution p ON p.id = u.assigned_to
+       WHERE u.id = $1`,
+      [req.user.id],
+    );
+    if (!result.rows[0]) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    const user = result.rows[0];
+    res.json({
+      ...user,
+      pendingApproval: isPendingApproval(user),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Dashboard — summary counts (scoped for YBF cohorts)
 app.get("/api/dashboard", authenticateToken, async (req, res) => {
   try {
@@ -382,6 +643,9 @@ app.get("/api/dashboard", authenticateToken, async (req, res) => {
         totalYouth: 0,
         totalPartners: 0,
         totalSessions: 0,
+        avgSessionsPerYouth: 0,
+        youthAt80Percent: 0,
+        expectedSessionTotal: INSTITUTIONAL_SESSION_TOTAL,
         totalCases: 0,
         atRiskCount: 0,
         avgAttendance: null,
@@ -398,9 +662,7 @@ app.get("/api/dashboard", authenticateToken, async (req, res) => {
 
     const cohortFilter = isYbf ? "AND y.cohort_id = ANY($1)" : "";
     const sessionCohortFilter = isYbf ? "WHERE s.cohort_id = ANY($1)" : "";
-    const caseCohortFilter = isYbf
-      ? "WHERE y.cohort_id = ANY($1)"
-      : "";
+    const caseCohortFilter = isYbf ? "WHERE y.cohort_id = ANY($1)" : "";
     const params = isYbf ? [allowedCohorts] : [];
 
     const [
@@ -415,6 +677,11 @@ app.get("/api/dashboard", authenticateToken, async (req, res) => {
       outputRes,
       sessionAttendanceRes,
       cohortsRes,
+      avgSessionsRes,
+      youth80Res,
+      regionBreakdownRes,
+      programBreakdownRes,
+      yearBreakdownRes,
     ] = await Promise.all([
       pool.query(
         `SELECT COUNT(*) FROM youth y WHERE y.deleted_by IS NULL ${cohortFilter}`,
@@ -505,6 +772,34 @@ app.get("/api/dashboard", authenticateToken, async (req, res) => {
             [allowedCohorts],
           )
         : Promise.resolve({ rows: [] }),
+      computeAvgSessionsPerYouth(cohortFilter, params),
+      computeYouthAt80Percent(cohortFilter, params),
+      pool.query(
+        `SELECT COALESCE(y.region, p.region, 'Unassigned') AS label, COUNT(*) AS count
+         FROM youth y
+         LEFT JOIN partner_institution p ON p.id = y.partner_institution_id
+         WHERE y.deleted_by IS NULL ${cohortFilter}
+         GROUP BY COALESCE(y.region, p.region, 'Unassigned')
+         ORDER BY count DESC`,
+        params,
+      ),
+      pool.query(
+        `SELECT COALESCE(y.program_type, 'Unassigned') AS label, COUNT(*) AS count
+         FROM youth y
+         WHERE y.deleted_by IS NULL ${cohortFilter}
+         GROUP BY COALESCE(y.program_type, 'Unassigned')
+         ORDER BY count DESC`,
+        params,
+      ),
+      pool.query(
+        `SELECT COALESCE(y.program_year::text, c.program_year::text, 'Unassigned') AS label, COUNT(*) AS count
+         FROM youth y
+         LEFT JOIN cohort c ON c.id = y.cohort_id
+         WHERE y.deleted_by IS NULL ${cohortFilter}
+         GROUP BY COALESCE(y.program_year::text, c.program_year::text, 'Unassigned')
+         ORDER BY count DESC`,
+        params,
+      ),
     ]);
 
     const totalYouth = Number(youthRes.rows[0].count || 0);
@@ -514,20 +809,36 @@ app.get("/api/dashboard", authenticateToken, async (req, res) => {
     const totalUsers = Number(usersRes.rows[0].count || 0);
     const pendingSyncs = Number(pendingSyncsRes.rows[0].count || 0);
     const atRiskCount = Number(atRiskRes.rows[0].count || 0);
+    const avgSessionsPerYouth = Number(avgSessionsRes || 0);
+    const youthAt80Percent = Number(youth80Res || 0);
     const avgAttendance =
       avgAttendanceRes.rows[0].avg_attendance !== null
         ? Number(avgAttendanceRes.rows[0].avg_attendance)
         : null;
 
+    const mapBreakdown = (rows) =>
+      rows.map((r) => ({
+        label: r.label,
+        count: Number(r.count || 0),
+      }));
+
     const response = {
       totalYouth,
       totalPartners,
       totalSessions,
+      avgSessionsPerYouth,
+      youthAt80Percent,
+      expectedSessionTotal: INSTITUTIONAL_SESSION_TOTAL,
       totalCases,
       totalUsers,
       pendingSyncs,
       atRiskCount,
       avgAttendance,
+      filterBreakdown: {
+        byRegion: mapBreakdown(regionBreakdownRes.rows),
+        byProgramType: mapBreakdown(programBreakdownRes.rows),
+        byYear: mapBreakdown(yearBreakdownRes.rows),
+      },
     };
 
     if (isYbf) {
@@ -1011,8 +1322,16 @@ app.get(
       LIMIT $2 OFFSET $3
     `;
 
-        const countRes = await pool.query(countQueryFiltered, [threshold, allowed]);
-        const rowsRes = await pool.query(rowsQueryFiltered, [threshold, limit, offset, allowed]);
+        const countRes = await pool.query(countQueryFiltered, [
+          threshold,
+          allowed,
+        ]);
+        const rowsRes = await pool.query(rowsQueryFiltered, [
+          threshold,
+          limit,
+          offset,
+          allowed,
+        ]);
 
         return res.json({
           total: Number(countRes.rows[0].count || 0),
@@ -1084,6 +1403,9 @@ app.post(
       institution_type,
       type,
       location,
+      region,
+      program_type,
+      programType,
       contact_name,
       contact_phone,
       contact_email,
@@ -1113,15 +1435,21 @@ app.post(
       }
     }
 
+    const partnerRegion = region || location || null;
+    const partnerProgramType =
+      normalizeProgramType(program_type || programType) || "In-school";
+
     try {
       const result = await pool.query(
-        `INSERT INTO partner_institution (name, district, type, location, contact_name, contact_phone, contact_email, partnership_date)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+        `INSERT INTO partner_institution (name, district, type, location, region, program_type, contact_name, contact_phone, contact_email, partnership_date)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
         [
           name,
           district,
           partnerType,
-          location,
+          partnerRegion,
+          partnerRegion,
+          partnerProgramType,
           contact_name,
           contact_phone,
           contact_email,
@@ -1145,7 +1473,11 @@ app.post(
         await assignYbfToPartner(String(assignedYbf), partner.id);
       }
 
-      if (cohortYear !== undefined && cohortYear !== null && cohortYear !== "") {
+      if (
+        cohortYear !== undefined &&
+        cohortYear !== null &&
+        cohortYear !== ""
+      ) {
         const year = Number(cohortYear);
         const existingCohort = await pool.query(
           `SELECT id FROM cohort WHERE partner_institution_id = $1 AND program_year = $2 LIMIT 1`,
@@ -1173,7 +1505,7 @@ app.post(
 app.put(
   "/api/partners/:id",
   authenticateToken,
-  authorizeRoles("admin", "program_manager","ybf"),
+  authorizeRoles("admin", "program_manager", "ybf"),
   async (req, res) => {
     const { id } = req.params;
     const {
@@ -1182,6 +1514,9 @@ app.put(
       institution_type,
       type,
       location,
+      region,
+      program_type,
+      programType,
       contact_name,
       contact_phone,
       contact_email,
@@ -1195,16 +1530,26 @@ app.put(
     const partnerType = institution_type || type;
     const partnershipDate = partnership_date || startDate || null;
 
+    const partnerRegion = region || location || null;
+    const partnerProgramType =
+      program_type || programType
+        ? normalizeProgramType(program_type || programType)
+        : null;
+
     try {
       const result = await pool.query(
         `UPDATE partner_institution 
-       SET name = $1, district = $2, type = $3, location = $4, contact_name = $5, contact_phone = $6, contact_email = $7, partnership_date = $8, status = $9, updated_at = NOW()
-       WHERE id = $10 AND deleted_by IS NULL RETURNING *`,
+       SET name = $1, district = $2, type = $3, location = $4, region = COALESCE($5, region),
+           program_type = COALESCE($6, program_type),
+           contact_name = $7, contact_phone = $8, contact_email = $9, partnership_date = $10, status = $11, updated_at = NOW()
+       WHERE id = $12 AND deleted_by IS NULL RETURNING *`,
         [
           name,
           district,
           partnerType,
-          location,
+          partnerRegion,
+          partnerRegion,
+          partnerProgramType,
           contact_name,
           contact_phone,
           contact_email,
@@ -1226,10 +1571,14 @@ app.put(
             [String(assignedYbf)],
           );
           if (!ybfUser.rows[0]) {
-            return res.status(400).json({ error: "Assigned YBF user not found" });
+            return res
+              .status(400)
+              .json({ error: "Assigned YBF user not found" });
           }
           if (String(ybfUser.rows[0].role).toLowerCase() !== "ybf") {
-            return res.status(400).json({ error: "Assigned user must be a YBF" });
+            return res
+              .status(400)
+              .json({ error: "Assigned user must be a YBF" });
           }
         }
         await replacePartnerYbfAssignment(id, assignedYbf || null);
@@ -1274,16 +1623,52 @@ app.delete(
 app.get(
   "/api/youth",
   authenticateToken,
-  authorizeRoles("admin", "program_manager","ybf"),
+  authorizeRoles("admin", "program_manager", "ybf", "instructor"),
   async (req, res) => {
     try {
+      const {
+        region,
+        program_type,
+        programType,
+        program_year,
+        programYear,
+        roster_year,
+        rosterYear,
+      } = req.query;
+      const filters = [];
+      const filterParams = [];
+      const addFilter = (clause, value) => {
+        filterParams.push(value);
+        filters.push(clause.replace("$X", `$${filterParams.length}`));
+      };
+      if (region && region !== "all")
+        addFilter(` AND COALESCE(y.region, p.region) = $X`, region);
+      if (program_type || programType) {
+        addFilter(` AND y.program_type = $X`, program_type || programType);
+      }
+      if (program_year || programYear) {
+        addFilter(
+          ` AND COALESCE(y.program_year, c.program_year) = $X`,
+          Number(program_year || programYear),
+        );
+      }
+      if (roster_year || rosterYear) {
+        addFilter(
+          ` AND COALESCE(y.roster_year, 1) = $X`,
+          Number(roster_year || rosterYear),
+        );
+      }
+      const extraFilter = filters.join("");
+
       // If the user is a YBF, scope youth to their assigned cohorts
       const youthSelect = `
         SELECT y.id, y.full_name, y.date_of_birth, y.gender,
                y.district_of_residence AS district, y.partner_institution_id,
                y.cohort_id, y.program_type, y.program_year, y.region, y.nationality,
+               y.disability, y.course, y.employment_status, y.roster_year, y.school_name,
+               y.baseline_income, y.current_income, y.has_business, y.above_ipl,
                y.created_at, y.updated_at, y.deleted_at, y.deleted_by, y.created_by, y.youth_code,
-               p.name AS partner_name,
+               p.name AS partner_name, p.region AS partner_region,
                c.program_year AS cohort_year,
                CASE WHEN COUNT(a.id)=0 THEN 0
                     ELSE ROUND(((COUNT(a.id) FILTER (WHERE a.status='Present')::float / NULLIF(COUNT(a.id),0)::float) * 100)::numeric, 1)
@@ -1304,18 +1689,31 @@ app.get(
           return res.json([]);
         }
         const result = await pool.query(
-          `${youthSelect} AND y.cohort_id = ANY($1)
-           GROUP BY y.id, p.name, c.program_year
+          `${youthSelect} AND y.cohort_id = ANY($${filterParams.length + 1})${extraFilter}
+           GROUP BY y.id, p.name, p.region, c.program_year
            ORDER BY y.full_name ASC`,
-          [allowed],
+          [...filterParams, allowed],
+        );
+        return res.json(result.rows);
+      }
+
+      if (req.user && req.user.role === "instructor") {
+        const partnerIds = await getInstructorPartnerIds(req.user.id);
+        if (!partnerIds.length) return res.json([]);
+        const result = await pool.query(
+          `${youthSelect} AND y.partner_institution_id = ANY($${filterParams.length + 1})${extraFilter}
+           GROUP BY y.id, p.name, p.region, c.program_year
+           ORDER BY y.full_name ASC`,
+          [...filterParams, partnerIds],
         );
         return res.json(result.rows);
       }
 
       const result = await pool.query(
-        `${youthSelect}
-         GROUP BY y.id, p.name, c.program_year
+        `${youthSelect}${extraFilter}
+         GROUP BY y.id, p.name, p.region, c.program_year
          ORDER BY y.created_at DESC`,
+        filterParams,
       );
       res.json(result.rows);
     } catch (err) {
@@ -1339,15 +1737,23 @@ app.post(
       cohort_id,
       program_type,
       programType,
+      nationality,
+      region,
+      disability,
+      course,
+      employment_status,
+      employmentStatus,
+      roster_year,
+      rosterYear,
+      school_name,
+      schoolName,
     } = req.body;
 
     if (!full_name || !date_of_birth || !gender || !district) {
-      return res
-        .status(400)
-        .json({
-          error:
-            "Missing required fields: full_name, date_of_birth, gender, district",
-        });
+      return res.status(400).json({
+        error:
+          "Missing required fields: full_name, date_of_birth, gender, district",
+      });
     }
 
     if (!partner_institution_id && !req.body.partner) {
@@ -1379,7 +1785,9 @@ app.post(
       if (!resolvedProgramType) {
         return res
           .status(400)
-          .json({ error: "Invalid program type. Use In-school or Out-of-school." });
+          .json({
+            error: "Invalid program type. Use In-school or Out-of-school.",
+          });
       }
 
       const cohortRes = await pool.query(
@@ -1391,9 +1799,11 @@ app.post(
         return res.status(400).json({ error: "Invalid cohort selected" });
       }
 
+      const resolvedRosterYear = Number(roster_year ?? rosterYear ?? 1) || 1;
+
       const result = await pool.query(
-        `INSERT INTO youth (full_name, date_of_birth, gender, district_of_residence, partner_institution_id, cohort_id, program_type, program_year)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+        `INSERT INTO youth (full_name, date_of_birth, gender, district_of_residence, partner_institution_id, cohort_id, program_type, program_year, nationality, region, disability, course, employment_status, roster_year, school_name)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
         [
           full_name,
           date_of_birth,
@@ -1403,6 +1813,13 @@ app.post(
           cohortId,
           resolvedProgramType,
           programYear,
+          nationality || null,
+          region || null,
+          disability || null,
+          course || null,
+          employment_status || employmentStatus || null,
+          resolvedRosterYear,
+          school_name || schoolName || null,
         ],
       );
       res.status(201).json(result.rows[0]);
@@ -1427,6 +1844,16 @@ app.put(
       partner,
       cohort,
       program_type,
+      nationality,
+      region,
+      disability,
+      course,
+      employment_status,
+      employmentStatus,
+      roster_year,
+      rosterYear,
+      school_name,
+      schoolName,
     } = req.body;
 
     try {
@@ -1450,23 +1877,19 @@ app.put(
       let resolvedCohortId = cohort_id || existing.rows[0].cohort_id;
       if (!resolvedCohortId && cohort) {
         if (!resolvedPartnerId) {
-          return res
-            .status(400)
-            .json({
-              error:
-                "Partner or partner_institution_id is required to resolve cohort",
-            });
+          return res.status(400).json({
+            error:
+              "Partner or partner_institution_id is required to resolve cohort",
+          });
         }
         resolvedCohortId = await getCohortIdByPartnerAndYear(
           resolvedPartnerId,
           cohort,
         );
         if (!resolvedCohortId) {
-          return res
-            .status(400)
-            .json({
-              error: `Cohort not found for partner '${partner || resolvedPartnerId}' and cohort '${cohort}'`,
-            });
+          return res.status(400).json({
+            error: `Cohort not found for partner '${partner || resolvedPartnerId}' and cohort '${cohort}'`,
+          });
         }
       }
 
@@ -1488,14 +1911,22 @@ app.put(
       if (typeof program_type === "string" && !resolvedProgramType) {
         return res
           .status(400)
-          .json({ error: "Invalid program type. Use In-school or Out-of-school." });
+          .json({
+            error: "Invalid program type. Use In-school or Out-of-school.",
+          });
       }
       if (!resolvedProgramType) resolvedProgramType = "In-school";
 
       const result = await pool.query(
         `UPDATE youth 
-       SET full_name = $1, date_of_birth = $2, gender = $3, district_of_residence = $4, partner_institution_id = $5, cohort_id = $6, program_type = $7, program_year = $8, updated_at = NOW()
-       WHERE id = $9 AND deleted_by IS NULL RETURNING *`,
+       SET full_name = $1, date_of_birth = $2, gender = $3, district_of_residence = $4, partner_institution_id = $5, cohort_id = $6, program_type = $7, program_year = $8,
+           nationality = COALESCE($9, nationality), region = COALESCE($10, region),
+           disability = COALESCE($11, disability), course = COALESCE($12, course),
+           employment_status = COALESCE($13, employment_status),
+           roster_year = COALESCE($14, roster_year),
+           school_name = COALESCE($15, school_name),
+           updated_at = NOW()
+       WHERE id = $16 AND deleted_by IS NULL RETURNING *`,
         [
           full_name,
           date_of_birth,
@@ -1505,6 +1936,13 @@ app.put(
           resolvedCohortId,
           resolvedProgramType,
           programYear,
+          nationality ?? null,
+          region ?? null,
+          disability ?? null,
+          course ?? null,
+          employment_status || employmentStatus || null,
+          roster_year ?? rosterYear ?? null,
+          school_name || schoolName || null,
           id,
         ],
       );
@@ -1544,6 +1982,12 @@ app.get(
   authorizeRoles("admin", "program_manager", "ybf", "instructor"),
   async (req, res) => {
     try {
+      await pool.query(
+        `UPDATE session SET is_locked = true
+         WHERE data_entry_deadline IS NOT NULL
+           AND data_entry_deadline < CURRENT_DATE
+           AND is_locked = false`,
+      );
       const baseQuery = `
         SELECT s.*, p.name AS partner_name, CONCAT('Term ', s.term_number) AS term,
                COUNT(a.id) FILTER (WHERE a.status = 'Present') AS attendance_count,
@@ -1563,7 +2007,20 @@ app.get(
            ORDER BY s.session_date DESC`,
           [allowed],
         );
-        return res.json(result.rows);
+        return res.json(result.rows.map(enrichSessionRow));
+      }
+
+      if (req.user && req.user.role === "instructor") {
+        const partnerIds = await getInstructorPartnerIds(req.user.id);
+        if (!partnerIds.length) return res.json([]);
+        const result = await pool.query(
+          `${baseQuery}
+           WHERE c.partner_institution_id = ANY($1)
+           GROUP BY s.id, p.name
+           ORDER BY s.session_date DESC`,
+          [partnerIds],
+        );
+        return res.json(result.rows.map(enrichSessionRow));
       }
 
       const result = await pool.query(
@@ -1571,7 +2028,7 @@ app.get(
          GROUP BY s.id, p.name
          ORDER BY s.session_date DESC`,
       );
-      res.json(result.rows);
+      res.json(result.rows.map(enrichSessionRow));
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -1601,13 +2058,20 @@ app.post(
         if (!(await ensureYbfCohortAccess(req, res, cohort_id))) return;
       }
 
+      const scheduleCheck = validateSessionSchedule(session_date);
+      if (!scheduleCheck.ok) {
+        return res.status(400).json({ error: scheduleCheck.error });
+      }
+
+      const dataEntryDeadline = addDays(session_date, DATA_ENTRY_DAYS);
+
       const resolvedTerm = Number(term_number) > 0 ? Number(term_number) : 1;
       const resolvedSessionNumber =
         Number(session_number) > 0 ? Number(session_number) : 1;
 
       const insertResult = await pool.query(
-        `INSERT INTO session (cohort_id, topic, session_date, venue, term_number, session_number)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+        `INSERT INTO session (cohort_id, topic, session_date, venue, term_number, session_number, data_entry_deadline, is_locked)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, false) RETURNING *`,
         [
           cohort_id,
           String(topic).trim(),
@@ -1615,6 +2079,7 @@ app.post(
           venue || null,
           resolvedTerm,
           resolvedSessionNumber,
+          dataEntryDeadline,
         ],
       );
 
@@ -1629,7 +2094,9 @@ app.post(
         [insertResult.rows[0].id],
       );
 
-      res.status(201).json(enriched.rows[0] || insertResult.rows[0]);
+      res
+        .status(201)
+        .json(enrichSessionRow(enriched.rows[0] || insertResult.rows[0]));
     } catch (err) {
       if (err.code === "23505") {
         return res.status(400).json({
@@ -1742,8 +2209,11 @@ app.post(
   authorizeRoles("admin", "program_manager", "ybf"),
   validateRequired(["youth_id", "category", "note_text"]),
   async (req, res) => {
-    const { youth_id, category, note_text, follow_up_due, follow_up_required } =
-      req.body;
+    const { youth_id, category, note_text, follow_up_due } = req.body;
+    const follow_up_required =
+      typeof req.body.follow_up_required === "boolean"
+        ? req.body.follow_up_required
+        : false;
     try {
       if (req.user && req.user.role === "ybf") {
         const youthRes = await pool.query(
@@ -1755,7 +2225,9 @@ app.post(
         }
         const allowed = await getUserCohorts(req.user.id);
         if (!hasCohortAccess(allowed, youthRes.rows[0].cohort_id)) {
-          return res.status(403).json({ error: "You do not have access to this youth" });
+          return res
+            .status(403)
+            .json({ error: "You do not have access to this youth" });
         }
       }
 
@@ -1767,7 +2239,7 @@ app.post(
           req.user.id,
           category,
           note_text,
-          follow_up_due,
+          follow_up_due ?? null,
           follow_up_required,
         ],
       );
@@ -1784,13 +2256,24 @@ app.put(
   authorizeRoles("admin", "program_manager", "ybf"),
   async (req, res) => {
     const { id } = req.params;
-    const { category, note_text, follow_up_due, follow_up_required } = req.body;
+    const { category, note_text, follow_up_due, follow_up_required, is_done } =
+      req.body;
     try {
       const result = await pool.query(
         `UPDATE case_note 
-       SET category = $1, note_text = $2, follow_up_due = $3, follow_up_required = $4, updated_at = NOW()
-       WHERE id = $5 RETURNING *`,
-        [category, note_text, follow_up_due, follow_up_required, id],
+       SET category = COALESCE($1, category), note_text = COALESCE($2, note_text),
+           follow_up_due = COALESCE($3, follow_up_due),
+           follow_up_required = COALESCE($4, follow_up_required),
+           is_done = COALESCE($5, is_done), updated_at = NOW()
+       WHERE id = $6 RETURNING *`,
+        [
+          category,
+          note_text,
+          follow_up_due,
+          follow_up_required,
+          typeof is_done === "boolean" ? is_done : null,
+          id,
+        ],
       );
       if (result.rows.length === 0)
         return res.status(404).json({ error: "Case note not found" });
@@ -1874,7 +2357,9 @@ app.post(
         }
         const allowed = await getUserCohorts(req.user.id);
         if (!hasCohortAccess(allowed, youthRes.rows[0].cohort_id)) {
-          return res.status(403).json({ error: "You do not have access to this youth" });
+          return res
+            .status(403)
+            .json({ error: "You do not have access to this youth" });
         }
       }
 
@@ -1925,7 +2410,9 @@ app.put(
         }
         const allowed = await getUserCohorts(req.user.id);
         if (!hasCohortAccess(allowed, accessRes.rows[0].cohort_id)) {
-          return res.status(403).json({ error: "You do not have access to this record" });
+          return res
+            .status(403)
+            .json({ error: "You do not have access to this record" });
         }
       }
 
@@ -2035,6 +2522,9 @@ app.post(
   async (req, res) => {
     const { session_id, youth_id, status } = req.body;
     try {
+      const lockError = await assertSessionUnlocked(session_id, req.user?.role);
+      if (lockError) return res.status(403).json({ error: lockError });
+
       if (req.user && req.user.role === "ybf") {
         const sessionRes = await pool.query(
           `SELECT cohort_id FROM session WHERE id = $1`,
@@ -2043,7 +2533,9 @@ app.post(
         if (!sessionRes.rows[0]) {
           return res.status(404).json({ error: "Session not found" });
         }
-        if (!(await ensureYbfCohortAccess(req, res, sessionRes.rows[0].cohort_id))) {
+        if (
+          !(await ensureYbfCohortAccess(req, res, sessionRes.rows[0].cohort_id))
+        ) {
           return;
         }
       }
@@ -2080,7 +2572,9 @@ app.post(
   async (req, res) => {
     const { records } = req.body;
     if (!Array.isArray(records) || records.length === 0) {
-      return res.status(400).json({ error: "records must be a non-empty array" });
+      return res
+        .status(400)
+        .json({ error: "records must be a non-empty array" });
     }
 
     const client = await pool.connect();
@@ -2091,8 +2585,16 @@ app.post(
       for (const record of records) {
         const { session_id, youth_id, status } = record;
         if (!session_id || !youth_id || !status) {
-          throw new Error("Each record requires session_id, youth_id, and status");
+          throw new Error(
+            "Each record requires session_id, youth_id, and status",
+          );
         }
+
+        const lockError = await assertSessionUnlocked(
+          session_id,
+          req.user?.role,
+        );
+        if (lockError) throw new Error(lockError);
 
         if (req.user && req.user.role === "ybf") {
           const sessionRes = await client.query(
@@ -2130,7 +2632,11 @@ app.post(
       }
 
       await client.query("COMMIT");
-      res.json({ message: "Attendance saved", count: saved.length, records: saved });
+      res.json({
+        message: "Attendance saved",
+        count: saved.length,
+        records: saved,
+      });
     } catch (err) {
       await client.query("ROLLBACK");
       res.status(500).json({ error: err.message });
@@ -2180,7 +2686,7 @@ app.get(
         where = `WHERE name ILIKE $${params.length - 1} OR email ILIKE $${params.length}`;
       }
 
-      const dataQuery = `SELECT id, name, email, role, COALESCE(status, 'active') AS status, created_at FROM users ${where} ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+      const dataQuery = `SELECT id, name, email, role, COALESCE(status, 'active') AS status, assigned_to, created_at FROM users ${where} ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
       params.push(lim, offset);
 
       const result = await pool.query(dataQuery, params);
@@ -2206,23 +2712,52 @@ app.put(
   authorizeRoles("admin", "program_manager"),
   async (req, res) => {
     const { id } = req.params;
-    const { name, email, role, status } = req.body;
+    const { name, email, role, status, assigned_to, assignedTo } = req.body;
     try {
       if (status && !USER_STATUSES.includes(status)) {
         return res.status(400).json({
-          error: "Invalid status. Use active, inactive, or blocked.",
+          error: "Invalid status. Use active, inactive, blocked, or pending.",
         });
       }
+      const partnerId = assigned_to || assignedTo || null;
       const result = await pool.query(
         `UPDATE users
        SET name = COALESCE($1, name), email = COALESCE($2, email), role = COALESCE($3, role),
-           status = COALESCE($4, status), updated_at = NOW()
-       WHERE id = $5 RETURNING id, name, email, role, COALESCE(status, 'active') AS status`,
-        [name, email, role, status || null, id],
+           status = COALESCE($4, status),
+           assigned_to = COALESCE($5, assigned_to),
+           updated_at = NOW()
+       WHERE id = $6 RETURNING id, name, email, role, COALESCE(status, 'active') AS status, assigned_to`,
+        [
+          name,
+          email,
+          role ? normalizeUserRole(role) : null,
+          status || null,
+          partnerId,
+          id,
+        ],
       );
       if (result.rows.length === 0)
         return res.status(404).json({ error: "User not found" });
-      res.json(result.rows[0]);
+
+      const updated = result.rows[0];
+      if (partnerId) {
+        const roleLower = String(updated.role || "").toLowerCase();
+        if (roleLower === "ybf") {
+          await assignYbfToPartner(updated.id, partnerId);
+        } else if (roleLower === "instructor") {
+          await assignInstructorToPartner(updated.id, partnerId);
+        }
+      }
+      if (status === "active" && updated.assigned_to) {
+        await pool.query(`UPDATE users SET status = 'active' WHERE id = $1`, [
+          updated.id,
+        ]);
+      }
+
+      res.json({
+        ...updated,
+        pendingApproval: isPendingApproval(updated),
+      });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -2238,11 +2773,15 @@ app.patch(
     const { status } = req.body;
     if (!status || !USER_STATUSES.includes(status)) {
       return res.status(400).json({
-        error: "Invalid status. Use active, inactive, or blocked.",
+        error: "Invalid status. Use active, inactive, blocked, or pending.",
       });
     }
     try {
-      if (req.user && String(req.user.id) === String(id) && status !== "active") {
+      if (
+        req.user &&
+        String(req.user.id) === String(id) &&
+        status !== "active"
+      ) {
         return res.status(400).json({
           error: "You cannot deactivate or block your own account.",
         });

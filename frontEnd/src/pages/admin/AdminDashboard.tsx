@@ -65,6 +65,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import { DashboardFilterBreakdown } from "@/components/DashboardFilterBreakdown";
+import { INSTITUTIONAL_SESSION_TOTAL } from "@/constants/regions";
 
 const CHART_COLORS = [
   "hsl(152, 55%, 33%)",
@@ -392,11 +394,15 @@ export default function AdminDashboard() {
     totalYouth: 0,
     totalPartners: 0,
     totalSessions: 0,
+    avgSessionsPerYouth: 0,
+    youthAt80Percent: 0,
+    expectedSessionTotal: INSTITUTIONAL_SESSION_TOTAL,
     totalCases: 0,
     totalUsers: 0,
     pendingSyncs: 0,
     atRiskCount: 0,
     avgAttendance: null,
+    filterBreakdown: undefined,
   };
   const youth = youthData || [];
   const partners = partnersData || [];
@@ -615,7 +621,7 @@ export default function AdminDashboard() {
             <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-destructive rounded-full" />
           </Button>
         </div>
-      </div>
+      </div> 
 
       {/* ── System Health Strip ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 p-4 bg-muted/30 rounded-xl border border-border">
@@ -676,10 +682,16 @@ export default function AdminDashboard() {
           variant="success"
         />
         <StatCard
-          title="Active Sessions"
-          value={dashboardStats.totalSessions}
+          title="Avg Sessions / Youth"
+          value={dashboardStats.avgSessionsPerYouth ?? 0}
           icon={GraduationCap}
           variant="warning"
+        />
+        <StatCard
+          title="Youth at 80%"
+          value={dashboardStats.youthAt80Percent ?? 0}
+          icon={Users}
+          variant="success"
         />
         <StatCard
           title="Active Cases"
@@ -694,6 +706,8 @@ export default function AdminDashboard() {
           variant="default"
         />
       </div>
+
+      <DashboardFilterBreakdown breakdown={dashboardStats.filterBreakdown} />
 
       {/* ── System Usage Trend + Role Distribution ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

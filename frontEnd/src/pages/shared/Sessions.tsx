@@ -203,7 +203,7 @@ export default function Sessions() {
               theme="session"
               icon={CalendarCheck}
               title="Schedule Session"
-              subtitle="Add a session to a cohort schedule"
+              subtitle="Add a session by Monday of that week. Attendance entry opens on session date with a 5-day window."
             >
               <div className="space-y-4">
                 <FormSection theme="session" title="Session details">
@@ -334,8 +334,22 @@ export default function Sessions() {
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatCard
-          title="Total Sessions"
-          value={sessionsList.length}
+          title="Avg Sessions / Youth"
+          value={
+            sessionsList.length > 0
+              ? (
+                  sessionsList.length /
+                  Math.max(
+                    sessionsList.reduce(
+                      (max, s) => Math.max(max, s.totalYouth ?? 0),
+                      1,
+                    ),
+                    1,
+                  )
+                ).toFixed(1)
+              : "0"
+          }
+          subtitle={`Program total: ${sessionsList[0]?.expectedSessionTotal ?? 18} sessions`}
           icon={CalendarCheck}
           variant="primary"
         />
@@ -376,19 +390,20 @@ export default function Sessions() {
                 <TableHead>Topic</TableHead>
                 <TableHead>Partner</TableHead>
                 <TableHead>Term</TableHead>
+                <TableHead>Data Entry</TableHead>
                 <TableHead className="text-right">Attendance</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     Loading sessions…
                   </TableCell>
                 </TableRow>
               ) : filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     No sessions found.
                   </TableCell>
                 </TableRow>
@@ -405,6 +420,15 @@ export default function Sessions() {
                     <TableCell>{s.partner || s.partner_name}</TableCell>
                     <TableCell>
                       <Badge variant="secondary">{s.term}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      {s.isLocked ? (
+                        <Badge variant="destructive">Locked</Badge>
+                      ) : s.daysRemaining != null ? (
+                        <Badge variant="outline">{s.daysRemaining}d left</Badge>
+                      ) : (
+                        <Badge variant="secondary">Scheduled</Badge>
+                      )}
                     </TableCell>
                     <TableCell className="text-right">
                       <span className="font-semibold">

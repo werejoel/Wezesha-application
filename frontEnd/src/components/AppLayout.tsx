@@ -2,6 +2,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { useUser } from "@/hooks/use-user";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { PendingValidationGate } from "@/components/PendingValidationGate";
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const { user } = useUser();
@@ -39,7 +40,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               </div>
             </div>
           </header>
-          <main className="flex-1 overflow-auto p-4 md:p-6">{children}</main>
+          <main className="flex-1 overflow-auto p-4 md:p-6">
+            <PendingValidationGate>{children}</PendingValidationGate>
+          </main>
         </div>
       </div>
     </SidebarProvider>

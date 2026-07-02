@@ -5,6 +5,7 @@ import {
   updateUser,
   deleteUser,
   updateUserStatus,
+  getPartners,
 } from "@/api";
 import { useUser } from "@/hooks/use-user";
 import { Badge } from "@/components/ui/badge";
@@ -31,9 +32,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 
-type UserStatus = "active" | "inactive" | "blocked";
+type UserStatus = "active" | "inactive" | "blocked" | "pending";
 
 const statusBadge = (status: UserStatus) => {
+  if (status === "pending") {
+    return (
+      <Badge className="bg-sky-100 text-sky-900 hover:bg-sky-100">
+        Pending Approval
+      </Badge>
+    );
+  }
   if (status === "active") {
     return (
       <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
@@ -72,6 +80,8 @@ export default function AdminUsers() {
     email: "",
     password: "",
     role: "enumerator",
+    assignedTo: "",
+    status: "active" as UserStatus,
   });
   const [editError, setEditError] = useState<string | null>(null);
   const [editFieldErrors, setEditFieldErrors] = useState<
@@ -88,6 +98,14 @@ export default function AdminUsers() {
     Record<string, string>
   >({});
   const [statusUpdating, setStatusUpdating] = useState<string | null>(null);
+  const [partners, setPartners] = useState<any[]>([]);
+  const [approvePartner, setApprovePartner] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    getPartners()
+      .then((rows) => setPartners(Array.isArray(rows) ? rows : []))
+      .catch(() => setPartners([]));
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -235,10 +253,44 @@ export default function AdminUsers() {
       email: u.email || "",
       password: "",
       role: u.role || "enumerator",
+      assignedTo: u.assigned_to ? String(u.assigned_to) : "",
+      status: (u.status || "active") as UserStatus,
     });
     setEditError(null);
     setEditFieldErrors({});
     setEditOpen(true);
+  };
+
+  const handleApproveUser = async (u: any, partnerId: string) => {
+    if (!partnerId) {
+      toast({
+        title: "Institution required",
+        description: "Assign a school/institution before approving.",
+        variant: "destructive",
+      });
+      return;
+    }
+    try {
+      const updated = await updateUser(String(u.id), {
+        assigned_to: partnerId,
+        status: "active",
+      });
+      setUsers(
+        users.map((x) =>
+          String(x.id) === String(u.id) ? { ...x, ...updated } : x,
+        ),
+      );
+      toast({
+        title: "User approved",
+        description: `${u.email} can now access the dashboard.`,
+      });
+    } catch (err: any) {
+      toast({
+        title: "Approval failed",
+        description: err?.message || "Could not approve user",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleStatusChange = async (
@@ -301,7 +353,9 @@ export default function AdminUsers() {
         name: editForm.name,
         email: editForm.email,
         role: editForm.role,
+        status: editForm.status,
       };
+      if (editForm.assignedTo) payload.assigned_to = editForm.assignedTo;
       if (editForm.password) payload.password = editForm.password;
       const updated = await updateUser(String(editingUser.id), payload);
       setUsers(
@@ -549,6 +603,43 @@ export default function AdminUsers() {
                     <option value="enumerator">enumerator</option>
                   </select>
                 </div>
+                {(editForm.role === "ybf" || editForm.role === "instructor") && (
+                  <div>
+                    <Label>Assigned Institution</Label>
+                    <select
+                      value={editForm.assignedTo}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, assignedTo: e.target.value })
+                      }
+                      className="w-full rounded-lg border bg-card px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="">Select institution</option>
+                      {partners.map((p) => (
+                        <option key={p.id} value={String(p.id)}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <div>
+                  <Label>Status</Label>
+                  <select
+                    value={editForm.status}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        status: e.target.value as UserStatus,
+                      })
+                    }
+                    className="w-full rounded-lg border bg-card px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="pending">pending</option>
+                    <option value="active">active</option>
+                    <option value="inactive">inactive</option>
+                    <option value="blocked">blocked</option>
+                  </select>
+                </div>
                 <div className="flex justify-end gap-2">
                   <Button
                     variant="outline"
@@ -784,7 +875,43 @@ export default function AdminUsers() {
                         : "-"}
                     </TableCell>
                     <TableCell className="py-4">
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-2 items-center">
+                        {(u.status === "pending" ||
+                          ((u.role === "ybf" || u.role === "instructor") &&
+                            !u.assigned_to)) &&
+                          (u.role === "ybf" || u.role === "instructor") && (
+                            <>
+                              <select
+                                className="rounded border px-2 py-1 text-xs"
+                                value={approvePartner[String(u.id)] || ""}
+                                onChange={(e) =>
+                                  setApprovePartner({
+                                    ...approvePartner,
+                                    [String(u.id)]: e.target.value,
+                                  })
+                                }
+                              >
+                                <option value="">Assign institution</option>
+                                {partners.map((p) => (
+                                  <option key={p.id} value={String(p.id)}>
+                                    {p.name}
+                                  </option>
+                                ))}
+                              </select>
+                              <Button
+                                size="sm"
+                                className="bg-emerald-600 text-white hover:bg-emerald-700"
+                                onClick={() =>
+                                  handleApproveUser(
+                                    u,
+                                    approvePartner[String(u.id)] || "",
+                                  )
+                                }
+                              >
+                                Approve
+                              </Button>
+                            </>
+                          )}
                         <Button
                           size="sm"
                           variant="outline"

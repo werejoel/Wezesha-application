@@ -46,6 +46,7 @@ const roleSidebarItems: Record<string, typeof mainItems> = {
   program_manager: [
     mainItems[0],
     mainItems[1],
+    mainItems[2],
     mainItems[3],
     mainItems[4],
     mainItems[5],

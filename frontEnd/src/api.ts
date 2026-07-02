@@ -26,6 +26,8 @@ const normalizeUser = (user: any) => {
   return {
     ...user,
     role: normalizeRole(user.role),
+    status: user.status || "active",
+    pendingApproval: Boolean(user.pendingApproval),
   };
 };
 
@@ -94,6 +96,8 @@ export const getCurrentUser = () => {
   return user ? normalizeUser(JSON.parse(user)) : null;
 };
 
+export const getMe = () => get("/auth/me").then((data) => normalizeUser(data));
+
 // Dashboard
 export const getDashboardStats = () => get("/dashboard");
 
@@ -131,7 +135,24 @@ export const deletePersonnel = (id: string) =>
   }).then(handleResponse);
 
 // Youth
-export const getYouth = () => get("/youth");
+export const getYouth = (filters?: {
+  region?: string;
+  programType?: string;
+  programYear?: string | number;
+  rosterYear?: string | number;
+}) => {
+  const params = new URLSearchParams();
+  if (filters?.region && filters.region !== "all")
+    params.set("region", filters.region);
+  if (filters?.programType && filters.programType !== "all")
+    params.set("program_type", filters.programType);
+  if (filters?.programYear && filters.programYear !== "all")
+    params.set("program_year", String(filters.programYear));
+  if (filters?.rosterYear)
+    params.set("roster_year", String(filters.rosterYear));
+  const qs = params.toString();
+  return get(`/youth${qs ? `?${qs}` : ""}`);
+};
 export const createYouth = (data: object) => post("/youth", data);
 export const updateYouth = (id: string, data: object) =>
   fetch(`${BASE_URL}/youth/${id}`, {
@@ -224,7 +245,7 @@ export const deleteUser = (id: string) =>
 
 export const updateUserStatus = (
   id: string,
-  status: "active" | "inactive" | "blocked",
+  status: "active" | "inactive" | "blocked" | "pending",
 ) =>
   fetch(`${BASE_URL}/users/${id}/status`, {
     method: "PATCH",
