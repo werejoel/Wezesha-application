@@ -9,9 +9,8 @@ import {
 } from "@/api";
 import { useUser } from "@/hooks/use-user";
 import { Badge } from "@/components/ui/badge";
-import { Ban, UserCheck, UserX } from "lucide-react";
+import { Ban, UserCheck, UserX, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import {
   Table,
   TableHeader,
@@ -37,26 +36,30 @@ type UserStatus = "active" | "inactive" | "blocked" | "pending";
 const statusBadge = (status: UserStatus) => {
   if (status === "pending") {
     return (
-      <Badge className="bg-sky-100 text-sky-900 hover:bg-sky-100">
+      <Badge className="bg-sky-100 text-sky-700 hover:bg-sky-200 px-3 py-1 text-xs font-medium transition-all duration-300">
         Pending Approval
       </Badge>
     );
   }
   if (status === "active") {
     return (
-      <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+      <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-200 px-3 py-1 text-xs font-medium transition-all duration-300">
         Active
       </Badge>
     );
   }
   if (status === "inactive") {
     return (
-      <Badge variant="secondary" className="bg-amber-100 text-amber-900">
+      <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-200 px-3 py-1 text-xs font-medium transition-all duration-300">
         Inactive
       </Badge>
     );
   }
-  return <Badge variant="destructive">Blocked</Badge>;
+  return (
+    <Badge className="bg-red-100 text-red-700 hover:bg-red-200 px-3 py-1 text-xs font-medium transition-all duration-300">
+      Blocked
+    </Badge>
+  );
 };
 
 export default function AdminUsers() {
@@ -99,7 +102,9 @@ export default function AdminUsers() {
   >({});
   const [statusUpdating, setStatusUpdating] = useState<string | null>(null);
   const [partners, setPartners] = useState<any[]>([]);
-  const [approvePartner, setApprovePartner] = useState<Record<string, string>>({});
+  const [approvePartner, setApprovePartner] = useState<Record<string, string>>(
+    {},
+  );
 
   useEffect(() => {
     getPartners()
@@ -114,7 +119,6 @@ export default function AdminUsers() {
         setLoading(true);
         const resp: any = await getUsers({ page, limit: pageSize, q: search });
         if (!mounted) return;
-        // resp may be an array (old API) or object { rows, total }
         if (Array.isArray(resp)) {
           setUsers(resp || []);
           setTotalCount(resp.length);
@@ -154,7 +158,6 @@ export default function AdminUsers() {
 
   const handleCreate = async () => {
     setFormError(null);
-    // validate
     const errs: Record<string, string> = {};
     if (!form.name.trim()) errs.name = "Name is required";
     if (!form.email.trim()) errs.email = "Email is required";
@@ -177,11 +180,9 @@ export default function AdminUsers() {
         form.password,
         form.role,
       );
-      // API returns user + token for register — normalize to created user
       const user = created.user || created;
-      // if server-side paging is enabled, refresh current page
       if (page === 1) setUsers([user, ...users]);
-      else setPage(1); // go to first page to show new user
+      else setPage(1);
       setCreateOpen(false);
       setForm({ name: "", email: "", password: "", role: "enumerator" });
       toast({ title: "User created", description: `${user.email} created` });
@@ -195,7 +196,6 @@ export default function AdminUsers() {
   };
 
   const handleDelete = async (id: string) => {
-    // open confirm dialog instead
     const target = users.find((u) => String(u.id) === String(id));
     setDeleteTarget(target || { id });
     setDeleteOpen(true);
@@ -206,7 +206,6 @@ export default function AdminUsers() {
     setDeleteOpen(false);
     const id = String(deleteTarget.id);
     const prev = users;
-    // optimistic
     setUsers(users.filter((u) => String(u.id) !== id));
     try {
       await deleteUser(id);
@@ -293,10 +292,7 @@ export default function AdminUsers() {
     }
   };
 
-  const handleStatusChange = async (
-    target: any,
-    status: UserStatus,
-  ) => {
+  const handleStatusChange = async (target: any, status: UserStatus) => {
     if (String(target.id) === String(currentUser?.id) && status !== "active") {
       toast({
         title: "Action not allowed",
@@ -333,7 +329,6 @@ export default function AdminUsers() {
   const handleSaveEdit = async () => {
     if (!editingUser) return;
     setEditError(null);
-    // field-level validation
     const errs: Record<string, string> = {};
     if (!editForm.name.trim()) errs.name = "Name is required";
     if (!editForm.email.trim()) errs.email = "Email is required";
@@ -412,250 +407,105 @@ export default function AdminUsers() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="page-header flex items-center justify-between">
+    <div className="space-y-8 pb-10">
+      <div className="flex items-start justify-between">
         <div>
-          <h1 className="page-title">User Management</h1>
-          <p className="page-description">
+          <h1
+            style={{
+              color: "var(--slate-900)",
+              fontFamily: "var(--font-sans)",
+            }}
+            className="text-4xl font-semibold tracking-tight text-slate-900"
+          >
+            User Management
+          </h1>
+          <p className="mt-2 text-lg text-slate-600">
             Create, view and manage application users
           </p>
         </div>
-        <div>
-          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-            <DialogTrigger asChild>
-              <Button>Create User</Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>Create User</DialogTitle>
-              </DialogHeader>
-              <div className="grid gap-3">
-                {formError && (
-                  <div className="text-sm text-destructive">{formError}</div>
+
+        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 shadow-lg shadow-violet-500/30 text-white px-6 py-2.5 text-base font-medium transition-all hover:scale-105 active:scale-95">
+              + Create User
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Create User</DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-3">
+              {formError && (
+                <div className="text-sm text-destructive">{formError}</div>
+              )}
+              <div>
+                <Label>Name</Label>
+                <Input
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                />
+                {createFieldErrors.name && (
+                  <p className="text-xs text-destructive mt-1">
+                    {createFieldErrors.name}
+                  </p>
                 )}
-                <div>
-                  <Label>Name</Label>
-                  <Input
-                    value={form.name}
-                    onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  />
-                  {createFieldErrors.name && (
-                    <p className="text-xs text-destructive mt-1">
-                      {createFieldErrors.name}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <Label>Email</Label>
-                  <Input
-                    value={form.email}
-                    onChange={(e) =>
-                      setForm({ ...form, email: e.target.value })
-                    }
-                    type="email"
-                  />
-                  {createFieldErrors.email && (
-                    <p className="text-xs text-destructive mt-1">
-                      {createFieldErrors.email}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <Label>Password</Label>
-                  <Input
-                    value={form.password}
-                    onChange={(e) =>
-                      setForm({ ...form, password: e.target.value })
-                    }
-                    type="password"
-                  />
-                  {createFieldErrors.password && (
-                    <p className="text-xs text-destructive mt-1">
-                      {createFieldErrors.password}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <Label>Role</Label>
-                  <select
-                    value={form.role}
-                    onChange={(e) => setForm({ ...form, role: e.target.value })}
-                    className="w-full rounded-lg border bg-card px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-                  >
-                    <option value="admin">admin</option>
-                    <option value="program_manager">program_manager</option>
-                    <option value="ybf">ybf</option>
-                    <option value="instructor">instructor</option>
-                    <option value="enumerator">enumerator</option>
-                  </select>
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => setCreateOpen(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={handleCreate}
-                    disabled={Object.keys(createFieldErrors).length > 0}
-                  >
-                    Create
-                  </Button>
-                </div>
               </div>
-            </DialogContent>
-          </Dialog>
-          <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-            <DialogContent className="sm:max-w-sm">
-              <DialogHeader>
-                <DialogTitle>Confirm Delete</DialogTitle>
-              </DialogHeader>
-              <div className="grid gap-3">
-                <p>
-                  Are you sure you want to delete{" "}
-                  <strong>{deleteTarget?.email || deleteTarget?.id}</strong>?
-                  This action cannot be undone.
-                </p>
-                <div className="flex justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setDeleteOpen(false);
-                      setDeleteTarget(null);
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button variant="destructive" onClick={handleDeleteConfirmed}>
-                    Delete
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
-          <Dialog open={editOpen} onOpenChange={setEditOpen}>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>Edit User</DialogTitle>
-              </DialogHeader>
-              <div className="grid gap-3">
-                {editError && (
-                  <div className="text-sm text-destructive">{editError}</div>
+              <div>
+                <Label>Email</Label>
+                <Input
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  type="email"
+                />
+                {createFieldErrors.email && (
+                  <p className="text-xs text-destructive mt-1">
+                    {createFieldErrors.email}
+                  </p>
                 )}
-                <div>
-                  <Label>Name</Label>
-                  <Input
-                    value={editForm.name}
-                    onChange={(e) =>
-                      setEditForm({ ...editForm, name: e.target.value })
-                    }
-                  />
-                  {editFieldErrors.name && (
-                    <p className="text-xs text-destructive mt-1">
-                      {editFieldErrors.name}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <Label>Email</Label>
-                  <Input
-                    value={editForm.email}
-                    onChange={(e) =>
-                      setEditForm({ ...editForm, email: e.target.value })
-                    }
-                    type="email"
-                  />
-                  {editFieldErrors.email && (
-                    <p className="text-xs text-destructive mt-1">
-                      {editFieldErrors.email}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <Label>Password (leave blank to keep)</Label>
-                  <Input
-                    value={editForm.password}
-                    onChange={(e) =>
-                      setEditForm({ ...editForm, password: e.target.value })
-                    }
-                    type="password"
-                  />
-                  {editFieldErrors.password && (
-                    <p className="text-xs text-destructive mt-1">
-                      {editFieldErrors.password}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <Label>Role</Label>
-                  <select
-                    value={editForm.role}
-                    onChange={(e) =>
-                      setEditForm({ ...editForm, role: e.target.value })
-                    }
-                    className="w-full rounded-lg border bg-card px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-                  >
-                    <option value="admin">admin</option>
-                    <option value="program_manager">program_manager</option>
-                    <option value="ybf">ybf</option>
-                    <option value="instructor">instructor</option>
-                    <option value="enumerator">enumerator</option>
-                  </select>
-                </div>
-                {(editForm.role === "ybf" || editForm.role === "instructor") && (
-                  <div>
-                    <Label>Assigned Institution</Label>
-                    <select
-                      value={editForm.assignedTo}
-                      onChange={(e) =>
-                        setEditForm({ ...editForm, assignedTo: e.target.value })
-                      }
-                      className="w-full rounded-lg border bg-card px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-                    >
-                      <option value="">Select institution</option>
-                      {partners.map((p) => (
-                        <option key={p.id} value={String(p.id)}>
-                          {p.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-                <div>
-                  <Label>Status</Label>
-                  <select
-                    value={editForm.status}
-                    onChange={(e) =>
-                      setEditForm({
-                        ...editForm,
-                        status: e.target.value as UserStatus,
-                      })
-                    }
-                    className="w-full rounded-lg border bg-card px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-                  >
-                    <option value="pending">pending</option>
-                    <option value="active">active</option>
-                    <option value="inactive">inactive</option>
-                    <option value="blocked">blocked</option>
-                  </select>
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setEditOpen(false);
-                      setEditingUser(null);
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button onClick={handleSaveEdit}>Save</Button>
-                </div>
               </div>
-            </DialogContent>
-          </Dialog>
-        </div>
+              <div>
+                <Label>Password</Label>
+                <Input
+                  value={form.password}
+                  onChange={(e) =>
+                    setForm({ ...form, password: e.target.value })
+                  }
+                  type="password"
+                />
+                {createFieldErrors.password && (
+                  <p className="text-xs text-destructive mt-1">
+                    {createFieldErrors.password}
+                  </p>
+                )}
+              </div>
+              <div>
+                <Label>Role</Label>
+                <select
+                  value={form.role}
+                  onChange={(e) => setForm({ ...form, role: e.target.value })}
+                  className="w-full rounded-lg border bg-card px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="admin">admin</option>
+                  <option value="program_manager">program_manager</option>
+                  <option value="ybf">ybf</option>
+                  <option value="instructor">instructor</option>
+                  <option value="enumerator">enumerator</option>
+                </select>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setCreateOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleCreate}
+                  disabled={Object.keys(createFieldErrors).length > 0}
+                >
+                  Create
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {error && (
@@ -664,88 +514,105 @@ export default function AdminUsers() {
         </div>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
-          <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
-            Total users
-          </p>
-          <p className="mt-2 text-3xl font-semibold text-slate-900">
-            {usersCount}
-          </p>
-        </div>
-        <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 shadow-sm">
-          <p className="text-xs uppercase tracking-[0.2em] text-sky-700">
-            Admins
-          </p>
-          <p className="mt-2 text-3xl font-semibold text-sky-900">
-            {adminCount}
-          </p>
-        </div>
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm">
-          <p className="text-xs uppercase tracking-[0.2em] text-emerald-700">
-            Program managers
-          </p>
-          <p className="mt-2 text-3xl font-semibold text-emerald-900">
-            {managerCount}
-          </p>
-        </div>
-        <div className="rounded-2xl border border-fuchsia-200 bg-fuchsia-50 p-4 shadow-sm">
-          <p className="text-xs uppercase tracking-[0.2em] text-fuchsia-700">
-            YBF
-          </p>
-          <p className="mt-2 text-3xl font-semibold text-fuchsia-900">
-            {ybfCount}
-          </p>
-        </div>
+      {/* Stats Cards */}
+      <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
+        <Card className="group border border-slate-200 bg-white hover:shadow-xl transition-all duration-300 hover:-translate-y-1 dark:border-slate-700 dark:bg-slate-950 dark:hover:bg-slate-900">
+          <CardContent className="p-6">
+            <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
+              Total users
+            </p>
+            <p className="mt-2 text-4xl font-semibold text-slate-900 dark:text-slate-100">
+              {usersCount}
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="group border border-sky-200 bg-white hover:shadow-xl transition-all duration-300 hover:-translate-y-1 dark:border-sky-700/40 dark:bg-slate-950 dark:hover:bg-slate-900">
+          <CardContent className="p-6">
+            <p className="text-sm font-medium text-sky-700 dark:text-sky-300">
+              Admins
+            </p>
+            <p className="mt-2 text-4xl font-semibold text-sky-900 dark:text-sky-100">
+              {adminCount}
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="group border border-emerald-200 bg-white hover:shadow-xl transition-all duration-300 hover:-translate-y-1 dark:border-emerald-700/40 dark:bg-slate-950 dark:hover:bg-slate-900">
+          <CardContent className="p-6">
+            <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
+              Program managers
+            </p>
+            <p className="mt-2 text-4xl font-semibold text-emerald-900 dark:text-emerald-100">
+              {managerCount}
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="group border border-fuchsia-200 bg-white hover:shadow-xl transition-all duration-300 hover:-translate-y-1 dark:border-fuchsia-700/40 dark:bg-slate-950 dark:hover:bg-slate-900">
+          <CardContent className="p-6">
+            <p className="text-sm font-medium text-fuchsia-700 dark:text-fuchsia-300">
+              YBF
+            </p>
+            <p className="mt-2 text-4xl font-semibold text-fuchsia-900 dark:text-fuchsia-100">
+              {ybfCount}
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm">
-          <p className="text-xs uppercase tracking-[0.2em] text-emerald-700">
-            Active accounts
-          </p>
-          <p className="mt-2 text-3xl font-semibold text-emerald-900">
-            {activeCount}
-          </p>
-        </div>
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
-          <p className="text-xs uppercase tracking-[0.2em] text-amber-700">
-            Inactive
-          </p>
-          <p className="mt-2 text-3xl font-semibold text-amber-900">
-            {inactiveCount}
-          </p>
-        </div>
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 shadow-sm">
-          <p className="text-xs uppercase tracking-[0.2em] text-red-700">
-            Blocked
-          </p>
-          <p className="mt-2 text-3xl font-semibold text-red-900">
-            {blockedCount}
-          </p>
-        </div>
+      <div className="grid gap-6 sm:grid-cols-3">
+        <Card className="border-emerald-200 bg-white dark:border-emerald-700/40 dark:bg-slate-950">
+          <CardContent className="p-6">
+            <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
+              Active accounts
+            </p>
+            <p className="mt-2 text-4xl font-semibold text-emerald-900 dark:text-emerald-100">
+              {activeCount}
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="border-amber-200 bg-white dark:border-amber-700/40 dark:bg-slate-950">
+          <CardContent className="p-6">
+            <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
+              Inactive
+            </p>
+            <p className="mt-2 text-4xl font-semibold text-amber-900 dark:text-amber-100">
+              {inactiveCount}
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="border-red-200 bg-white dark:border-red-700/40 dark:bg-slate-950">
+          <CardContent className="p-6">
+            <p className="text-sm font-medium text-red-700 dark:text-red-300">
+              Blocked
+            </p>
+            <p className="mt-2 text-4xl font-semibold text-red-900 dark:text-red-100">
+              {blockedCount}
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
-      <Card className="overflow-hidden border border-slate-200 bg-white shadow-sm">
-        <CardHeader className="bg-slate-50">
-          <CardTitle>Role distribution</CardTitle>
+      <Card className="border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-950">
+        <CardHeader className="bg-slate-50 dark:bg-slate-900">
+          <CardTitle className="text-slate-900 dark:text-slate-100">
+            Role distribution
+          </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4 p-4">
+        <CardContent className="space-y-6 p-6">
           {roleDistribution.map((item) => {
             const percent = Math.round((item.count / distributionTotal) * 100);
             return (
               <div key={item.role} className="space-y-2">
-                <div className="flex items-center justify-between text-sm text-slate-700">
-                  <span className="font-medium text-slate-900">
+                <div className="flex items-center justify-between text-sm text-slate-700 dark:text-slate-300">
+                  <span className="font-medium text-slate-900 dark:text-slate-100">
                     {item.label}
                   </span>
-                  <span className="font-semibold text-slate-900">
+                  <span className="font-semibold text-slate-900 dark:text-slate-100">
                     {item.count} ({percent}%)
                   </span>
                 </div>
-                <div className="h-3 overflow-hidden rounded-full bg-slate-100">
+                <div className="h-3 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
                   <div
-                    className={`${item.color} h-full rounded-full transition-all duration-300`}
+                    className={`${item.color} h-full rounded-full transition-all duration-700`}
                     style={{ width: `${percent}%` }}
                   />
                 </div>
@@ -809,23 +676,23 @@ export default function AdminUsers() {
         <CardContent className="p-0 overflow-x-auto">
           <Table className="min-w-full">
             <TableHeader>
-              <TableRow className="bg-slate-100/90">
-                <TableHead className="text-xs uppercase tracking-[0.12em] text-slate-500">
+              <TableRow className="bg-slate-100/90 dark:bg-slate-900/95">
+                <TableHead className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">
                   Name
                 </TableHead>
-                <TableHead className="text-xs uppercase tracking-[0.12em] text-slate-500">
+                <TableHead className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">
                   Email
                 </TableHead>
-                <TableHead className="text-xs uppercase tracking-[0.12em] text-slate-500">
+                <TableHead className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">
                   Role
                 </TableHead>
-                <TableHead className="text-xs uppercase tracking-[0.12em] text-slate-500">
+                <TableHead className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">
                   Status
                 </TableHead>
-                <TableHead className="text-xs uppercase tracking-[0.12em] text-slate-500">
+                <TableHead className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">
                   Created
                 </TableHead>
-                <TableHead className="text-xs uppercase tracking-[0.12em] text-slate-500">
+                <TableHead className="text-xs uppercase tracking-[0.12em] text-slate-500 dark:text-slate-300">
                   Actions
                 </TableHead>
               </TableRow>
@@ -833,11 +700,16 @@ export default function AdminUsers() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell
-                    colSpan={6}
-                    className="text-center py-10 text-sm text-muted-foreground"
-                  >
-                    Loading users...
+                  <TableCell colSpan={6} className="h-80">
+                    <div className="flex flex-col items-center justify-center gap-4">
+                      <div className="relative flex h-20 w-20 items-center justify-center">
+                        <Loader2 className="h-12 w-12 animate-spin text-violet-600" />
+                        <div className="absolute inset-0 h-12 w-12 animate-ping rounded-full bg-violet-200/40" />
+                      </div>
+                      <p className="text-slate-600 dark:text-slate-200 font-medium">
+                        Loading users...
+                      </p>
+                    </div>
                   </TableCell>
                 </TableRow>
               ) : users.length === 0 ? (
@@ -853,23 +725,23 @@ export default function AdminUsers() {
                 users.map((u, index) => (
                   <TableRow
                     key={u.id}
-                    className={`${index % 2 === 0 ? "bg-white" : "bg-slate-50/60"} transition hover:bg-slate-100`}
+                    className={`${index % 2 === 0 ? "bg-white dark:bg-slate-950" : "bg-slate-50/60 dark:bg-slate-900/60"} group hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-200`}
                   >
-                    <TableCell className="py-4 font-semibold text-slate-900">
+                    <TableCell className="py-4 font-semibold text-slate-900 dark:text-slate-100">
                       {u.name || u.full_name || u.email}
                     </TableCell>
-                    <TableCell className="py-4 text-sm text-slate-500">
+                    <TableCell className="py-4 text-sm text-slate-500 dark:text-slate-400">
                       {u.email}
                     </TableCell>
                     <TableCell className="py-4">
-                      <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+                      <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
                         {u.role}
                       </span>
                     </TableCell>
                     <TableCell className="py-4">
                       {statusBadge((u.status || "active") as UserStatus)}
                     </TableCell>
-                    <TableCell className="py-4 text-sm text-slate-500">
+                    <TableCell className="py-4 text-sm text-slate-500 dark:text-slate-400">
                       {u.created_at
                         ? new Date(u.created_at).toLocaleDateString()
                         : "-"}
@@ -882,7 +754,7 @@ export default function AdminUsers() {
                           (u.role === "ybf" || u.role === "instructor") && (
                             <>
                               <select
-                                className="rounded border px-2 py-1 text-xs"
+                                className="rounded border px-2 py-1 text-xs focus:ring-2 focus:ring-violet-500"
                                 value={approvePartner[String(u.id)] || ""}
                                 onChange={(e) =>
                                   setApprovePartner({
@@ -900,7 +772,7 @@ export default function AdminUsers() {
                               </select>
                               <Button
                                 size="sm"
-                                className="bg-emerald-600 text-white hover:bg-emerald-700"
+                                className="bg-emerald-600 text-white hover:bg-emerald-700 transition-all"
                                 onClick={() =>
                                   handleApproveUser(
                                     u,
@@ -912,10 +784,11 @@ export default function AdminUsers() {
                               </Button>
                             </>
                           )}
+
                         <Button
                           size="sm"
                           variant="outline"
-                          className="text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+                          className="text-emerald-700 border-emerald-200 hover:bg-emerald-50 transition-all active:scale-95"
                           disabled={
                             statusUpdating === String(u.id) ||
                             (u.status || "active") === "active"
@@ -928,7 +801,7 @@ export default function AdminUsers() {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="text-amber-700 border-amber-200 hover:bg-amber-50"
+                          className="text-amber-700 border-amber-200 hover:bg-amber-50 transition-all active:scale-95"
                           disabled={
                             statusUpdating === String(u.id) ||
                             u.status === "inactive"
@@ -941,7 +814,7 @@ export default function AdminUsers() {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="text-red-700 border-red-200 hover:bg-red-50"
+                          className="text-red-700 border-red-200 hover:bg-red-50 transition-all active:scale-95"
                           disabled={
                             statusUpdating === String(u.id) ||
                             u.status === "blocked"
@@ -952,7 +825,7 @@ export default function AdminUsers() {
                           Block
                         </Button>
                         <Button
-                          className="bg-sky-600 text-white hover:bg-sky-700"
+                          className="bg-sky-600 text-white hover:bg-sky-700 transition-all active:scale-95"
                           size="sm"
                           onClick={() => openEdit(u)}
                         >
@@ -961,8 +834,8 @@ export default function AdminUsers() {
                         <Button
                           className={
                             u.role === "admin"
-                              ? "bg-amber-500 text-slate-900 hover:bg-amber-600"
-                              : "bg-emerald-600 text-white hover:bg-emerald-700"
+                              ? "bg-amber-500 text-slate-900 hover:bg-amber-600 transition-all active:scale-95"
+                              : "bg-emerald-600 text-white hover:bg-emerald-700 transition-all active:scale-95"
                           }
                           size="sm"
                           onClick={() => handleToggleRole(u)}
@@ -970,7 +843,7 @@ export default function AdminUsers() {
                           {u.role === "admin" ? "Demote" : "Promote"}
                         </Button>
                         <Button
-                          className="bg-rose-600 text-white hover:bg-rose-700"
+                          className="bg-rose-600 text-white hover:bg-rose-700 transition-all active:scale-95"
                           size="sm"
                           onClick={() => handleDelete(String(u.id))}
                         >
@@ -985,6 +858,159 @@ export default function AdminUsers() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Delete Dialog */}
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Confirm Delete</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <p>
+              Are you sure you want to delete{" "}
+              <strong>{deleteTarget?.email || deleteTarget?.id}</strong>? This
+              action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setDeleteOpen(false);
+                  setDeleteTarget(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={handleDeleteConfirmed}>
+                Delete
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Dialog */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit User</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3">
+            {editError && (
+              <div className="text-sm text-destructive">{editError}</div>
+            )}
+            <div>
+              <Label>Name</Label>
+              <Input
+                value={editForm.name}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, name: e.target.value })
+                }
+              />
+              {editFieldErrors.name && (
+                <p className="text-xs text-destructive mt-1">
+                  {editFieldErrors.name}
+                </p>
+              )}
+            </div>
+            <div>
+              <Label>Email</Label>
+              <Input
+                value={editForm.email}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, email: e.target.value })
+                }
+                type="email"
+              />
+              {editFieldErrors.email && (
+                <p className="text-xs text-destructive mt-1">
+                  {editFieldErrors.email}
+                </p>
+              )}
+            </div>
+            <div>
+              <Label>Password (leave blank to keep)</Label>
+              <Input
+                value={editForm.password}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, password: e.target.value })
+                }
+                type="password"
+              />
+              {editFieldErrors.password && (
+                <p className="text-xs text-destructive mt-1">
+                  {editFieldErrors.password}
+                </p>
+              )}
+            </div>
+            <div>
+              <Label>Role</Label>
+              <select
+                value={editForm.role}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, role: e.target.value })
+                }
+                className="w-full rounded-lg border bg-card px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="admin">admin</option>
+                <option value="program_manager">program_manager</option>
+                <option value="ybf">ybf</option>
+                <option value="instructor">instructor</option>
+                <option value="enumerator">enumerator</option>
+              </select>
+            </div>
+            {(editForm.role === "ybf" || editForm.role === "instructor") && (
+              <div>
+                <Label>Assigned Institution</Label>
+                <select
+                  value={editForm.assignedTo}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, assignedTo: e.target.value })
+                  }
+                  className="w-full rounded-lg border bg-card px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="">Select institution</option>
+                  {partners.map((p) => (
+                    <option key={p.id} value={String(p.id)}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <div>
+              <Label>Status</Label>
+              <select
+                value={editForm.status}
+                onChange={(e) =>
+                  setEditForm({
+                    ...editForm,
+                    status: e.target.value as UserStatus,
+                  })
+                }
+                className="w-full rounded-lg border bg-card px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="pending">pending</option>
+                <option value="active">active</option>
+                <option value="inactive">inactive</option>
+                <option value="blocked">blocked</option>
+              </select>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setEditOpen(false);
+                  setEditingUser(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleSaveEdit}>Save</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

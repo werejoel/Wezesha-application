@@ -162,23 +162,31 @@ function SystemHealthGauge({ score }: { score: number }) {
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { data: stats, isLoading: statsLoading } = useQuery({
+  const { data: stats, isLoading: statsLoading } = useQuery<any, Error, any>({
     queryKey: ["dashboard"],
-    queryFn: getDashboardStats,
+    queryFn: () => getDashboardStats(),
   });
   const [usersPage, setUsersPage] = useState(1);
   const [usersPageSize, setUsersPageSize] = useState(10);
-  const { data: youthData, isLoading: youthLoading } = useQuery({
+  const { data: youthData, isLoading: youthLoading } = useQuery<any, Error, any>({
     queryKey: ["youth"],
-    queryFn: getYouth,
+    queryFn: () => getYouth(),
   });
-  const { data: partnersData, isLoading: partnersLoading } = useQuery({
+  const { data: partnersData, isLoading: partnersLoading } = useQuery<
+    any,
+    Error,
+    any
+  >({
     queryKey: ["partners"],
-    queryFn: getPartners,
+    queryFn: () => getPartners(),
   });
-  const { data: sessionsData, isLoading: sessionsLoading } = useQuery({
+  const { data: sessionsData, isLoading: sessionsLoading } = useQuery<
+    any,
+    Error,
+    any
+  >({
     queryKey: ["sessions"],
-    queryFn: getSessions,
+    queryFn: () => getSessions(),
   });
   const { data: usersData, isLoading: usersLoading } = useQuery<
     any,
@@ -186,20 +194,25 @@ export default function AdminDashboard() {
     any
   >({
     queryKey: ["users", usersPage, usersPageSize],
-    queryFn: async () =>
-      await getUsers({ page: usersPage, limit: usersPageSize }),
+    queryFn: () => getUsers({ page: usersPage, limit: usersPageSize }),
   });
-  const { data: atRiskListData, isLoading: atRiskListLoading } = useQuery({
+  const { data: atRiskListData, isLoading: atRiskListLoading } = useQuery<
+    any,
+    Error,
+    any
+  >({
     queryKey: ["youth", "atRisk"],
     queryFn: () => getAtRiskYouth({ limit: 5, page: 1 }),
   });
-  const { data: lowAttendanceData, isLoading: lowAttendanceLoading } = useQuery(
-    {
-      queryKey: ["sessions", "lowAttendance"],
-      queryFn: () =>
-        getLowAttendanceSessions({ threshold: 70, limit: 5, page: 1 }),
-    },
-  );
+  const { data: lowAttendanceData, isLoading: lowAttendanceLoading } = useQuery<
+    any,
+    Error,
+    any
+  >({
+    queryKey: ["sessions", "lowAttendance"],
+    queryFn: () =>
+      getLowAttendanceSessions({ threshold: 70, limit: 5, page: 1 }),
+  });
 
   const [usersSearch, setUsersSearch] = useState("");
 
@@ -1212,27 +1225,32 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full table-auto border-collapse">
+          <div className="overflow-x-auto rounded-3xl border border-border bg-card shadow-sm ring-1 ring-inset ring-slate-200/40 dark:border-slate-700 dark:ring-slate-800/40">
+            <table className="w-full table-auto border-separate border-spacing-y-2 bg-transparent text-sm">
               <thead>
-                <tr className="text-left text-xs text-muted-foreground">
-                  <th className="px-3 py-2">Name</th>
-                  <th className="px-3 py-2">Email</th>
-                  <th className="px-3 py-2">Role</th>
-                  <th className="px-3 py-2">Created</th>
+                <tr className="bg-slate-900/95 text-left text-xs uppercase tracking-[0.14em] text-slate-300">
+                  <th className="px-4 py-3">Name</th>
+                  <th className="px-4 py-3">Email</th>
+                  <th className="px-4 py-3">Role</th>
+                  <th className="px-4 py-3">Created</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredUsers.map((u: any) => (
-                  <tr key={u.id} className="border-t">
-                    <td className="px-3 py-2">
+                  <tr
+                    key={u.id}
+                    className="rounded-3xl border border-transparent bg-white shadow-sm transition duration-200 hover:border-primary/20 hover:bg-primary/5 odd:bg-slate-50 even:bg-white dark:border-slate-800 dark:bg-slate-950 dark:odd:bg-slate-950/70 dark:even:bg-slate-900/70"
+                  >
+                    <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">
                       {u.name || u.full_name || u.email}
                     </td>
-                    <td className="px-3 py-2 text-xs text-muted-foreground">
+                    <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
                       {u.email}
                     </td>
-                    <td className="px-3 py-2">{u.role}</td>
-                    <td className="px-3 py-2 text-xs text-muted-foreground">
+                    <td className="px-4 py-3 text-slate-700 dark:text-slate-300">
+                      {u.role}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
                       {u.created_at
                         ? new Date(u.created_at).toLocaleDateString()
                         : "-"}

@@ -9,6 +9,7 @@ import {
   Users,
   CalendarCheck,
   TrendingUp,
+  Loader2,
 } from "lucide-react";
 import { downloadExport, getOutcomes, getReports, getYouth } from "@/api";
 import { ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
@@ -288,7 +289,10 @@ export default function Reports() {
       </div>
 
       {isLoading ? (
-        <div className="reports-loading">Loading reports…</div>
+        <div className="reports-loading">
+          <Loader2 className="h-10 w-10 animate-spin text-primary" />
+          <p className="mt-3 text-sm font-medium">Loading reports…</p>
+        </div>
       ) : (
         <>
           <div className="reports-metrics-grid">
