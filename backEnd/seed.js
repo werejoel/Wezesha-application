@@ -7,14 +7,14 @@ async function seed() {
 
   try {
     await client.query('BEGIN');
-    console.log('🌱 Starting seed...');
+    console.log('Starting seed...');
 
     // Ensure users table has role column
     await client.query(`
       ALTER TABLE users 
       ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'enumerator'
     `);
-    console.log('✅ Users table updated with role column');
+    console.log(' Users table updated with role column');
 
     // 1. Partners
     console.log('Adding partners...');
@@ -47,7 +47,7 @@ async function seed() {
       );
       if (res.rows[0]) partnerMap[p.name] = res.rows[0].id;
     }
-    console.log(`✅ ${Object.keys(partnerMap).length} partners added`);
+    console.log(` ${Object.keys(partnerMap).length} partners added`);
 
     // 2. YBFs
     console.log('Adding YBFs...');
@@ -71,7 +71,7 @@ async function seed() {
         [y.name, y.contact_phone, y.contact_email]
       );
     }
-    console.log(`✅ ${ybfs.length} YBFs added`);
+    console.log(` ${ybfs.length} YBFs added`);
 
     // 3. Cohorts — cohort uses partner_institution_id + program_year (no name column)
     console.log('Adding cohorts...');
@@ -88,7 +88,6 @@ async function seed() {
     for (const c of cohortDefs) {
       const partnerId = partnerMap[c.partnerName];
       if (!partnerId) continue;
-
       const existingCohort = await client.query(
         `SELECT id FROM cohort WHERE partner_institution_id = $1 AND program_year = $2 LIMIT 1`,
         [partnerId, c.program_year]
@@ -106,7 +105,7 @@ async function seed() {
       );
       if (res.rows[0]) cohortMap[`${c.partnerName}-${c.program_year}`] = res.rows[0].id;
     }
-    console.log(`✅ ${Object.keys(cohortMap).length} cohorts added`);
+    console.log(` ${Object.keys(cohortMap).length} cohorts added`);
 
     // 4. Youth
 console.log('Adding youth...');
@@ -132,7 +131,7 @@ for (let i = 0; i < names.length; i++) {
   );
 
   if (!cohortRes.rows[0]) {
-    console.log(`⚠️ No cohort found for ${partnerName}, skipping ${names[i]}`);
+    console.log(`No cohort found for ${partnerName}, skipping ${names[i]}`);
     continue;
   }
 
@@ -167,7 +166,7 @@ for (let i = 0; i < names.length; i++) {
   );
   if (res.rows[0]) youthMap[names[i]] = res.rows[0].id;
 }
-console.log(`✅ ${Object.keys(youthMap).length} youth added`);
+console.log(`${Object.keys(youthMap).length} youth added`);
   // 5. Sessions
 console.log('Adding sessions...');
 const sessionDefs = [
@@ -202,7 +201,7 @@ for (const s of sessionDefs) {
     [cohortRes.rows[0].id, s.topic, s.date, s.venue, s.term_number, s.session_number]
   );
 }
-console.log(`✅ ${sessionDefs.length} sessions added`);
+console.log(` ${sessionDefs.length} sessions added`);
 
 // 5.5 Attendance records for at-risk youth
 console.log('Adding attendance records...');
@@ -249,7 +248,7 @@ for (const [youthName, youthId] of Object.entries(youthMap)) {
     );
   }
 }
-console.log('✅ Attendance records added');
+console.log('Attendance records added');
 
 // 6. Default system accounts (admin + program manager only)
 console.log('Adding default system accounts...');
@@ -291,7 +290,7 @@ for (const user of defaultUsers) {
     [user.name, user.email, hashedPassword, user.role]
   );
 }
-console.log(`✅ ${defaultUsers.length} default accounts ready (admin + program manager)`);
+console.log(` ${defaultUsers.length} default accounts ready (admin + program manager)`);
 
 // 6.6 Output milestones for sample youth
 console.log('Adding output milestones...');
@@ -318,7 +317,7 @@ for (let i = 0; i < milestoneYouth.length; i++) {
     );
   }
 }
-console.log('✅ Output milestones added');
+console.log(' Output milestones added');
 
 // Get admin user id for case notes
 const adminUserRes = await client.query(
@@ -357,16 +356,16 @@ for (const cn of caseNotes) {
     [youthId, adminUserId, cn.category, cn.note, cn.followUp || null, !!cn.followUp]
   );
 }
-console.log(`✅ ${caseNotes.length} case notes added`);
+console.log(` ${caseNotes.length} case notes added`);
 
 
 
     await client.query('COMMIT');
-    console.log('\n🎉 Seed completed successfully!');
+    console.log('\n Seed completed successfully!');
 
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error('❌ Seed failed:', err.message);
+    console.error(' Seed failed:', err.message);
   } finally {
     client.release();
     process.exit();
