@@ -426,7 +426,9 @@ export default function AdminUsers() {
 
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 shadow-lg shadow-violet-500/30 text-white px-6 py-2.5 text-base font-medium transition-all hover:scale-105 active:scale-95">
+            <Button 
+            style={{backgroundColor:"hsl(152, 55%, 33%)"}}
+            className="hover:from-violet-700 hover:to-indigo-700 shadow-lg  text-white px-6 py-2.5 text-base font-medium transition-all hover:scale-105 active:scale-95">
               + Create User
             </Button>
           </DialogTrigger>
@@ -515,76 +517,76 @@ export default function AdminUsers() {
       )}
 
       {/* Stats Cards */}
-      <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
-        <Card className="group border border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white hover:shadow-xl transition-all duration-300 hover:-translate-y-1 dark:border-slate-700 dark:bg-slate-950 dark:hover:bg-slate-900">
-          <CardContent className="p-6">
-            <p className="text-sm font-medium text-slate-600 dark:text-slate-400">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Card className="border border-slate-200 bg-white hover:border-slate-300 hover:shadow-lg transition-all duration-300 dark:border-slate-700/40 dark:bg-slate-950">
+          <CardContent className="p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-slate-500 dark:text-slate-400">
               Total users
             </p>
-            <p className="mt-2 text-4xl font-semibold text-slate-900 dark:text-slate-100">
+            <p className="mt-2 text-2xl font-semibold text-slate-900 dark:text-slate-100">
               {usersCount}
             </p>
           </CardContent>
         </Card>
-        <Card className="group border border-sky-200 bg-sky-50/70 hover:border-sky-300 hover:bg-sky-50 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 dark:border-sky-700/40 dark:bg-slate-950 dark:hover:bg-slate-900">
-          <CardContent className="p-6">
-            <p className="text-sm font-medium text-sky-700 dark:text-sky-300">
+        <Card className="border border-slate-200 bg-white hover:border-slate-300 hover:shadow-lg transition-all duration-300 dark:border-slate-700/40 dark:bg-slate-950">
+          <CardContent className="p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-sky-700 dark:text-sky-300">
               Admins
             </p>
-            <p className="mt-2 text-4xl font-semibold text-sky-900 dark:text-sky-100">
+            <p className="mt-2 text-2xl font-semibold text-sky-900 dark:text-sky-100">
               {adminCount}
             </p>
           </CardContent>
         </Card>
-        <Card className="group border border-emerald-200 bg-emerald-50/70 hover:border-emerald-300 hover:bg-emerald-50 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 dark:border-emerald-700/40 dark:bg-slate-950 dark:hover:bg-slate-900">
-          <CardContent className="p-6">
-            <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
+        <Card className="border border-slate-200 bg-white hover:border-slate-300 hover:shadow-lg transition-all duration-300 dark:border-slate-700/40 dark:bg-slate-950">
+          <CardContent className="p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-emerald-700 dark:text-emerald-300">
               Program managers
             </p>
-            <p className="mt-2 text-4xl font-semibold text-emerald-900 dark:text-emerald-100">
+            <p className="mt-2 text-2xl font-semibold text-emerald-900 dark:text-emerald-100">
               {managerCount}
             </p>
           </CardContent>
         </Card>
-        <Card className="group border border-fuchsia-200 bg-fuchsia-50/70 hover:border-fuchsia-300 hover:bg-fuchsia-50 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 dark:border-fuchsia-700/40 dark:bg-slate-950 dark:hover:bg-slate-900">
-          <CardContent className="p-6">
-            <p className="text-sm font-medium text-fuchsia-700 dark:text-fuchsia-300">
+        <Card className="border border-slate-200 bg-white hover:border-slate-300 hover:shadow-lg transition-all duration-300 dark:border-slate-700/40 dark:bg-slate-950">
+          <CardContent className="p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-fuchsia-700 dark:text-fuchsia-300">
               YBF
             </p>
-            <p className="mt-2 text-4xl font-semibold text-fuchsia-900 dark:text-fuchsia-100">
+            <p className="mt-2 text-2xl font-semibold text-fuchsia-900 dark:text-fuchsia-100">
               {ybfCount}
             </p>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid gap-6 sm:grid-cols-3">
-        <Card className="border-emerald-200 bg-white dark:border-emerald-700/40 dark:bg-slate-950">
-          <CardContent className="p-6">
-            <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Card className="border border-emerald-200 bg-white hover:shadow-lg transition-all duration-300 dark:border-emerald-700/40 dark:bg-slate-950">
+          <CardContent className="p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-emerald-700 dark:text-emerald-300">
               Active accounts
             </p>
-            <p className="mt-2 text-4xl font-semibold text-emerald-900 dark:text-emerald-100">
+            <p className="mt-2 text-2xl font-semibold text-emerald-900 dark:text-emerald-100">
               {activeCount}
             </p>
           </CardContent>
         </Card>
-        <Card className="border-amber-200 bg-white dark:border-amber-700/40 dark:bg-slate-950">
-          <CardContent className="p-6">
-            <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
+        <Card className="border border-amber-200 bg-white hover:shadow-lg transition-all duration-300 dark:border-amber-700/40 dark:bg-slate-950">
+          <CardContent className="p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-amber-700 dark:text-amber-300">
               Inactive
             </p>
-            <p className="mt-2 text-4xl font-semibold text-amber-900 dark:text-amber-100">
+            <p className="mt-2 text-2xl font-semibold text-amber-900 dark:text-amber-100">
               {inactiveCount}
             </p>
           </CardContent>
         </Card>
-        <Card className="border-red-200 bg-white dark:border-red-700/40 dark:bg-slate-950">
-          <CardContent className="p-6">
-            <p className="text-sm font-medium text-red-700 dark:text-red-300">
+        <Card className="border border-red-200 bg-white hover:shadow-lg transition-all duration-300 dark:border-red-700/40 dark:bg-slate-950">
+          <CardContent className="p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-red-700 dark:text-red-300">
               Blocked
             </p>
-            <p className="mt-2 text-4xl font-semibold text-red-900 dark:text-red-100">
+            <p className="mt-2 text-2xl font-semibold text-red-900 dark:text-red-100">
               {blockedCount}
             </p>
           </CardContent>

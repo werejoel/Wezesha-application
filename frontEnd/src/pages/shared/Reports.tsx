@@ -132,7 +132,7 @@ export default function Reports() {
   }) as UseQueryResult<any[], Error>;
   const youthQuery = useQuery({
     queryKey: ["youth"] as const,
-    queryFn: getYouth,
+    queryFn: () => getYouth(),
   }) as UseQueryResult<any[], Error>;
   const outcomesQuery = useQuery({
     queryKey: ["outcomes"] as const,

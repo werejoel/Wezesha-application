@@ -215,6 +215,10 @@
     background: rgba(248, 250, 252, 0.9);
 }
 
+.dark .reports-table tbody tr:hover {
+    background: hsla(216, 53%, 24%, 0.85);
+}
+
 .reports-table tbody tr:hover td,
 .reports-table tbody tr:hover th {
     color: var(--foreground);
