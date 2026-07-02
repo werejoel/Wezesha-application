@@ -2809,14 +2809,79 @@ app.delete(
   async (req, res) => {
     const { id } = req.params;
     try {
+      const blockingRes = await pool.query(
+        `SELECT table_name, count(*) AS count
+         FROM (
+           SELECT 'case_note' AS table_name FROM case_note WHERE author_id = $1
+           UNION ALL
+           SELECT 'field_visit' AS table_name FROM field_visit WHERE visitor_id = $1
+           UNION ALL
+           SELECT 'mentorship_session' AS table_name FROM mentorship_session WHERE mentor_id = $1
+         ) t
+         GROUP BY table_name`,
+        [id],
+      );
+
+      const blocking = blockingRes.rows
+        .filter((row) => Number(row.count) > 0)
+        .map((row) => `${row.count} ${row.table_name}`);
+
+      if (blocking.length > 0) {
+        return res.status(409).json({
+          error: `Cannot delete user because related records exist: ${blocking.join(", ")}. Reassign or remove those records first.`,
+        });
+      }
+
+      await pool.query("BEGIN");
+      const cleanupQueries = [
+        "UPDATE attendance_record SET entered_by = NULL WHERE entered_by = $1",
+        "UPDATE baseline_data SET recorded_by = NULL WHERE recorded_by = $1",
+        "UPDATE case_note SET assigned_to = NULL WHERE assigned_to = $1",
+        "UPDATE cohort SET created_by = NULL WHERE created_by = $1",
+        "UPDATE config_history SET changed_by = NULL WHERE changed_by = $1",
+        "UPDATE field_enumerator SET deleted_by = NULL WHERE deleted_by = $1",
+        "UPDATE field_enumerator SET user_id = NULL WHERE user_id = $1",
+        "UPDATE field_visit SET created_by = NULL WHERE created_by = $1",
+        "UPDATE instructor SET deleted_by = NULL WHERE deleted_by = $1",
+        "UPDATE instructor SET user_id = NULL WHERE user_id = $1",
+        "UPDATE mentorship_session SET created_by = NULL WHERE created_by = $1",
+        "UPDATE outcome_data_point SET recorded_by = NULL WHERE recorded_by = $1",
+        "UPDATE output_milestone SET updated_by = NULL WHERE updated_by = $1",
+        "UPDATE partner_institution SET created_by = NULL WHERE created_by = $1",
+        "UPDATE partner_institution SET deleted_by = NULL WHERE deleted_by = $1",
+        "UPDATE session SET created_by = NULL WHERE created_by = $1",
+        "UPDATE system_config SET updated_by = NULL WHERE updated_by = $1",
+        "UPDATE user_roles SET assigned_by = NULL WHERE assigned_by = $1",
+        "UPDATE users SET assigned_to = NULL WHERE assigned_to = $1",
+        "UPDATE users SET deleted_by = NULL WHERE deleted_by = $1",
+        "UPDATE youth SET created_by = NULL WHERE created_by = $1",
+        "UPDATE youth SET deleted_by = NULL WHERE deleted_by = $1",
+        "UPDATE youth_business_fellow SET deleted_by = NULL WHERE deleted_by = $1",
+        "UPDATE youth_business_fellow SET user_id = NULL WHERE user_id = $1",
+      ];
+
+      for (const query of cleanupQueries) {
+        await pool.query(query, [id]);
+      }
+
       const result = await pool.query(
         "DELETE FROM users WHERE id = $1 RETURNING *",
         [id],
       );
-      if (result.rows.length === 0)
+      if (result.rows.length === 0) {
+        await pool.query("ROLLBACK");
         return res.status(404).json({ error: "User not found" });
+      }
+
+      await pool.query("COMMIT");
       res.json({ message: "User deleted successfully" });
     } catch (err) {
+      await pool.query("ROLLBACK").catch(() => null);
+      if (err.code === "23503") {
+        return res.status(409).json({
+          error: "Cannot delete user because related records still reference that user. Reassign or remove those records first.",
+        });
+      }
       res.status(500).json({ error: err.message });
     }
   },
