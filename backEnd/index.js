@@ -2322,7 +2322,7 @@ app.get(
         if (!allowed || allowed.length === 0) return res.json([]);
         const result = await pool.query(
           `${baseQuery} AND y.cohort_id = ANY($1)
-           ORDER BY om.updated_at DESC NULLS LAST, om.created_at DESC`,
+           ORDER BY om.updated_at DESC NULLS LAST, om.id DESC`,
           [allowed],
         );
         return res.json(result.rows);
@@ -2330,7 +2330,7 @@ app.get(
 
       const result = await pool.query(
         `${baseQuery}
-         ORDER BY om.created_at DESC`,
+         ORDER BY om.id DESC`,
       );
       res.json(result.rows);
     } catch (err) {
