@@ -168,7 +168,11 @@ export default function AdminDashboard() {
   });
   const [usersPage, setUsersPage] = useState(1);
   const [usersPageSize, setUsersPageSize] = useState(10);
-  const { data: youthData, isLoading: youthLoading } = useQuery<any, Error, any>({
+  const { data: youthData, isLoading: youthLoading } = useQuery<
+    any,
+    Error,
+    any
+  >({
     queryKey: ["youth"],
     queryFn: () => getYouth(),
   });
@@ -613,7 +617,10 @@ export default function AdminDashboard() {
               })}
             </span>
           </div>
-          <h1 className="page-title flex items-center gap-2">
+          <h1
+            className="page-title flex items-center gap-2"
+            style={{ alignItems: "center", color: "hsl(152, 55%, 33%)" }}
+          >
             Admin Dashboard
           </h1>
           <p className="page-description">
@@ -622,19 +629,16 @@ export default function AdminDashboard() {
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <Button
+            style={{ backgroundColor: "hsl(152, 55%, 33%)", color: "white" }}
             variant="default"
             size="sm"
-            className="h-8 gap-1.5 text-xs bg-sky-600 text-white hover:bg-sky-700 shadow-sm shadow-sky-200"
+            className="h-8 gap-1.5 text-xs bg-sky-600 text-white shadow-sm hover:shadow-md"
             onClick={() => downloadExportFile("all", "wezesha-data.xlsx")}
           >
-            <Download className="h-3.5 w-3.5" /> Export
-          </Button>
-          <Button variant="outline" size="icon" className="h-8 w-8 relative">
-            <Bell className="h-3.5 w-3.5" />
-            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-destructive rounded-full" />
+            <Download className="h-3.5 w-3.5" /> Export Data
           </Button>
         </div>
-      </div> 
+      </div>
 
       {/* ── System Health Strip ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 p-4 bg-muted/30 rounded-xl border border-border">
@@ -1580,6 +1584,7 @@ export default function AdminDashboard() {
                   </p>
                   <div className="flex flex-wrap gap-2">
                     <Button
+                    style={{ backgroundColor: "hsl(152, 55%, 33%)", color: "white" }}
                       variant="default"
                       className="h-10 bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm shadow-emerald-200"
                       onClick={() => downloadExportFile("youth", "youth.xlsx")}
@@ -1587,6 +1592,7 @@ export default function AdminDashboard() {
                       Export Youth
                     </Button>
                     <Button
+                    style={{ backgroundColor: "hsl(152, 55%, 33%)", color: "hsl(152, 55%, 33%)" }}
                       variant="default"
                       className="h-10 bg-orange-500 text-white hover:bg-orange-600 shadow-sm shadow-orange-200"
                       onClick={() =>
@@ -1596,6 +1602,7 @@ export default function AdminDashboard() {
                       Export Partners
                     </Button>
                     <Button
+                    style={{ backgroundColor: "hsl(152, 55%, 33%)", color: "white" }}
                       variant="default"
                       className="h-10 bg-violet-600 text-white hover:bg-violet-700 shadow-sm shadow-violet-200"
                       onClick={() =>
@@ -1605,8 +1612,9 @@ export default function AdminDashboard() {
                       Export Sessions
                     </Button>
                     <Button
+                    style={{ backgroundColor: "hsl(152, 55%, 33%)", color: "white" }}
                       variant="default"
-                      className="h-10 bg-sky-600 text-white hover:bg-sky-700 shadow-sm shadow-sky-200"
+                      className="h-10  text-white hover:bg-sky-700 shadow-sm shadow-sky-200"
                       onClick={() =>
                         downloadExportFile("all", "wezesha-data.xlsx")
                       }

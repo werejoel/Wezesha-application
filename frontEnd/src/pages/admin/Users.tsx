@@ -516,9 +516,9 @@ export default function AdminUsers() {
 
       {/* Stats Cards */}
       <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
-        <Card className="group border border-slate-200 bg-white hover:shadow-xl transition-all duration-300 hover:-translate-y-1 dark:border-slate-700 dark:bg-slate-950 dark:hover:bg-slate-900">
+        <Card className="group border border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white hover:shadow-xl transition-all duration-300 hover:-translate-y-1 dark:border-slate-700 dark:bg-slate-950 dark:hover:bg-slate-900">
           <CardContent className="p-6">
-            <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
+            <p className="text-sm font-medium text-slate-600 dark:text-slate-400">
               Total users
             </p>
             <p className="mt-2 text-4xl font-semibold text-slate-900 dark:text-slate-100">
@@ -526,7 +526,7 @@ export default function AdminUsers() {
             </p>
           </CardContent>
         </Card>
-        <Card className="group border border-sky-200 bg-white hover:shadow-xl transition-all duration-300 hover:-translate-y-1 dark:border-sky-700/40 dark:bg-slate-950 dark:hover:bg-slate-900">
+        <Card className="group border border-sky-200 bg-sky-50/70 hover:border-sky-300 hover:bg-sky-50 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 dark:border-sky-700/40 dark:bg-slate-950 dark:hover:bg-slate-900">
           <CardContent className="p-6">
             <p className="text-sm font-medium text-sky-700 dark:text-sky-300">
               Admins
@@ -536,7 +536,7 @@ export default function AdminUsers() {
             </p>
           </CardContent>
         </Card>
-        <Card className="group border border-emerald-200 bg-white hover:shadow-xl transition-all duration-300 hover:-translate-y-1 dark:border-emerald-700/40 dark:bg-slate-950 dark:hover:bg-slate-900">
+        <Card className="group border border-emerald-200 bg-emerald-50/70 hover:border-emerald-300 hover:bg-emerald-50 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 dark:border-emerald-700/40 dark:bg-slate-950 dark:hover:bg-slate-900">
           <CardContent className="p-6">
             <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
               Program managers
@@ -546,7 +546,7 @@ export default function AdminUsers() {
             </p>
           </CardContent>
         </Card>
-        <Card className="group border border-fuchsia-200 bg-white hover:shadow-xl transition-all duration-300 hover:-translate-y-1 dark:border-fuchsia-700/40 dark:bg-slate-950 dark:hover:bg-slate-900">
+        <Card className="group border border-fuchsia-200 bg-fuchsia-50/70 hover:border-fuchsia-300 hover:bg-fuchsia-50 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 dark:border-fuchsia-700/40 dark:bg-slate-950 dark:hover:bg-slate-900">
           <CardContent className="p-6">
             <p className="text-sm font-medium text-fuchsia-700 dark:text-fuchsia-300">
               YBF

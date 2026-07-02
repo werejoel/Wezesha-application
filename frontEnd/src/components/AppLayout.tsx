@@ -3,7 +3,17 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { useUser } from "@/hooks/use-user";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { PendingValidationGate } from "@/components/PendingValidationGate";
-import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from "@/components/ui/alert-dialog";
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
 import { logout } from "@/api";
@@ -12,12 +22,13 @@ import { useNavigate } from "react-router-dom";
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, refreshUser } = useUser();
   const navigate = useNavigate();
-  const initials = user?.name
-    ?.split(" ")
-    .map((n) => n[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase() || "WI";
+  const initials =
+    user?.name
+      ?.split(" ")
+      .map((n) => n[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() || "WI";
 
   return (
     <SidebarProvider>
@@ -27,7 +38,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <header className="h-14 flex items-center justify-between border-b bg-card px-4 shrink-0">
             <div className="flex items-center gap-2">
               <SidebarTrigger className="mr-1" />
-             {/*  <div className="hidden sm:flex items-center gap-2 bg-muted rounded-lg px-3 py-1.5">
+              {/*  <div className="hidden sm:flex items-center gap-2 bg-muted rounded-lg px-3 py-1.5">
                 <Search className="h-4 w-4 text-muted-foreground" />
                 <input
                   type="text"
@@ -41,7 +52,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               <ThemeToggle compact />
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button variant="outline" size="sm" className="gap-2">
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="gap-2 bg-[hsl(152,55%,33%)] text-white hover:bg-[hsl(152,55%,28%)]"
+                  >
                     <LogOut className="h-4 w-4" />
                     Logout
                   </Button>
@@ -50,13 +65,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   <AlertDialogHeader>
                     <AlertDialogTitle>Confirm logout</AlertDialogTitle>
                     <AlertDialogDescription>
-                      Are you sure you want to log out? You will need to sign in again to continue.
+                      Are you sure you want to log out? You will need to sign in
+                      again to continue.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                     <AlertDialogAction
-                      variant="destructive"
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                       onClick={() => {
                         logout();
                         refreshUser();
