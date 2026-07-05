@@ -81,6 +81,18 @@ const ensureSchema = async () => {
   await pool.query(
     `ALTER TABLE session ADD COLUMN IF NOT EXISTS is_locked BOOLEAN DEFAULT false`,
   );
+  // Fix youth_code unique constraint to allow NULL values and handle duplicates from old failed inserts
+  await pool.query(`
+    DROP CONSTRAINT IF EXISTS youth_youth_code_key ON youth CASCADE
+  `).catch(() => {}); // Ignore if constraint doesn't exist
+  
+  // Recreate the unique constraint to only apply to non-NULL values
+  // This allows multiple NULL values (youth without codes) but keeps codes unique
+  await pool.query(`
+    ALTER TABLE youth ADD CONSTRAINT youth_youth_code_key UNIQUE (youth_code)
+      WHERE youth_code IS NOT NULL
+  `).catch(() => {}); // Ignore if constraint already exists
+  
   await pool.query(`
     CREATE TABLE IF NOT EXISTS ybf_partner_assignment (
       user_id UUID NOT NULL,
@@ -1799,27 +1811,50 @@ app.post(
 
       const resolvedRosterYear = Number(roster_year ?? rosterYear ?? 1) || 1;
 
-      const result = await pool.query(
-        `INSERT INTO youth (full_name, date_of_birth, gender, district_of_residence, partner_institution_id, cohort_id, program_type, program_year, nationality, region, disability, course, employment_status, roster_year, school_name)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
-        [
-          full_name,
-          date_of_birth,
-          gender,
-          district,
-          partnerId,
-          cohortId,
-          resolvedProgramType,
-          programYear,
-          nationality || null,
-          region || null,
-          disability || null,
-          course || null,
-          employment_status || employmentStatus || null,
-          resolvedRosterYear,
-          school_name || schoolName || null,
-        ],
-      );
+      // Retry logic for youth_code unique constraint violations
+      let result;
+      let retryCount = 0;
+      const maxRetries = 3;
+      
+      while (retryCount < maxRetries) {
+        try {
+          result = await pool.query(
+            `INSERT INTO youth (full_name, date_of_birth, gender, district_of_residence, partner_institution_id, cohort_id, program_type, program_year, nationality, region, disability, course, employment_status, roster_year, school_name)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
+            [
+              full_name,
+              date_of_birth,
+              gender,
+              district,
+              partnerId,
+              cohortId,
+              resolvedProgramType,
+              programYear,
+              nationality || null,
+              region || null,
+              disability || null,
+              course || null,
+              employment_status || employmentStatus || null,
+              resolvedRosterYear,
+              school_name || schoolName || null,
+            ],
+          );
+          break; // Success, exit retry loop
+        } catch (insertErr) {
+          // Check if it's a unique constraint violation on youth_code
+          if (insertErr.code === '23505' && insertErr.constraint === 'youth_youth_code_key') {
+            retryCount++;
+            if (retryCount >= maxRetries) {
+              throw new Error(`Failed to generate unique youth code after ${maxRetries} attempts. Please try again.`);
+            }
+            // Advance sequence and try again by allowing the database to generate a new code
+            await pool.query('SELECT nextval(\'youth_code_seq\'::regclass)');
+            continue;
+          }
+          throw insertErr;
+        }
+      }
+      
       res.status(201).json(result.rows[0]);
     } catch (err) {
       res.status(500).json({ error: err.message });
