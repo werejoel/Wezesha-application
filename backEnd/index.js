@@ -81,7 +81,7 @@ const ensureSchema = async () => {
   await pool.query(
     `ALTER TABLE session ADD COLUMN IF NOT EXISTS is_locked BOOLEAN DEFAULT false`,
   );
-  // Fix youth_code unique constraint to allow NULL values and handle duplicates from old failed inserts
+  // Ensure youth_code is unique only for non-NULL values
   await pool.query(`
     DROP CONSTRAINT IF EXISTS youth_youth_code_key ON youth CASCADE
   `).catch(() => {}); // Ignore if constraint doesn't exist
@@ -146,7 +146,6 @@ const normalizeUserRole = (role) => {
   if (normalized === "ybf" || normalized === "youth_business_fellow")
     return "ybf";
   if (normalized === "instructor") return "instructor";
-  if (normalized === "enumerator") return "enumerator";
   if (normalized === "admin" || normalized === "administrator") return "admin";
   return normalized;
 };

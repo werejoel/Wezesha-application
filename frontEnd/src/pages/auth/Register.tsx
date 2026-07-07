@@ -18,11 +18,6 @@ const ROLES = [
     label: "Instructor",
     desc: "Teach and guide aspiring entrepreneurs",
   },
-  {
-    value: "Enumerator",
-    label: "Enumerator",
-    desc: "Collect data and support field operations",
-  },
 ];
 
 const Register = () => {
@@ -191,7 +186,7 @@ const Register = () => {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
-                placeholder="Jane Doe"
+                placeholder="Muwanguzi Alex"
                 className="h-11 rounded-lg border-gray-200 bg-gray-50 focus:bg-white focus:border-emerald-500 focus:ring-emerald-500 transition-colors"
               />
             </div>
@@ -209,7 +204,7 @@ const Register = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                placeholder="you@example.com"
+                placeholder="wezeshaexample@gmail.com"
                 className="h-11 rounded-lg border-gray-200 bg-gray-50 focus:bg-white focus:border-emerald-500 focus:ring-emerald-500 transition-colors"
               />
             </div>

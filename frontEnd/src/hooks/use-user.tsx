@@ -5,7 +5,7 @@ interface User {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'program_manager' | 'ybf' | 'instructor' | 'enumerator';
+  role: 'admin' | 'program_manager' | 'ybf' | 'instructor';
   status?: 'active' | 'inactive' | 'blocked' | 'pending';
   assigned_to?: string | null;
   assigned_partner_name?: string | null;
@@ -54,7 +54,6 @@ export const useUser = () => {
       isProgramManager: () => false,
       isYBF: () => false,
       isInstructor: () => false,
-      isEnumerator: () => false,
     };
     return fallback;
   }
@@ -67,7 +66,7 @@ export const useUser = () => {
   const isProgramManager = () => hasRole(['admin', 'program_manager']);
   const isYBF = () => hasRole(['ybf']);
   const isInstructor = () => hasRole(['instructor']);
-  const isEnumerator = () => hasRole(['enumerator']);
+
 
   return {
     ...context,
@@ -76,6 +75,5 @@ export const useUser = () => {
     isProgramManager,
     isYBF,
     isInstructor,
-    isEnumerator,
   };
 };
