@@ -1,7 +1,7 @@
 export const MILESTONE_TYPES = [
-  "Business Plan",
+  "Application Letter & Business Plan",
+  "Business Ideas",
   "CV",
-  "Application Letter",
 ] as const;
 
 export const MILESTONE_STATUSES = [
@@ -24,6 +24,38 @@ export const YBF_CASE_CATEGORIES = [
 export type MilestoneType = (typeof MILESTONE_TYPES)[number];
 export type MilestoneStatus = (typeof MILESTONE_STATUSES)[number];
 export type AttendanceStatus = (typeof ATTENDANCE_STATUSES)[number];
+
+export const normalizeMilestoneType = (value: string): MilestoneType | null => {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized.includes("application letter") || normalized.includes("business plan") || normalized.includes("cover letter")) {
+    return "Application Letter & Business Plan";
+  }
+  if (normalized.includes("business idea")) return "Business Ideas";
+  if (normalized.includes("cv")) return "CV";
+  return null;
+};
+
+export const buildCalendarLink = ({
+  topic,
+  date,
+  venue,
+  partner,
+}: {
+  topic: string;
+  date: string;
+  venue?: string;
+  partner?: string;
+}) => {
+  const title = encodeURIComponent(`${topic} — YBF Session`);
+  const details = encodeURIComponent(
+    [partner ? `Partner: ${partner}` : null, venue ? `Venue: ${venue}` : null]
+      .filter(Boolean)
+      .join("\n"),
+  );
+  const start = new Date(`${date}T09:00:00`).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+  const end = new Date(`${date}T10:00:00`).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&details=${details}&dates=${start}/${end}`;
+};
 
 export const categoryColors: Record<string, string> = {
   "General Update": "bg-info text-info-foreground",

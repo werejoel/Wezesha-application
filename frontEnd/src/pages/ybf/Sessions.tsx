@@ -56,6 +56,7 @@ import {
   CheckCircle2,
   ClipboardCheck,
   Plus,
+  CalendarPlus,
 } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
 import { useToast } from "@/hooks/use-toast";
@@ -315,6 +316,45 @@ export default function YBFSessions() {
     });
   };
 
+  const generateIcsForSession = (session: typeof filtered[0]) => {
+    const startDate = new Date(session.session_date);
+    const endDate = new Date(startDate);
+    endDate.setHours(startDate.getHours() + 2); // Assume 2-hour sessions
+    
+    // Format dates in UTC
+    const formatDate = (date: Date) => {
+      return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z/, 'Z');
+    };
+    
+    return [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Wezesha//NONSGML v1.0//EN',
+      'BEGIN:VEVENT',
+      `UID:${session.id}@wezesha`,
+      `DTSTAMP:${formatDate(new Date())}`,
+      `DTSTART:${formatDate(startDate)}`,
+      `DTEND:${formatDate(endDate)}`,
+      `SUMMARY:${session.topic}`,
+      `DESCRIPTION:Session #${session.sessionNumber} for ${session.partner}`,
+      `LOCATION:${session.venue || 'Not specified'}`,
+      'END:VEVENT',
+      'END:VCALENDAR'
+    ].join('\r\n');
+  };
+
+  const downloadIcs = (session: typeof filtered[0]) => {
+    const icsContent = generateIcsForSession(session);
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `session-${session.sessionNumber}-${session.session_date}.ics`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="space-y-6">
       <div className="page-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -558,14 +598,24 @@ export default function YBFSessions() {
                       </span>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => openAttendance(s)}
-                      >
-                        <ClipboardCheck className="h-4 w-4 mr-1" />
-                        Mark Attendance
-                      </Button>
+                      <div className="flex gap-2 justify-end">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openAttendance(s)}
+                        >
+                          <ClipboardCheck className="h-4 w-4 mr-1" />
+                          Mark Attendance
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => downloadIcs(s)}
+                        >
+                          <CalendarPlus className="h-4 w-4 mr-1" />
+                          Add to Calendar
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

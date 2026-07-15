@@ -13,6 +13,7 @@ app.use(express.json());
 const REGIONS = ["ITS", "Central", "Eastern", "Northern-Lira", "Northern-Gulu"];
 const INSTITUTIONAL_SESSION_TOTAL = 18;
 const DATA_ENTRY_DAYS = 5;
+const MANAGEMENT_ROLES = ["admin", "program_manager", "program_leadership", "program_manager_out_of_school", "program_manager_in_school", "program_supervisor"];
 
 const ensureSchema = async () => {
   await pool.query(
@@ -24,6 +25,15 @@ const ensureSchema = async () => {
   await pool.query(
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS assigned_to UUID`,
   );
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS assigned_regions TEXT[] DEFAULT '{}'`);
+  await pool.query(`UPDATE users SET role = 'instructor' WHERE role = 'enumerator'`);
+  // The two documents are tracked together; business ideas are their own output.
+  await pool.query(`ALTER TABLE output_milestone DROP CONSTRAINT IF EXISTS output_milestone_milestone_type_check`);
+  await pool.query(`DELETE FROM output_milestone app USING output_milestone plan
+    WHERE app.youth_id = plan.youth_id AND app.milestone_type IN ('Application Letter', 'Cover Letter') AND plan.milestone_type = 'Business Plan'`);
+  await pool.query(`UPDATE output_milestone SET milestone_type = 'Application Letter & Business Plan'
+    WHERE milestone_type IN ('Business Plan', 'Application Letter', 'Cover Letter')`);
+  await pool.query(`ALTER TABLE output_milestone ADD CONSTRAINT output_milestone_milestone_type_check CHECK (milestone_type IN ('Application Letter & Business Plan', 'Business Ideas', 'CV'))`).catch(() => {});
   await pool.query(
     `ALTER TABLE partner_institution ADD COLUMN IF NOT EXISTS deleted_by UUID`,
   );
@@ -139,7 +149,7 @@ ensureSchema().catch((err) =>
 const USER_STATUSES = ["active", "inactive", "blocked", "pending"];
 
 const normalizeUserRole = (role) => {
-  if (!role || typeof role !== "string") return "enumerator";
+  if (!role || typeof role !== "string") return "ybf";
   const normalized = role.trim().toLowerCase().replace(/\s+/g, "_");
   if (normalized === "program_manager" || normalized === "programmanager")
     return "program_manager";
@@ -147,7 +157,23 @@ const normalizeUserRole = (role) => {
     return "ybf";
   if (normalized === "instructor") return "instructor";
   if (normalized === "admin" || normalized === "administrator") return "admin";
+  if (["program_leadership", "program_manager_out_of_school", "program_manager_in_school", "program_supervisor"].includes(normalized)) return normalized;
+  // Enumerator is retired. Existing accounts are transitioned to instructor access.
+  if (normalized === "enumerator") return "instructor";
   return normalized;
+};
+
+const getManagementScope = async (user) => {
+  const role = user?.role;
+  if (!role || ["admin", "program_manager", "program_leadership"].includes(role)) return null;
+  if (role === "program_manager_in_school") return { programType: "In-school" };
+  if (role === "program_manager_out_of_school") return { programType: "Out-of-school" };
+  if (role === "program_supervisor") {
+    const result = await pool.query(`SELECT assigned_regions FROM users WHERE id = $1`, [user.id]);
+    const regions = result.rows[0]?.assigned_regions || [];
+    return { regions: regions.length ? regions : REGIONS };
+  }
+  return null;
 };
 
 const addDays = (dateStr, days) => {
@@ -524,7 +550,6 @@ const PERMISSIONS = {
   program_manager: ["read", "write", "approve_records"],
   ybf: ["read_youth", "write_sessions", "write_case_notes"],
   instructor: ["read_sessions", "write_attendance"],
-  enumerator: ["read_outcomes", "write_outcomes", "read_limited"],
 };
 
 const generateRandomPassword = () => {
@@ -540,7 +565,7 @@ app.post(
   async (req, res) => {
     const { name, email, password, role } = req.body;
     try {
-      const normalizedRole = normalizeUserRole(role || "enumerator");
+      const normalizedRole = normalizeUserRole(role || "ybf");
       const needsApproval =
         normalizedRole === "ybf" || normalizedRole === "instructor";
       const status = needsApproval ? "pending" : "active";
@@ -900,7 +925,7 @@ app.get("/api/dashboard", authenticateToken, async (req, res) => {
 app.get(
   "/api/partners",
   authenticateToken,
-  authorizeRoles("admin", "program_manager", "ybf", "instructor", "enumerator"),
+  authorizeRoles(...MANAGEMENT_ROLES, "ybf", "instructor"),
   async (req, res) => {
     try {
       if (req.user && req.user.role === "ybf") {
@@ -956,7 +981,7 @@ app.get(
 app.get(
   "/api/cohorts",
   authenticateToken,
-  authorizeRoles("admin", "program_manager", "ybf", "instructor", "enumerator"),
+  authorizeRoles(...MANAGEMENT_ROLES, "ybf", "instructor"),
   async (req, res) => {
     try {
       if (req.user && req.user.role === "ybf") {
@@ -1007,11 +1032,11 @@ app.get(
 app.get(
   "/api/personnel",
   authenticateToken,
-  authorizeRoles("admin", "program_manager", "ybf", "instructor", "enumerator"),
+  authorizeRoles(...MANAGEMENT_ROLES, "ybf", "instructor"),
   async (req, res) => {
     try {
       const result = await pool.query(
-        "SELECT id, name, email, role, created_at FROM users WHERE role IN ('ybf', 'instructor', 'enumerator') ORDER BY created_at DESC",
+        "SELECT id, name, email, role, created_at FROM users WHERE role IN ('ybf', 'instructor') ORDER BY created_at DESC",
       );
       res.json(result.rows);
     } catch (err) {
@@ -1028,7 +1053,7 @@ app.post(
   async (req, res) => {
     const { name, email, role } = req.body;
     const normalizedRole = String(role).trim().toLowerCase();
-    if (!["ybf", "instructor", "enumerator"].includes(normalizedRole)) {
+    if (!["ybf", "instructor"].includes(normalizedRole)) {
       return res.status(400).json({ error: "Invalid role for personnel" });
     }
 
@@ -1060,7 +1085,7 @@ app.put(
     let normalizedRole = role;
     if (role) {
       normalizedRole = String(role).trim().toLowerCase();
-      if (!["ybf", "instructor", "enumerator"].includes(normalizedRole)) {
+      if (!["ybf", "instructor"].includes(normalizedRole)) {
         return res.status(400).json({ error: "Invalid role for personnel" });
       }
     }
@@ -1258,6 +1283,52 @@ app.get(
   },
 );
 
+// Cleaned Kobo submissions can be uploaded by an administrator. Kobo Collect can
+// post the same JSON to /api/kobo/submissions when KOBO_WEBHOOK_TOKEN is set.
+const importKoboSubmissions = async (submissions, importedBy) => {
+  if (!Array.isArray(submissions)) throw new Error("submissions must be an array");
+  let imported = 0;
+  const skipped = [];
+  for (const submission of submissions) {
+    const youthCode = submission.youth_code || submission.youthCode || submission._id;
+    if (!youthCode) { skipped.push({ reason: "Missing youth_code" }); continue; }
+    const youth = await pool.query(`SELECT id FROM youth WHERE youth_code = $1 AND deleted_by IS NULL`, [String(youthCode)]);
+    if (!youth.rows[0]) { skipped.push({ youth_code: youthCode, reason: "Youth not found" }); continue; }
+    const income = submission.current_income ?? submission.monthly_income ?? submission.income;
+    if (income !== undefined && income !== null && income !== "") {
+      await pool.query(`UPDATE youth SET current_income = $1, updated_at = NOW() WHERE id = $2`, [Number(income), youth.rows[0].id]);
+    }
+    const idea = submission.business_idea ?? submission.business_idea_generated ?? submission.has_business_idea;
+    if (idea === true || String(idea).toLowerCase() === "yes") {
+      const existing = await pool.query(`SELECT id FROM output_milestone WHERE youth_id = $1 AND milestone_type = 'Business Ideas' LIMIT 1`, [youth.rows[0].id]);
+      if (existing.rows[0]) {
+        await pool.query(`UPDATE output_milestone SET status = 'Completed', updated_at = NOW(), updated_by = $1 WHERE id = $2`, [importedBy || null, existing.rows[0].id]);
+      } else {
+        await pool.query(`INSERT INTO output_milestone (youth_id, milestone_type, status, updated_by) VALUES ($1, 'Business Ideas', 'Completed', $2)`, [youth.rows[0].id, importedBy || null]);
+      }
+    }
+    imported += 1;
+  }
+  return { imported, skipped, received: submissions.length };
+};
+
+app.post("/api/import/kobo", authenticateToken, authorizeRoles("admin"), async (req, res) => {
+  try {
+    res.json(await importKoboSubmissions(req.body.submissions || req.body.records, req.user.id));
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+app.post("/api/kobo/submissions", async (req, res) => {
+  const token = req.get("x-kobo-webhook-token") || req.query.token;
+  if (!process.env.KOBO_WEBHOOK_TOKEN || token !== process.env.KOBO_WEBHOOK_TOKEN) {
+    return res.status(401).json({ error: "Invalid Kobo webhook token" });
+  }
+  try {
+    const rows = Array.isArray(req.body) ? req.body : (req.body.submissions || req.body.records || [req.body]);
+    res.status(201).json(await importKoboSubmissions(rows, null));
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
 // Sessions with low attendance (paginated)
 app.get(
   "/api/sessions/low-attendance",
@@ -1376,10 +1447,10 @@ app.post(
     const { name, email, role, assigned_to } = req.body;
     const normalizedRole = role?.toString().trim().toLowerCase();
 
-    if (!["ybf", "instructor", "enumerator"].includes(normalizedRole)) {
+    if (!["ybf", "instructor"].includes(normalizedRole)) {
       return res
         .status(400)
-        .json({ error: "Role must be one of: ybf, instructor, enumerator" });
+        .json({ error: "Role must be one of: ybf, instructor" });
     }
 
     try {
@@ -1634,7 +1705,7 @@ app.delete(
 app.get(
   "/api/youth",
   authenticateToken,
-  authorizeRoles("admin", "program_manager", "ybf", "instructor"),
+  authorizeRoles(...MANAGEMENT_ROLES, "ybf", "instructor"),
   async (req, res) => {
     try {
       const {
@@ -1716,6 +1787,27 @@ app.get(
            GROUP BY y.id, p.name, p.region, c.program_year
            ORDER BY y.full_name ASC`,
           [...filterParams, partnerIds],
+        );
+        return res.json(result.rows);
+      }
+
+      const managementScope = await getManagementScope(req.user);
+      if (managementScope) {
+        const clauses = [];
+        const params = [...filterParams];
+        if (managementScope.programType) {
+          params.push(managementScope.programType);
+          clauses.push(`y.program_type = $${params.length}`);
+        }
+        if (managementScope.regions) {
+          params.push(managementScope.regions);
+          clauses.push(`COALESCE(y.region, p.region) = ANY($${params.length})`);
+        }
+        const scopedWhere = clauses.length ? ` AND ${clauses.join(" AND ")}` : "";
+        const result = await pool.query(
+          `${youthSelect}${scopedWhere}${extraFilter}
+           GROUP BY y.id, p.name, p.region, c.program_year
+           ORDER BY y.created_at DESC`, params,
         );
         return res.json(result.rows);
       }
@@ -2009,7 +2101,7 @@ app.delete(
 app.get(
   "/api/sessions",
   authenticateToken,
-  authorizeRoles("admin", "program_manager", "ybf", "instructor"),
+  authorizeRoles(...MANAGEMENT_ROLES, "ybf", "instructor"),
   async (req, res) => {
     try {
       await pool.query(
@@ -2049,6 +2141,27 @@ app.get(
            GROUP BY s.id, p.name
            ORDER BY s.session_date DESC`,
           [partnerIds],
+        );
+        return res.json(result.rows.map(enrichSessionRow));
+      }
+
+      const managementScope = await getManagementScope(req.user);
+      if (managementScope) {
+        const clauses = [];
+        const params = [];
+        if (managementScope.programType) {
+          params.push(managementScope.programType);
+          clauses.push(`EXISTS (SELECT 1 FROM youth sy WHERE sy.cohort_id = s.cohort_id AND sy.deleted_by IS NULL AND sy.program_type = $${params.length})`);
+        }
+        if (managementScope.regions) {
+          params.push(managementScope.regions);
+          clauses.push(`p.region = ANY($${params.length})`);
+        }
+        const result = await pool.query(
+          `${baseQuery}
+           WHERE ${clauses.join(" AND ")}
+           GROUP BY s.id, p.name
+           ORDER BY s.session_date DESC`, params,
         );
         return res.json(result.rows.map(enrichSessionRow));
       }
@@ -2338,7 +2451,7 @@ app.delete(
 app.get(
   "/api/outcomes",
   authenticateToken,
-  authorizeRoles("admin", "program_manager", "ybf", "enumerator"),
+  authorizeRoles(...MANAGEMENT_ROLES, "ybf"),
   async (req, res) => {
     try {
       const baseQuery = `
@@ -2372,10 +2485,12 @@ app.get(
 app.post(
   "/api/outcomes",
   authenticateToken,
-  authorizeRoles("admin", "program_manager", "ybf", "enumerator"),
+  authorizeRoles(...MANAGEMENT_ROLES, "ybf"),
   validateRequired(["youth_id", "milestone_type", "status"]),
   async (req, res) => {
-    const { youth_id, milestone_type, status } = req.body;
+    const { youth_id, status } = req.body;
+    const milestone_type = ["Business Plan", "Application Letter", "Cover Letter", "Business Plan & Application Letter"].includes(req.body.milestone_type)
+      ? "Application Letter & Business Plan" : req.body.milestone_type;
     try {
       if (req.user && req.user.role === "ybf") {
         const youthRes = await pool.query(
@@ -2423,10 +2538,12 @@ app.post(
 app.put(
   "/api/outcomes/:id",
   authenticateToken,
-  authorizeRoles("admin", "program_manager", "ybf", "enumerator"),
+  authorizeRoles(...MANAGEMENT_ROLES, "ybf"),
   async (req, res) => {
     const { id } = req.params;
-    const { milestone_type, status } = req.body;
+    const { status } = req.body;
+    const milestone_type = ["Business Plan", "Application Letter", "Cover Letter", "Business Plan & Application Letter"].includes(req.body.milestone_type)
+      ? "Application Letter & Business Plan" : req.body.milestone_type;
     try {
       if (req.user && req.user.role === "ybf") {
         const accessRes = await pool.query(
@@ -2742,7 +2859,7 @@ app.put(
   authorizeRoles("admin", "program_manager"),
   async (req, res) => {
     const { id } = req.params;
-    const { name, email, role, status, assigned_to, assignedTo } = req.body;
+    const { name, email, role, status, assigned_to, assignedTo, assigned_regions, assignedRegions } = req.body;
     try {
       if (status && !USER_STATUSES.includes(status)) {
         return res.status(400).json({
@@ -2750,19 +2867,24 @@ app.put(
         });
       }
       const partnerId = assigned_to || assignedTo || null;
+      const regions = Array.isArray(assigned_regions || assignedRegions)
+        ? (assigned_regions || assignedRegions).filter((region) => REGIONS.includes(region))
+        : null;
       const result = await pool.query(
         `UPDATE users
        SET name = COALESCE($1, name), email = COALESCE($2, email), role = COALESCE($3, role),
            status = COALESCE($4, status),
            assigned_to = COALESCE($5, assigned_to),
+           assigned_regions = COALESCE($6, assigned_regions),
            updated_at = NOW()
-       WHERE id = $6 RETURNING id, name, email, role, COALESCE(status, 'active') AS status, assigned_to`,
+       WHERE id = $7 RETURNING id, name, email, role, COALESCE(status, 'active') AS status, assigned_to, assigned_regions`,
         [
           name,
           email,
           role ? normalizeUserRole(role) : null,
           status || null,
           partnerId,
+          regions,
           id,
         ],
       );

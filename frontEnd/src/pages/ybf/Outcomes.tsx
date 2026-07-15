@@ -53,10 +53,14 @@ type YouthMilestones = {
 };
 
 const MILESTONE_TYPE_ALIASES: Record<string, MilestoneType> = {
-  "Business Plan": "Business Plan",
+  "Business Plan": "Application Letter & Business Plan",
+  "Business Plan & Application Letter": "Application Letter & Business Plan",
+  "Application Letter & Business Plan": "Application Letter & Business Plan",
+  "Business Idea Generated": "Business Ideas",
+  "Business Ideas": "Business Ideas",
   CV: "CV",
-  "Application Letter": "Application Letter",
-  "Cover Letter": "Application Letter",
+  "Application Letter": "Application Letter & Business Plan",
+  "Cover Letter": "Application Letter & Business Plan",
 };
 
 const normalizeMilestoneType = (value: string): MilestoneType | null => {
@@ -70,18 +74,18 @@ const normalizeMilestoneType = (value: string): MilestoneType | null => {
 
 const defaultMilestones = (): Record<
   MilestoneType,
-  { status: MilestoneStatus }
+  { id?: string; status: MilestoneStatus }
 > => ({
-  "Business Plan": { status: "Not Started" },
+  "Application Letter & Business Plan": { status: "Not Started" },
+  "Business Ideas": { status: "Not Started" },
   CV: { status: "Not Started" },
-  "Application Letter": { status: "Not Started" },
 });
 
 const MILESTONE_META: Record<
   MilestoneType,
   { color: string; bar: string; badge: string }
 > = {
-  "Business Plan": {
+  "Application Letter & Business Plan": {
     color: "text-emerald-700",
     bar: "bg-emerald-500",
     badge: "bg-emerald-100 text-emerald-800 border-emerald-200",
@@ -91,7 +95,7 @@ const MILESTONE_META: Record<
     bar: "bg-sky-500",
     badge: "bg-sky-100 text-sky-800 border-sky-200",
   },
-  "Application Letter": {
+  "Business Ideas": {
     color: "text-violet-700",
     bar: "bg-violet-500",
     badge: "bg-violet-100 text-violet-800 border-violet-200",
@@ -183,9 +187,9 @@ export default function YBFOutcomes() {
       MilestoneType,
       { completed: number; inProgress: number; notStarted: number }
     > = {
-      "Business Plan": { completed: 0, inProgress: 0, notStarted: 0 },
+      "Application Letter & Business Plan": { completed: 0, inProgress: 0, notStarted: 0 },
+      "Business Ideas": { completed: 0, inProgress: 0, notStarted: 0 },
       CV: { completed: 0, inProgress: 0, notStarted: 0 },
-      "Application Letter": { completed: 0, inProgress: 0, notStarted: 0 },
     };
     let completed = 0;
     let inProgress = 0;

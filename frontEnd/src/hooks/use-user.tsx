@@ -1,11 +1,12 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { getCurrentUser } from '@/api';
+import { roleDisplayName } from '@/lib/roles';
 
 interface User {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'program_manager' | 'ybf' | 'instructor';
+  role: 'admin' | 'program_manager' | 'program_leadership' | 'program_manager_out_of_school' | 'program_manager_in_school' | 'program_supervisor' | 'ybf' | 'instructor';
   status?: 'active' | 'inactive' | 'blocked' | 'pending';
   assigned_to?: string | null;
   assigned_partner_name?: string | null;
@@ -63,10 +64,9 @@ export const useUser = () => {
   };
 
   const isAdmin = () => hasRole(['admin']);
-  const isProgramManager = () => hasRole(['admin', 'program_manager']);
+  const isProgramManager = () => hasRole(['admin', 'program_manager', 'program_leadership', 'program_manager_out_of_school', 'program_manager_in_school', 'program_supervisor']);
   const isYBF = () => hasRole(['ybf']);
   const isInstructor = () => hasRole(['instructor']);
-
 
   return {
     ...context,
@@ -75,5 +75,6 @@ export const useUser = () => {
     isProgramManager,
     isYBF,
     isInstructor,
+    roleDisplayName,
   };
 };

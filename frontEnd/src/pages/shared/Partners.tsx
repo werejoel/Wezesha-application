@@ -86,7 +86,7 @@ type Personnel = {
 
 type PersonnelForm = {
   name: string;
-  role: "YBF" | "Instructor" | "Enumerator";
+  role: "YBF" | "Instructor";
   contact: string;
   email: string;
   assignedTo: string;
@@ -108,7 +108,11 @@ const defaultPersonnelForm: PersonnelForm = {
   status: "Active",
 };
 
-const defaultPartnerForm = {
+const defaultPartnerForm: {
+  name: string; type: "TVET" | "CBO"; location: string; region: string;
+  programType: "In-school" | "Out-of-school"; district: string; contactName: string;
+  contactPhone: string; contactEmail: string; startDate: string; programYear: string; assignedYbfId: string;
+} = {
   name: "",
   type: "TVET",
   location: "",
@@ -357,9 +361,7 @@ export default function Partners() {
       role:
         person.role === "YBF"
           ? "YBF"
-          : person.role === "Instructor"
-            ? "Instructor"
-            : "Enumerator",
+        : "Instructor",
       contact: person.contact === "-" ? "" : person.contact,
       email: person.email === "-" ? "" : person.email,
       assignedTo: person.assignedTo === "-" ? "" : person.assignedTo,
@@ -542,7 +544,7 @@ export default function Partners() {
                     ? "Edit Personnel Record"
                     : "Add Personnel Record"
                 }
-                subtitle="Manage YBFs, instructors, and enumerators"
+                subtitle="Manage YBFs and instructors"
               >
                 {personnelFormError ? (
                   <div className="rounded-lg border border-destructive/10 bg-destructive/5 p-3 text-sm text-destructive mb-4">
@@ -592,7 +594,6 @@ export default function Partners() {
                         >
                           <option value="YBF">Youth Business Fellow</option>
                           <option value="Instructor">Instructor</option>
-                          <option value="Enumerator">Enumerator</option>
                         </select>
                       </div>
                       <div>
@@ -709,25 +710,6 @@ export default function Partners() {
                             })
                           }
                           placeholder="Business Studies"
-                          className="bg-white/80"
-                        />
-                      </div>
-                    )}
-                    {personnelForm.role === "Enumerator" && (
-                      <div>
-                        <Label htmlFor="personnel-area">
-                          Geographic Area / Cohort
-                        </Label>
-                        <Input
-                          id="personnel-area"
-                          value={personnelForm.geographicArea}
-                          onChange={(e) =>
-                            setPersonnelForm({
-                              ...personnelForm,
-                              geographicArea: e.target.value,
-                            })
-                          }
-                          placeholder="Kampala , Uganda or Cohort 2024"
                           className="bg-white/80"
                         />
                       </div>
@@ -1273,7 +1255,7 @@ export default function Partners() {
               <div>
                 <CardTitle>Personnel Records</CardTitle>
                 <p className="text-sm text-muted-foreground">
-                  Youth Business Fellows, instructors and enumerators loaded.
+                  Youth Business Fellows and instructors loaded.
                 </p>
               </div>
             </CardHeader>

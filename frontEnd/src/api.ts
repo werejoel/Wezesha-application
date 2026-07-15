@@ -1,4 +1,6 @@
 // frontEnd/src/api.ts
+import { normalizeRole } from "@/lib/roles";
+
 const BASE_URL = `${import.meta.env.VITE_API_URL}/api`;
 const getAuthHeaders = () => {
   const token = localStorage.getItem("token");
@@ -7,18 +9,6 @@ const getAuthHeaders = () => {
     "Content-Type": "application/json",
   };
   return token ? { ...base, Authorization: `Bearer ${token}` } : base;
-};
-
-const normalizeRole = (role: string | undefined | null) => {
-  if (!role) return role;
-  const normalized = role.toString().trim().toLowerCase();
-  if (normalized === "program manager" || normalized === "program_manager")
-    return "program_manager";
-  if (normalized === "ybf") return "ybf";
-  if (normalized === "instructor") return "instructor";
-  if (normalized === "enumerator") return "enumerator";
-  if (normalized === "admin") return "admin";
-  return normalized;
 };
 
 const normalizeUser = (user: any) => {
@@ -273,6 +263,9 @@ export const downloadExport = (resource: string = "all") =>
     }
     return res.blob();
   });
+
+export const importKoboData = (submissions: object[]) =>
+  post("/import/kobo", { submissions });
 
 // Attendance
 export const getAttendance = () => get("/attendance");

@@ -60,7 +60,10 @@ const roleSidebarItems: Record<string, typeof mainItems> = {
     { title: "Output Tracking", url: "/outcomes", icon: TrendingUp },
   ],
   instructor: [mainItems[0], mainItems[3]],
-  enumerator: [mainItems[0], mainItems[3], mainItems[4]],
+  program_leadership: [mainItems[0], mainItems[1], mainItems[2], mainItems[3], mainItems[4], mainItems[5], mainItems[6], mainItems[7], mainItems[8]],
+  program_manager_out_of_school: [mainItems[0], mainItems[1], mainItems[3], mainItems[4], mainItems[5], mainItems[6], mainItems[7]],
+  program_manager_in_school: [mainItems[0], mainItems[1], mainItems[3], mainItems[4], mainItems[5], mainItems[6], mainItems[7]],
+  program_supervisor: [mainItems[0], mainItems[3], mainItems[4], mainItems[5], mainItems[6], mainItems[7]],
 };
 
 export function AppSidebar() {
@@ -70,7 +73,7 @@ export function AppSidebar() {
   const { user } = useUser();
 
   const menuItems = user
-    ? (roleSidebarItems[user.role] ?? roleSidebarItems.enumerator)
+    ? (roleSidebarItems[user.role] ?? roleSidebarItems.program_supervisor)
     : [mainItems[0]];
 
   return (

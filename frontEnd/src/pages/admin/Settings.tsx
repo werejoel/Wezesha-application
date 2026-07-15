@@ -34,7 +34,7 @@ import { useTheme, type ThemeMode } from "@/hooks/use-theme";
 import { useUser } from "@/hooks/use-user";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { getUsers, updateUserStatus } from "@/api";
+import { getUsers, importKoboData, updateUserStatus } from "@/api";
 
 const ORG_KEY = "wezesha_org_name";
 const NOTIFY_KEY = "wezesha_email_notifications";
@@ -108,6 +108,7 @@ export default function AdminSettings() {
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [compactTables, setCompactTables] = useState(false);
   const [maintenanceMode, setMaintenanceMode] = useState(false);
+  const [koboImporting, setKoboImporting] = useState(false);
 
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
@@ -179,6 +180,20 @@ export default function AdminSettings() {
       title: "Settings saved",
       description: "Your preferences have been updated.",
     });
+  };
+
+  const handleKoboFile = async (file?: File) => {
+    if (!file) return;
+    try {
+      setKoboImporting(true);
+      const parsed = JSON.parse(await file.text());
+      const submissions = Array.isArray(parsed) ? parsed : parsed.submissions || parsed.records;
+      if (!Array.isArray(submissions)) throw new Error("Use a Kobo JSON export containing an array of submissions.");
+      const result = await importKoboData(submissions);
+      toast({ title: "Kobo data imported", description: `${result.imported} of ${result.received} submissions updated.` });
+    } catch (err: any) {
+      toast({ title: "Kobo import failed", description: err?.message || "Check the cleaned JSON file.", variant: "destructive" });
+    } finally { setKoboImporting(false); }
   };
 
   const handleStatusChange = async (target: ManagedUser, status: UserStatus) => {
@@ -261,6 +276,19 @@ export default function AdminSettings() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>KoboToolbox data import</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-muted-foreground">Upload a cleaned Kobo JSON export. Each submission must include <code>youth_code</code>; business ideas and income are synced to the matching youth.</p>
+          <label className="shrink-0">
+            <Button asChild disabled={koboImporting}><span>{koboImporting ? "Importing…" : "Upload cleaned JSON"}</span></Button>
+            <input className="hidden" type="file" accept="application/json,.json" disabled={koboImporting} onChange={(e) => handleKoboFile(e.target.files?.[0])} />
+          </label>
+        </CardContent>
+      </Card>
 
       <Card className="border-primary/20">
         <CardHeader className="pb-3">

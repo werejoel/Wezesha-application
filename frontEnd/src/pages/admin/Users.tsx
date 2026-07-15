@@ -73,7 +73,7 @@ export default function AdminUsers() {
     name: "",
     email: "",
     password: "",
-    role: "enumerator",
+    role: "ybf",
   });
   const [formError, setFormError] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
@@ -82,8 +82,9 @@ export default function AdminUsers() {
     name: "",
     email: "",
     password: "",
-    role: "enumerator",
+    role: "ybf",
     assignedTo: "",
+    assignedRegions: "",
     status: "active" as UserStatus,
   });
   const [editError, setEditError] = useState<string | null>(null);
@@ -105,6 +106,7 @@ export default function AdminUsers() {
   const [approvePartner, setApprovePartner] = useState<Record<string, string>>(
     {},
   );
+  const [personnelView, setPersonnelView] = useState<"all" | "ybf" | "instructor">("all");
 
   useEffect(() => {
     getPartners()
@@ -184,7 +186,7 @@ export default function AdminUsers() {
       if (page === 1) setUsers([user, ...users]);
       else setPage(1);
       setCreateOpen(false);
-      setForm({ name: "", email: "", password: "", role: "enumerator" });
+      setForm({ name: "", email: "", password: "", role: "program_manager" });
       toast({ title: "User created", description: `${user.email} created` });
     } catch (err: any) {
       setFormError(err?.message || "Failed to create user");
@@ -224,7 +226,7 @@ export default function AdminUsers() {
   };
 
   const handleToggleRole = async (u: any) => {
-    const newRole = u.role === "admin" ? "enumerator" : "admin";
+    const newRole = u.role === "admin" ? "program_manager" : "admin";
     try {
       const updated = await updateUser(String(u.id), {
         name: u.name,
@@ -251,8 +253,9 @@ export default function AdminUsers() {
       name: u.name || u.full_name || "",
       email: u.email || "",
       password: "",
-      role: u.role || "enumerator",
+      role: u.role || "program_manager",
       assignedTo: u.assigned_to ? String(u.assigned_to) : "",
+      assignedRegions: Array.isArray(u.assigned_regions) ? u.assigned_regions.join(",") : "",
       status: (u.status || "active") as UserStatus,
     });
     setEditError(null);
@@ -351,6 +354,9 @@ export default function AdminUsers() {
         status: editForm.status,
       };
       if (editForm.assignedTo) payload.assigned_to = editForm.assignedTo;
+      if (editForm.role === "program_supervisor") {
+        payload.assigned_regions = editForm.assignedRegions ? editForm.assignedRegions.split(",") : [];
+      }
       if (editForm.password) payload.password = editForm.password;
       const updated = await updateUser(String(editingUser.id), payload);
       setUsers(
@@ -376,7 +382,6 @@ export default function AdminUsers() {
   const managerCount = users.filter((u) => u.role === "program_manager").length;
   const ybfCount = users.filter((u) => u.role === "ybf").length;
   const instructorCount = users.filter((u) => u.role === "instructor").length;
-  const enumeratorCount = users.filter((u) => u.role === "enumerator").length;
   const activeCount = users.filter(
     (u) => (u.status || "active") === "active",
   ).length;
@@ -398,13 +403,8 @@ export default function AdminUsers() {
       count: instructorCount,
       color: "bg-violet-500",
     },
-    {
-      role: "enumerator",
-      label: "Enumerators",
-      count: enumeratorCount,
-      color: "bg-slate-500",
-    },
   ];
+  const displayedUsers = personnelView === "all" ? users : users.filter((u) => u.role === personnelView);
 
   return (
     <div className="space-y-8 pb-10">
@@ -489,9 +489,12 @@ export default function AdminUsers() {
                 >
                   <option value="admin">admin</option>
                   <option value="program_manager">program_manager</option>
+                  <option value="program_leadership">program_leadership</option>
+                  <option value="program_manager_out_of_school">program_manager_out_of_school</option>
+                  <option value="program_manager_in_school">program_manager_in_school</option>
+                  <option value="program_supervisor">program_supervisor</option>
                   <option value="ybf">ybf</option>
                   <option value="instructor">instructor</option>
-                  <option value="enumerator">enumerator</option>
                 </select>
               </div>
               <div className="flex justify-end gap-2">
@@ -515,6 +518,14 @@ export default function AdminUsers() {
           {error}
         </div>
       )}
+
+      <div className="flex gap-2">
+        {(["all", "ybf", "instructor"] as const).map((view) => (
+          <Button key={view} size="sm" variant={personnelView === view ? "default" : "outline"} onClick={() => setPersonnelView(view)}>
+            {view === "all" ? "All users" : view === "ybf" ? "YBFs" : "Instructors"}
+          </Button>
+        ))}
+      </div>
 
       {/* Stats Cards */}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -714,7 +725,7 @@ export default function AdminUsers() {
                     </div>
                   </TableCell>
                 </TableRow>
-              ) : users.length === 0 ? (
+              ) : displayedUsers.length === 0 ? (
                 <TableRow>
                   <TableCell
                     colSpan={6}
@@ -724,7 +735,7 @@ export default function AdminUsers() {
                   </TableCell>
                 </TableRow>
               ) : (
-                users.map((u, index) => (
+                displayedUsers.map((u, index) => (
                   <TableRow
                     key={u.id}
                     className={`${index % 2 === 0 ? "bg-white dark:bg-slate-950" : "bg-slate-50/60 dark:bg-slate-900/60"} group hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-200`}
@@ -956,9 +967,12 @@ export default function AdminUsers() {
               >
                 <option value="admin">admin</option>
                 <option value="program_manager">program_manager</option>
+                <option value="program_leadership">program_leadership</option>
+                <option value="program_manager_out_of_school">program_manager_out_of_school</option>
+                <option value="program_manager_in_school">program_manager_in_school</option>
+                <option value="program_supervisor">program_supervisor</option>
                 <option value="ybf">ybf</option>
                 <option value="instructor">instructor</option>
-                <option value="enumerator">enumerator</option>
               </select>
             </div>
             {(editForm.role === "ybf" || editForm.role === "instructor") && (
@@ -977,6 +991,16 @@ export default function AdminUsers() {
                       {p.name}
                     </option>
                   ))}
+                </select>
+              </div>
+            )}
+            {editForm.role === "program_supervisor" && (
+              <div>
+                <Label>Supervisor coverage</Label>
+                <select value={editForm.assignedRegions} onChange={(e) => setEditForm({ ...editForm, assignedRegions: e.target.value })} className="w-full rounded-lg border bg-card px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring">
+                  <option value="">Select coverage</option>
+                  <option value="Central">Central</option>
+                  <option value="Eastern,Northern-Gulu,Northern-Lira">East, Gulu and Lira</option>
                 </select>
               </div>
             )}
