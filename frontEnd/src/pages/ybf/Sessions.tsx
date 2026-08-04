@@ -101,7 +101,14 @@ export default function YBFSessions() {
   const [cohorts, setCohorts] = useState<
     { id: string; label: string }[]
   >([]);
-  const calendarUrl = `${import.meta.env.VITE_API_URL || window.location.origin}/api/sessions/calendar.ics`;
+  const calendarUrl = (() => {
+    const baseUrl = `${import.meta.env.VITE_API_URL || window.location.origin}/api/sessions/calendar.ics`;
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    if (!token) return baseUrl;
+
+    const separator = baseUrl.includes("?") ? "&" : "?";
+    return `${baseUrl}${separator}token=${encodeURIComponent(token)}`;
+  })();
   const [sessionForm, setSessionForm] = useState(defaultSessionForm);
   const [sessionErrors, setSessionErrors] = useState<Record<string, string>>(
     {},

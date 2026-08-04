@@ -574,9 +574,22 @@ const ensureYbfCohortAccess = async (req, res, cohortId) => {
 };
 
 // JWT Middleware
-const authenticateToken = (req, res, next) => {
+const getBearerToken = (req) => {
   const authHeader = req.headers["authorization"];
-  const token = authHeader && authHeader.split(" ")[1];
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    return authHeader.split(" ")[1];
+  }
+
+  const queryToken = req.query?.token || req.query?.access_token;
+  if (typeof queryToken === "string" && queryToken.trim()) {
+    return queryToken;
+  }
+
+  return null;
+};
+
+const authenticateToken = (req, res, next) => {
+  const token = getBearerToken(req);
   if (!token) return res.status(401).json({ error: "Access token required" });
 
   jwt.verify(
