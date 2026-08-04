@@ -1,5 +1,6 @@
 export const MILESTONE_TYPES = [
   "Business Plan",
+  "Business Ideas",
   "CV",
   "Application Letter",
 ] as const;

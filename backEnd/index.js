@@ -2,13 +2,22 @@ const express = require("express");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
+const crypto = require("crypto");
 const ExcelJS = require("exceljs");
 const pool = require("./db");
 require("dotenv").config();
 
 const app = express();
+app.disable("x-powered-by");
 app.use(cors());
 app.use(express.json());
+app.use((req, res, next) => {
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
+  next();
+});
 
 const REGIONS = ["ITS", "Central", "Eastern", "Northern-Lira", "Northern-Gulu"];
 const INSTITUTIONAL_SESSION_TOTAL = 18;
@@ -23,6 +32,9 @@ const ensureSchema = async () => {
   );
   await pool.query(
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS assigned_to UUID`,
+  );
+  await pool.query(
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS region_scope VARCHAR(50)`,
   );
   await pool.query(
     `ALTER TABLE partner_institution ADD COLUMN IF NOT EXISTS deleted_by UUID`,
@@ -114,6 +126,16 @@ const ensureSchema = async () => {
       PRIMARY KEY (user_id, partner_institution_id)
     )
   `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      token_hash VARCHAR(255) NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
+      used_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
   // Migrate legacy single-partner YBF links into the junction table
   await pool.query(`
     INSERT INTO ybf_partner_assignment (user_id, partner_institution_id)
@@ -143,11 +165,71 @@ const normalizeUserRole = (role) => {
   const normalized = role.trim().toLowerCase().replace(/\s+/g, "_");
   if (normalized === "program_manager" || normalized === "programmanager")
     return "program_manager";
+  if (normalized === "program_leadership" || normalized === "programleadership")
+    return "program_leadership";
+  if (
+    normalized === "program_manager_out_of_school" ||
+    normalized === "programmanageroutofschool"
+  )
+    return "program_manager_out_of_school";
+  if (
+    normalized === "program_manager_in_school" ||
+    normalized === "programmanagerinschool"
+  )
+    return "program_manager_in_school";
+  if (
+    normalized === "program_supervisor" ||
+    normalized === "programsupervisor" ||
+    normalized === "program_supervisor_central" ||
+    normalized === "program_supervisor_east" ||
+    normalized === "program_supervisor_gulu" ||
+    normalized === "program_supervisor_lira"
+  )
+    return "program_supervisor";
   if (normalized === "ybf" || normalized === "youth_business_fellow")
     return "ybf";
   if (normalized === "instructor") return "instructor";
   if (normalized === "admin" || normalized === "administrator") return "admin";
   return normalized;
+};
+
+const normalizeRegionScope = (value) => {
+  if (!value || typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return null;
+  if (normalized.includes("central")) return "Central";
+  if (normalized.includes("eastern")) return "Eastern";
+  if (normalized.includes("gulu")) return "Gulu";
+  if (normalized.includes("lira")) return "Lira";
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+};
+
+const isProgramManagementRole = (role) => {
+  const normalized = String(role || "").toLowerCase();
+  return [
+    "admin",
+    "program_manager",
+    "program_leadership",
+    "program_manager_out_of_school",
+    "program_manager_in_school",
+    "program_supervisor",
+  ].includes(normalized);
+};
+
+const getUserRegionScope = (user) => {
+  if (!user) return null;
+  return normalizeRegionScope(user.region_scope || user.region || null);
+};
+
+const buildRegionScopeClause = (req, columnRef) => {
+  const role = String(req?.user?.role || "").toLowerCase();
+  if (role !== "program_supervisor") return { clause: "", value: null };
+  const scope = getUserRegionScope(req.user);
+  if (!scope) return { clause: "", value: null };
+  return {
+    clause: ` AND LOWER(${columnRef}) = LOWER($1)`,
+    value: scope,
+  };
 };
 
 const addDays = (dateStr, days) => {
@@ -509,9 +591,24 @@ const authenticateToken = (req, res, next) => {
 };
 
 // Role-based authorization middleware
+const MANAGEMENT_ROLE_ALIASES = new Set([
+  "program_manager",
+  "program_leadership",
+  "program_manager_out_of_school",
+  "program_manager_in_school",
+  "program_supervisor",
+]);
+
 const authorizeRoles = (...allowedRoles) => {
   return (req, res, next) => {
-    if (!req.user || !allowedRoles.includes(req.user.role)) {
+    const role = normalizeUserRole(req.user?.role);
+    const isAllowed =
+      Boolean(role) &&
+      (allowedRoles.includes(role) ||
+        (allowedRoles.includes("program_manager") && MANAGEMENT_ROLE_ALIASES.has(role)) ||
+        (allowedRoles.includes("admin") && role === "admin"));
+
+    if (!req.user || !isAllowed) {
       return res.status(403).json({ error: "Insufficient permissions" });
     }
     next();
@@ -522,15 +619,39 @@ const authorizeRoles = (...allowedRoles) => {
 const PERMISSIONS = {
   admin: ["read", "write", "delete", "manage_users", "system_config"],
   program_manager: ["read", "write", "approve_records"],
+  program_leadership: ["read", "write", "approve_records"],
+  program_manager_out_of_school: ["read", "write", "approve_records"],
+  program_manager_in_school: ["read", "write", "approve_records"],
+  program_supervisor: ["read", "write", "approve_records"],
   ybf: ["read_youth", "write_sessions", "write_case_notes"],
   instructor: ["read_sessions", "write_attendance"],
-  enumerator: ["read_outcomes", "write_outcomes", "read_limited"],
 };
 
 const generateRandomPassword = () => {
   const randomPart = Math.random().toString(36).slice(-8);
   const numericPart = Math.floor(100 + Math.random() * 900);
   return `${randomPart}${numericPart}`;
+};
+
+const generateResetToken = () => crypto.randomBytes(24).toString("hex");
+const hashToken = (token) =>
+  crypto.createHash("sha256").update(token).digest("hex");
+
+const createPasswordResetToken = async (userId) => {
+  const token = generateResetToken();
+  const tokenHash = hashToken(token);
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+
+  await pool.query(
+    "DELETE FROM password_reset_tokens WHERE user_id = $1",
+    [userId],
+  );
+  await pool.query(
+    "INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)",
+    [userId, tokenHash, expiresAt],
+  );
+
+  return { token, expiresAt };
 };
 
 // Auth routes
@@ -540,14 +661,14 @@ app.post(
   async (req, res) => {
     const { name, email, password, role } = req.body;
     try {
-      const normalizedRole = normalizeUserRole(role || "enumerator");
+      const normalizedRole = normalizeUserRole(role);
       const needsApproval =
         normalizedRole === "ybf" || normalizedRole === "instructor";
       const status = needsApproval ? "pending" : "active";
       const hashedPassword = await bcrypt.hash(password, 10);
       const result = await pool.query(
-        "INSERT INTO users (name, email, password_hash, role, status) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, email, role, status, assigned_to",
-        [name, email, hashedPassword, normalizedRole, status],
+        "INSERT INTO users (name, email, password_hash, role, status, region_scope) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name, email, role, status, assigned_to, region_scope",
+        [name, email, hashedPassword, normalizedRole, status, normalizedRole === "program_supervisor" ? normalizeRegionScope(req.body.region_scope || req.body.regionScope || null) : null],
       );
       const user = result.rows[0];
       const token = jwt.sign(
@@ -567,6 +688,85 @@ app.post(
       } else {
         res.status(500).json({ error: err.message });
       }
+    }
+  },
+);
+
+app.post(
+  "/api/auth/forgot-password",
+  validateRequired(["email"]),
+  async (req, res) => {
+    const { email } = req.body;
+    try {
+      const userRes = await pool.query(
+        "SELECT id FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1",
+        [email],
+      );
+
+      if (userRes.rows[0]) {
+        const { token } = await createPasswordResetToken(userRes.rows[0].id);
+        return res.json({
+          message: "If an account exists, a reset code has been generated.",
+          resetToken: token,
+        });
+      }
+
+      return res.json({
+        message: "If an account exists, a reset code has been generated.",
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  },
+);
+
+app.post(
+  "/api/auth/reset-password",
+  validateRequired(["email", "token", "password"]),
+  async (req, res) => {
+    const { email, token, password } = req.body;
+    try {
+      if (!password || String(password).length < 8) {
+        return res.status(400).json({ error: "Password must be at least 8 characters." });
+      }
+
+      const userRes = await pool.query(
+        "SELECT id FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1",
+        [email],
+      );
+      if (!userRes.rows[0]) {
+        return res.status(400).json({ error: "User not found" });
+      }
+
+      const tokenHash = hashToken(token);
+      const resetRes = await pool.query(
+        `SELECT id, expires_at
+         FROM password_reset_tokens
+         WHERE user_id = $1
+           AND token_hash = $2
+           AND used_at IS NULL
+           AND expires_at > NOW()
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [userRes.rows[0].id, tokenHash],
+      );
+
+      if (!resetRes.rows[0]) {
+        return res.status(400).json({ error: "Reset code is invalid or expired" });
+      }
+
+      const hashedPassword = await bcrypt.hash(password, 10);
+      await pool.query("UPDATE users SET password_hash = $1 WHERE id = $2", [
+        hashedPassword,
+        userRes.rows[0].id,
+      ]);
+      await pool.query("UPDATE password_reset_tokens SET used_at = NOW() WHERE id = $1", [
+        resetRes.rows[0].id,
+      ]);
+
+      res.json({ message: "Password updated successfully" });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
     }
   },
 );
@@ -605,6 +805,7 @@ app.post(
           role: user.role,
           status: user.status || "active",
           assigned_to: user.assigned_to || null,
+          region_scope: user.region_scope || null,
           pendingApproval: isPendingApproval(user),
         },
         token,
@@ -624,7 +825,7 @@ app.get("/api/auth/me", authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT u.id, u.name, u.email, u.role, COALESCE(u.status, 'active') AS status,
-              u.assigned_to, p.name AS assigned_partner_name
+              u.assigned_to, u.region_scope, p.name AS assigned_partner_name
        FROM users u
        LEFT JOIN partner_institution p ON p.id = u.assigned_to
        WHERE u.id = $1`,
@@ -855,11 +1056,13 @@ app.get("/api/dashboard", authenticateToken, async (req, res) => {
     if (isYbf) {
       const progress = {
         businessPlan: { completed: 0, inProgress: 0, notStarted: 0 },
+        businessIdeas: { completed: 0, inProgress: 0, notStarted: 0 },
         cv: { completed: 0, inProgress: 0, notStarted: 0 },
         applicationLetter: { completed: 0, inProgress: 0, notStarted: 0 },
       };
       const typeMap = {
         "Business Plan": "businessPlan",
+        "Business Ideas": "businessIdeas",
         CV: "cv",
         "Application Letter": "applicationLetter",
         "Cover Letter": "applicationLetter",
@@ -1253,6 +1456,139 @@ app.get(
       res.send(Buffer.from(buffer));
     } catch (err) {
       console.error("Export error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  },
+);
+
+app.post(
+  "/api/import/kobo",
+  authenticateToken,
+  authorizeRoles("admin"),
+  async (req, res) => {
+    try {
+      const { resource = "youth", records } = req.body;
+      if (!Array.isArray(records)) {
+        return res.status(400).json({ error: "Expected a records array" });
+      }
+
+      if (resource !== "youth") {
+        return res.status(400).json({ error: "Only youth imports are supported for now" });
+      }
+
+      let imported = 0;
+      let skipped = 0;
+      for (const row of records) {
+        const fullName = row.full_name || row.fullName || row.name || row["full_name"] || null;
+        if (!fullName) {
+          skipped += 1;
+          continue;
+        }
+
+        const partnerName = row.partner_name || row.partnerName || row.partner || row.institution || null;
+        let partnerId = null;
+        if (partnerName) {
+          const partnerRes = await pool.query(
+            "SELECT id FROM partner_institution WHERE LOWER(name) = LOWER($1) LIMIT 1",
+            [String(partnerName)],
+          );
+          partnerId = partnerRes.rows[0]?.id || null;
+        }
+
+        const cohortValue = row.cohort_id || row.cohortId || row.cohort || null;
+        let cohortId = null;
+        if (cohortValue) {
+          const cohortRes = await pool.query(
+            "SELECT id FROM cohort WHERE id = $1 LIMIT 1",
+            [String(cohortValue)],
+          );
+          cohortId = cohortRes.rows[0]?.id || null;
+        }
+
+        await pool.query(
+          `INSERT INTO youth (full_name, gender, district, date_of_birth, program_type, partner_institution_id, cohort_id, region)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [
+            String(fullName),
+            row.gender || null,
+            row.district || row.district_of_residence || null,
+            row.date_of_birth || row.dob || null,
+            row.program_type || row.programType || null,
+            partnerId,
+            cohortId,
+            row.region || null,
+          ],
+        );
+        imported += 1;
+      }
+
+      res.json({ imported, skipped, resource });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  },
+);
+
+app.get(
+  "/api/sessions/calendar.ics",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      let sessionRows = [];
+      const baseQuery = `
+        SELECT s.id, s.topic, s.session_date, s.venue, s.term_number, s.session_number, p.name AS partner_name
+        FROM session s
+        LEFT JOIN cohort c ON c.id = s.cohort_id
+        LEFT JOIN partner_institution p ON p.id = c.partner_institution_id
+      `;
+
+      if (req.user?.role === "ybf") {
+        const allowed = await getUserCohorts(req.user.id);
+        if (!allowed || allowed.length === 0) {
+          return res.type("text/calendar").send("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Wezesha//Calendar//EN\r\nEND:VCALENDAR");
+        }
+        sessionRows = (
+          await pool.query(`${baseQuery} WHERE s.cohort_id = ANY($1) ORDER BY s.session_date ASC`, [allowed])
+        ).rows;
+      } else if (req.user?.role === "instructor") {
+        const partnerIds = await getInstructorPartnerIds(req.user.id);
+        if (!partnerIds.length) {
+          return res.type("text/calendar").send("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Wezesha//Calendar//EN\r\nEND:VCALENDAR");
+        }
+        sessionRows = (
+          await pool.query(`${baseQuery} WHERE c.partner_institution_id = ANY($1) ORDER BY s.session_date ASC`, [partnerIds])
+        ).rows;
+      } else {
+        sessionRows = (await pool.query(`${baseQuery} ORDER BY s.session_date ASC`)).rows;
+      }
+
+      const lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//Wezesha//Session Calendar//EN",
+        "CALSCALE:GREGORIAN",
+      ];
+
+      sessionRows.forEach((session) => {
+        const dtStart = String(session.session_date || "").slice(0, 10).replace(/-/g, "");
+        const summary = `${session.topic || "Session"} (${session.partner_name || "Wezesha"})`;
+        const location = session.venue || "TBD";
+        const description = `Term ${session.term_number || 1}, Session ${session.session_number || 1}`;
+        lines.push("BEGIN:VEVENT");
+        lines.push(`UID:${session.id}@wezesha`);
+        lines.push(`DTSTAMP:${new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z")}`);
+        lines.push(`DTSTART;VALUE=DATE:${dtStart}`);
+        lines.push(`SUMMARY:${summary}`);
+        lines.push(`LOCATION:${location}`);
+        lines.push(`DESCRIPTION:${description}`);
+        lines.push("END:VEVENT");
+      });
+
+      lines.push("END:VCALENDAR");
+      res.setHeader("Content-Type", "text/calendar; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="wezesha-sessions-${req.user.id}.ics"`);
+      res.send(lines.join("\r\n"));
+    } catch (err) {
       res.status(500).json({ error: err.message });
     }
   },
@@ -2716,7 +3052,7 @@ app.get(
         where = `WHERE name ILIKE $${params.length - 1} OR email ILIKE $${params.length}`;
       }
 
-      const dataQuery = `SELECT id, name, email, role, COALESCE(status, 'active') AS status, assigned_to, created_at FROM users ${where} ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+      const dataQuery = `SELECT id, name, email, role, COALESCE(status, 'active') AS status, assigned_to, region_scope, created_at FROM users ${where} ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
       params.push(lim, offset);
 
       const result = await pool.query(dataQuery, params);
@@ -2742,7 +3078,7 @@ app.put(
   authorizeRoles("admin", "program_manager"),
   async (req, res) => {
     const { id } = req.params;
-    const { name, email, role, status, assigned_to, assignedTo } = req.body;
+    const { name, email, role, status, assigned_to, assignedTo, region_scope, regionScope } = req.body;
     try {
       if (status && !USER_STATUSES.includes(status)) {
         return res.status(400).json({
@@ -2750,19 +3086,22 @@ app.put(
         });
       }
       const partnerId = assigned_to || assignedTo || null;
+      const normalizedRegionScope = region_scope || regionScope || null;
       const result = await pool.query(
         `UPDATE users
        SET name = COALESCE($1, name), email = COALESCE($2, email), role = COALESCE($3, role),
            status = COALESCE($4, status),
            assigned_to = COALESCE($5, assigned_to),
+           region_scope = COALESCE($6, region_scope),
            updated_at = NOW()
-       WHERE id = $6 RETURNING id, name, email, role, COALESCE(status, 'active') AS status, assigned_to`,
+       WHERE id = $7 RETURNING id, name, email, role, COALESCE(status, 'active') AS status, assigned_to, region_scope`,
         [
           name,
           email,
           role ? normalizeUserRole(role) : null,
           status || null,
           partnerId,
+          normalizedRegionScope ? normalizeRegionScope(normalizedRegionScope) : null,
           id,
         ],
       );

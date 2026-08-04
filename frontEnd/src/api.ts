@@ -14,6 +14,26 @@ const normalizeRole = (role: string | undefined | null) => {
   const normalized = role.toString().trim().toLowerCase();
   if (normalized === "program manager" || normalized === "program_manager")
     return "program_manager";
+  if (
+    normalized === "program_leadership" ||
+    normalized === "program leadership"
+  )
+    return "program_leadership";
+  if (
+    normalized === "program_manager_out_of_school" ||
+    normalized === "program manager out of school"
+  )
+    return "program_manager_out_of_school";
+  if (
+    normalized === "program_manager_in_school" ||
+    normalized === "program manager in school"
+  )
+    return "program_manager_in_school";
+  if (
+    normalized === "program_supervisor" ||
+    normalized === "program supervisor"
+  )
+    return "program_supervisor";
   if (normalized === "ybf") return "ybf";
   if (normalized === "instructor") return "instructor";
   if (normalized === "enumerator") return "enumerator";
@@ -90,6 +110,12 @@ export const logout = () => {
   localStorage.removeItem("token");
   localStorage.removeItem("user");
 };
+
+export const requestPasswordReset = (email: string) =>
+  post("/auth/forgot-password", { email });
+
+export const resetPassword = (email: string, token: string, password: string) =>
+  post("/auth/reset-password", { email, token, password });
 
 export const getCurrentUser = () => {
   const user = localStorage.getItem("user");
@@ -230,7 +256,8 @@ export const createUser = (
   email: string,
   password: string,
   role: string,
-) => post("/auth/register", { name, email, password, role });
+  regionScope?: string,
+) => post("/auth/register", { name, email, password, role, region_scope: regionScope });
 export const updateUser = (id: string, data: object) =>
   fetch(`${BASE_URL}/users/${id}`, {
     method: "PUT",
@@ -252,6 +279,9 @@ export const updateUserStatus = (
     headers: getAuthHeaders(),
     body: JSON.stringify({ status }),
   }).then(handleResponse);
+
+export const importKoboData = (resource: string, records: any[]) =>
+  post("/import/kobo", { resource, records });
 
 export const downloadExport = (resource: string = "all") =>
   fetch(`${BASE_URL}/export?resource=${encodeURIComponent(resource)}`, {

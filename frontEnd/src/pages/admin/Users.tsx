@@ -33,6 +33,23 @@ import { useToast } from "@/hooks/use-toast";
 
 type UserStatus = "active" | "inactive" | "blocked" | "pending";
 
+const roleLabelMap: Record<string, string> = {
+  admin: "Admin",
+  program_manager: "Program Manager",
+  program_leadership: "Program Leadership",
+  program_manager_out_of_school: "Program Manager (Out of School)",
+  program_manager_in_school: "Program Manager (In School)",
+  program_supervisor: "Program Supervisor",
+  ybf: "YBF",
+  instructor: "Instructor",
+  enumerator: "Enumerator",
+};
+
+const getRoleLabel = (role?: string) => {
+  const value = String(role || "").toLowerCase();
+  return roleLabelMap[value] || role || "Unknown";
+};
+
 const statusBadge = (status: UserStatus) => {
   if (status === "pending") {
     return (
@@ -74,6 +91,7 @@ export default function AdminUsers() {
     email: "",
     password: "",
     role: "enumerator",
+    regionScope: "",
   });
   const [formError, setFormError] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
@@ -84,6 +102,7 @@ export default function AdminUsers() {
     password: "",
     role: "enumerator",
     assignedTo: "",
+    regionScope: "",
     status: "active" as UserStatus,
   });
   const [editError, setEditError] = useState<string | null>(null);
@@ -179,12 +198,19 @@ export default function AdminUsers() {
         form.email,
         form.password,
         form.role,
+        form.regionScope || undefined,
       );
       const user = created.user || created;
       if (page === 1) setUsers([user, ...users]);
       else setPage(1);
       setCreateOpen(false);
-      setForm({ name: "", email: "", password: "", role: "enumerator" });
+      setForm({
+        name: "",
+        email: "",
+        password: "",
+        role: "enumerator",
+        regionScope: "",
+      });
       toast({ title: "User created", description: `${user.email} created` });
     } catch (err: any) {
       setFormError(err?.message || "Failed to create user");
@@ -253,6 +279,7 @@ export default function AdminUsers() {
       password: "",
       role: u.role || "enumerator",
       assignedTo: u.assigned_to ? String(u.assigned_to) : "",
+      regionScope: u.region_scope || "",
       status: (u.status || "active") as UserStatus,
     });
     setEditError(null);
@@ -352,6 +379,9 @@ export default function AdminUsers() {
       };
       if (editForm.assignedTo) payload.assigned_to = editForm.assignedTo;
       if (editForm.password) payload.password = editForm.password;
+      if (editForm.role === "program_supervisor") {
+        payload.region_scope = editForm.regionScope || null;
+      }
       const updated = await updateUser(String(editingUser.id), payload);
       setUsers(
         users.map((u) =>
@@ -374,9 +404,12 @@ export default function AdminUsers() {
   const usersCount = totalCount || users.length;
   const adminCount = users.filter((u) => u.role === "admin").length;
   const managerCount = users.filter((u) => u.role === "program_manager").length;
+  const leadershipCount = users.filter((u) => u.role === "program_leadership").length;
+  const outOfSchoolCount = users.filter((u) => u.role === "program_manager_out_of_school").length;
+  const inSchoolCount = users.filter((u) => u.role === "program_manager_in_school").length;
+  const supervisorCount = users.filter((u) => u.role === "program_supervisor").length;
   const ybfCount = users.filter((u) => u.role === "ybf").length;
   const instructorCount = users.filter((u) => u.role === "instructor").length;
-  const enumeratorCount = users.filter((u) => u.role === "enumerator").length;
   const activeCount = users.filter(
     (u) => (u.status || "active") === "active",
   ).length;
@@ -391,18 +424,36 @@ export default function AdminUsers() {
       count: managerCount,
       color: "bg-emerald-500",
     },
-    { role: "ybf", label: "YBF", count: ybfCount, color: "bg-fuchsia-500" },
+    {
+      role: "program_leadership",
+      label: "Program Leadership",
+      count: leadershipCount,
+      color: "bg-cyan-500",
+    },
+    {
+      role: "program_manager_out_of_school",
+      label: "Program Managers (Out of School)",
+      count: outOfSchoolCount,
+      color: "bg-teal-500",
+    },
+    {
+      role: "program_manager_in_school",
+      label: "Program Managers (In School)",
+      count: inSchoolCount,
+      color: "bg-green-500",
+    },
+    {
+      role: "program_supervisor",
+      label: "Program Supervisors",
+      count: supervisorCount,
+      color: "bg-lime-500",
+    },
+    { role: "ybf", label: "YBFs", count: ybfCount, color: "bg-fuchsia-500" },
     {
       role: "instructor",
       label: "Instructors",
       count: instructorCount,
       color: "bg-violet-500",
-    },
-    {
-      role: "enumerator",
-      label: "Enumerators",
-      count: enumeratorCount,
-      color: "bg-slate-500",
     },
   ];
 
@@ -426,9 +477,10 @@ export default function AdminUsers() {
 
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
-            <Button 
-            style={{backgroundColor:"hsl(152, 55%, 33%)"}}
-            className="hover:from-violet-700 hover:to-indigo-700 shadow-lg  text-white px-6 py-2.5 text-base font-medium transition-all hover:scale-105 active:scale-95">
+            <Button
+              style={{ backgroundColor: "hsl(152, 55%, 33%)" }}
+              className="hover:from-violet-700 hover:to-indigo-700 shadow-lg  text-white px-6 py-2.5 text-base font-medium transition-all hover:scale-105 active:scale-95"
+            >
               + Create User
             </Button>
           </DialogTrigger>
@@ -487,13 +539,38 @@ export default function AdminUsers() {
                   onChange={(e) => setForm({ ...form, role: e.target.value })}
                   className="w-full rounded-lg border bg-card px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
                 >
-                  <option value="admin">admin</option>
-                  <option value="program_manager">program_manager</option>
-                  <option value="ybf">ybf</option>
-                  <option value="instructor">instructor</option>
-                  <option value="enumerator">enumerator</option>
+                  <option value="admin">Admin</option>
+                  <option value="program_manager">Program Manager</option>
+                  <option value="program_leadership">Program Leadership</option>
+                  <option value="program_manager_out_of_school">
+                    Program Manager (Out of School)
+                  </option>
+                  <option value="program_manager_in_school">
+                    Program Manager (In School)
+                  </option>
+                  <option value="program_supervisor">Program Supervisor</option>
+                  <option value="ybf">YBF</option>
+                  <option value="instructor">Instructor</option>
                 </select>
               </div>
+              {form.role === "program_supervisor" && (
+                <div>
+                  <Label>Region Scope</Label>
+                  <select
+                    value={form.regionScope}
+                    onChange={(e) =>
+                      setForm({ ...form, regionScope: e.target.value })
+                    }
+                    className="w-full rounded-lg border bg-card px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">Select region</option>
+                    <option value="Central">Central</option>
+                    <option value="Eastern">Eastern</option>
+                    <option value="Gulu">Gulu</option>
+                    <option value="Lira">Lira</option>
+                  </select>
+                </div>
+              )}
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setCreateOpen(false)}>
                   Cancel
@@ -737,7 +814,7 @@ export default function AdminUsers() {
                     </TableCell>
                     <TableCell className="py-4">
                       <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
-                        {u.role}
+                        {getRoleLabel(u.role)}
                       </span>
                     </TableCell>
                     <TableCell className="py-4">
@@ -954,13 +1031,38 @@ export default function AdminUsers() {
                 }
                 className="w-full rounded-lg border bg-card px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
               >
-                <option value="admin">admin</option>
-                <option value="program_manager">program_manager</option>
-                <option value="ybf">ybf</option>
-                <option value="instructor">instructor</option>
-                <option value="enumerator">enumerator</option>
+                <option value="admin">Admin</option>
+                <option value="program_manager">Program Manager</option>
+                <option value="program_leadership">Program Leadership</option>
+                <option value="program_manager_out_of_school">
+                  Program Manager (Out of School)
+                </option>
+                <option value="program_manager_in_school">
+                  Program Manager (In School)
+                </option>
+                <option value="program_supervisor">Program Supervisor</option>
+                <option value="ybf">YBF</option>
+                <option value="instructor">Instructor</option>
               </select>
             </div>
+            {editForm.role === "program_supervisor" && (
+              <div>
+                <Label>Region Scope</Label>
+                <select
+                  value={editForm.regionScope}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, regionScope: e.target.value })
+                  }
+                  className="w-full rounded-lg border bg-card px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="">Select region</option>
+                  <option value="Central">Central</option>
+                  <option value="Eastern">Eastern</option>
+                  <option value="Gulu">Gulu</option>
+                  <option value="Lira">Lira</option>
+                </select>
+              </div>
+            )}
             {(editForm.role === "ybf" || editForm.role === "instructor") && (
               <div>
                 <Label>Assigned Institution</Label>

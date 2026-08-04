@@ -45,6 +45,7 @@ type DashboardData = {
   avgAttendance: number | null;
   outputProgress?: {
     businessPlan: OutputProgress;
+    businessIdeas: OutputProgress;
     cv: OutputProgress;
     applicationLetter: OutputProgress;
   };
@@ -90,6 +91,7 @@ export default function YBFDashboard() {
 
   const output = dashboard.outputProgress || {
     businessPlan: { completed: 0, inProgress: 0, notStarted: 0 },
+    businessIdeas: { completed: 0, inProgress: 0, notStarted: 0 },
     cv: { completed: 0, inProgress: 0, notStarted: 0 },
     applicationLetter: { completed: 0, inProgress: 0, notStarted: 0 },
   };
@@ -101,8 +103,9 @@ export default function YBFDashboard() {
 
   const outputItems = [
     { label: "Business Plans", key: output.businessPlan, icon: ClipboardList },
+    { label: "Business Ideas", key: output.businessIdeas, icon: TrendingUp },
     { label: "CVs", key: output.cv, icon: CheckCircle2 },
-    { label: "Cover Letters", key: output.applicationLetter, icon: TrendingUp },
+    { label: "Application Letters", key: output.applicationLetter, icon: TrendingUp },
   ];
 
   return (

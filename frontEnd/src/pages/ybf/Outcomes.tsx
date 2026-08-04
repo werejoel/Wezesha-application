@@ -54,6 +54,7 @@ type YouthMilestones = {
 
 const MILESTONE_TYPE_ALIASES: Record<string, MilestoneType> = {
   "Business Plan": "Business Plan",
+  "Business Ideas": "Business Ideas",
   CV: "CV",
   "Application Letter": "Application Letter",
   "Cover Letter": "Application Letter",
@@ -73,6 +74,7 @@ const defaultMilestones = (): Record<
   { status: MilestoneStatus }
 > => ({
   "Business Plan": { status: "Not Started" },
+  "Business Ideas": { status: "Not Started" },
   CV: { status: "Not Started" },
   "Application Letter": { status: "Not Started" },
 });
@@ -85,6 +87,11 @@ const MILESTONE_META: Record<
     color: "text-emerald-700",
     bar: "bg-emerald-500",
     badge: "bg-emerald-100 text-emerald-800 border-emerald-200",
+  },
+  "Business Ideas": {
+    color: "text-cyan-700",
+    bar: "bg-cyan-500",
+    badge: "bg-cyan-100 text-cyan-800 border-cyan-200",
   },
   CV: {
     color: "text-sky-700",
@@ -184,6 +191,7 @@ export default function YBFOutcomes() {
       { completed: number; inProgress: number; notStarted: number }
     > = {
       "Business Plan": { completed: 0, inProgress: 0, notStarted: 0 },
+      "Business Ideas": { completed: 0, inProgress: 0, notStarted: 0 },
       CV: { completed: 0, inProgress: 0, notStarted: 0 },
       "Application Letter": { completed: 0, inProgress: 0, notStarted: 0 },
     };

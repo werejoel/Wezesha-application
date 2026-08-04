@@ -254,15 +254,23 @@ const Login = () => {
             if you need an account.
           </p>
 
-          <p className="text-center text-sm text-gray-500">
-            No account?{" "}
+          <div className="flex items-center justify-between text-sm text-gray-500">
             <Link
-              to="/register"
+              to="/forgot-password"
               className="font-semibold text-emerald-700 hover:text-emerald-600 underline underline-offset-2 transition-colors"
             >
-              Register here
+              Forgot password?
             </Link>
-          </p>
+            <span>
+              No account?{" "}
+              <Link
+                to="/register"
+                className="font-semibold text-emerald-700 hover:text-emerald-600 underline underline-offset-2 transition-colors"
+              >
+                Register here
+              </Link>
+            </span>
+          </div>
         </div>
       </div>
     </div>

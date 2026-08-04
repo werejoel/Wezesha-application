@@ -36,9 +36,9 @@ const reportCategories = [
     id: "output",
     title: "Output Completion Report",
     description:
-      "Track business plan, CV, and cover letter progress across output milestones.",
+      "Track business plans, business ideas, CVs, and application letters across output milestones.",
     icon: FileText,
-    filters: ["all", "Business Plan", "CV", "Application Letter"],
+    filters: ["all", "Business Plan", "Business Ideas", "CV", "Application Letter"],
   },
   {
     id: "enrollment",
@@ -67,8 +67,9 @@ const reportFilterLabels: Record<string, Record<string, string>> = {
   output: {
     all: "All Milestones",
     "Business Plan": "Business Plan",
+    "Business Ideas": "Business Ideas",
     CV: "CV",
-    "Application Letter": "Cover Letter",
+    "Application Letter": "Application Letter",
   },
   enrollment: {
     all: "All Youth",

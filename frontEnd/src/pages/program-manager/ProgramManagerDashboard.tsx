@@ -201,10 +201,6 @@ const ProgramManagerDashboard = () => {
       name: "Instructor",
       value: partners?.filter((p) => p.role === "Instructor").length || 0,
     },
-    {
-      name: "Enumerator",
-      value: partners?.filter((p) => p.role === "Enumerator").length || 0,
-    },
   ];
 
   const systemUsers = partners?.length + youth?.length || 0;
@@ -246,7 +242,7 @@ const ProgramManagerDashboard = () => {
       {/* ── Header ── */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">
+          <h1 style={{color:"hsl(152, 55%, 33%)"}} className="text-3xl font-bold text-gray-900">
             Program Manager Dashboard
           </h1>
           <p className="text-gray-600 mt-1">

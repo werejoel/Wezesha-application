@@ -467,11 +467,6 @@ export default function AdminDashboard() {
       value: users.filter((u: any) => u.role?.toLowerCase() === "instructor")
         .length,
     },
-    {
-      name: "Enumerator",
-      value: users.filter((u: any) => u.role?.toLowerCase() === "enumerator")
-        .length,
-    },
   ];
 
   const enrollMap = new Map<string, { month: string; count: number }>();
@@ -1433,7 +1428,6 @@ export default function AdminDashboard() {
                       <option value="program_manager">Program Manager</option>
                       <option value="ybf">YBF</option>
                       <option value="instructor">Instructor</option>
-                      <option value="enumerator">Enumerator</option>
                     </select>
                     <Button
                       type="submit"
@@ -1477,8 +1471,7 @@ export default function AdminDashboard() {
                       <option value="admin">Admin</option>
                       <option value="program_manager">Program Manager</option>
                       <option value="ybf">YBF</option>
-                      <option value="instructor">Instructor</option>
-                      <option value="enumerator">Enumerator</option>
+                      <option value="instructor">Instructor</option>  
                     </select>
                   </div>
                   <div className="flex items-center gap-2 mt-3">
@@ -1526,7 +1519,7 @@ export default function AdminDashboard() {
                       <option value={10}>10</option>
                       <option value={25}>25</option>
                     </select>
-                  </div>
+                  </div>   
                   <Button onClick={handleChangeUserRole} className="h-10">
                     Save Role
                   </Button>
@@ -1584,7 +1577,10 @@ export default function AdminDashboard() {
                   </p>
                   <div className="flex flex-wrap gap-2">
                     <Button
-                    style={{ backgroundColor: "hsl(152, 55%, 33%)", color: "white" }}
+                      style={{
+                        backgroundColor: "hsl(152, 55%, 33%)",
+                        color: "white",
+                      }}
                       variant="default"
                       className="h-10 bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm shadow-emerald-200"
                       onClick={() => downloadExportFile("youth", "youth.xlsx")}
@@ -1592,7 +1588,10 @@ export default function AdminDashboard() {
                       Export Youth
                     </Button>
                     <Button
-                    style={{ backgroundColor: "hsl(152, 55%, 33%)", color: "hsl(152, 55%, 33%)" }}
+                      style={{
+                        backgroundColor: "hsl(152, 55%, 33%)",
+                        color: "hsl(152, 55%, 33%)",
+                      }}
                       variant="default"
                       className="h-10 bg-orange-500 text-white hover:bg-orange-600 shadow-sm shadow-orange-200"
                       onClick={() =>
@@ -1602,7 +1601,10 @@ export default function AdminDashboard() {
                       Export Partners
                     </Button>
                     <Button
-                    style={{ backgroundColor: "hsl(152, 55%, 33%)", color: "white" }}
+                      style={{
+                        backgroundColor: "hsl(152, 55%, 33%)",
+                        color: "white",
+                      }}
                       variant="default"
                       className="h-10 bg-violet-600 text-white hover:bg-violet-700 shadow-sm shadow-violet-200"
                       onClick={() =>
@@ -1612,7 +1614,10 @@ export default function AdminDashboard() {
                       Export Sessions
                     </Button>
                     <Button
-                    style={{ backgroundColor: "hsl(152, 55%, 33%)", color: "white" }}
+                      style={{
+                        backgroundColor: "hsl(152, 55%, 33%)",
+                        color: "white",
+                      }}
                       variant="default"
                       className="h-10  text-white hover:bg-sky-700 shadow-sm shadow-sky-200"
                       onClick={() =>
