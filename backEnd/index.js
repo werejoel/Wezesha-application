@@ -153,6 +153,33 @@ const ensureSchema = async () => {
     UPDATE partner_institution SET region = location
     WHERE region IS NULL AND location IS NOT NULL AND location <> ''
   `);
+
+  const outputMilestoneTable = await pool.query(
+    `SELECT to_regclass('public.output_milestone') AS table_name`,
+  );
+  if (outputMilestoneTable.rows[0]?.table_name) {
+    await pool.query(
+      `ALTER TABLE output_milestone DROP CONSTRAINT IF EXISTS output_milestone_milestone_type_check`,
+    );
+    // Normalize legacy labels before recreating the constraint.
+    await pool.query(`
+      DELETE FROM output_milestone om
+      USING output_milestone om2
+      WHERE om.youth_id = om2.youth_id
+        AND om.milestone_type = 'Application Letter'
+        AND om2.milestone_type = 'Business Ideas'
+    `);
+    await pool.query(
+      `UPDATE output_milestone
+       SET milestone_type = 'Business Ideas'
+       WHERE milestone_type = 'Application Letter'`,
+    );
+    await pool.query(
+      `ALTER TABLE output_milestone
+       ADD CONSTRAINT output_milestone_milestone_type_check
+       CHECK (milestone_type IN ('Business Plan', 'Business Ideas', 'CV'))`,
+    );
+  }
 };
 ensureSchema().catch((err) =>
   console.error("Schema bootstrap failed:", err.message),
@@ -229,6 +256,47 @@ const buildRegionScopeClause = (req, columnRef) => {
   return {
     clause: ` AND LOWER(${columnRef}) = LOWER($1)`,
     value: scope,
+  };
+};
+
+const buildProgramTypeClause = (req, columnRef) => {
+  const role = String(req?.user?.role || "").toLowerCase();
+  if (role === "program_manager_out_of_school") {
+    return { clause: ` AND LOWER(${columnRef}) = LOWER($1)`, value: "Out-of-school" };
+  }
+  if (role === "program_manager_in_school") {
+    return { clause: ` AND LOWER(${columnRef}) = LOWER($1)`, value: "In-school" };
+  }
+  return { clause: "", value: null };
+};
+
+const getScopeFilters = (
+  req,
+  programTypeColumn,
+  regionColumn,
+  startIndex = 1,
+) => {
+  const filters = [];
+  const values = [];
+  const addFilter = (clause, value) => {
+    values.push(value);
+    const placeholderIndex = values.length + startIndex - 1;
+    filters.push(clause.replace("$1", `$${placeholderIndex}`));
+  };
+
+  const programTypeFilter = buildProgramTypeClause(req, programTypeColumn);
+  if (programTypeFilter.value) {
+    addFilter(programTypeFilter.clause, programTypeFilter.value);
+  }
+
+  const regionFilter = buildRegionScopeClause(req, regionColumn);
+  if (regionFilter.value) {
+    addFilter(regionFilter.clause, regionFilter.value);
+  }
+
+  return {
+    clause: filters.join(""),
+    values,
   };
 };
 
@@ -667,6 +735,132 @@ const createPasswordResetToken = async (userId) => {
   return { token, expiresAt };
 };
 
+const normalizeKoboKey = (value) =>
+  String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+
+const flattenKoboValue = (value, prefix = "") => {
+  if (value === null || value === undefined) return {};
+  if (Array.isArray(value)) {
+    return value.reduce((acc, item, index) => ({
+      ...acc,
+      ...flattenKoboValue(item, `${prefix}[${index}]`),
+    }), {});
+  }
+  if (typeof value === "object") {
+    return Object.entries(value).reduce((acc, [key, item]) => ({
+      ...acc,
+      ...flattenKoboValue(item, prefix ? `${prefix}/${key}` : key),
+    }), {});
+  }
+  return { [prefix]: value };
+};
+
+const extractKoboRecords = (payload) => {
+  if (Array.isArray(payload)) return payload;
+  if (!payload || typeof payload !== "object") return [];
+
+  if (Array.isArray(payload.results)) return payload.results;
+  if (Array.isArray(payload.data)) return payload.data;
+  if (Array.isArray(payload.records)) return payload.records;
+  if (Array.isArray(payload.rows)) return payload.rows;
+  if (Array.isArray(payload.items)) return payload.items;
+  if (Array.isArray(payload.value)) return payload.value;
+  if (Array.isArray(payload.objects)) return payload.objects;
+  if (payload.response && Array.isArray(payload.response.results)) {
+    return payload.response.results;
+  }
+  return [payload];
+};
+
+const normalizeKoboRecord = (row) => {
+  const flattened = Object.entries(flattenKoboValue(row)).reduce((acc, [key, value]) => {
+    acc[normalizeKoboKey(key)] = value;
+    return acc;
+  }, {});
+
+  const pickValue = (aliases) => {
+    for (const alias of aliases) {
+      const aliasKey = normalizeKoboKey(alias);
+      if (flattened[aliasKey] !== undefined && flattened[aliasKey] !== null) {
+        const value = flattened[aliasKey];
+        if (typeof value === "string") {
+          const trimmed = value.trim();
+          if (trimmed) return trimmed;
+        } else if (value !== "") {
+          return value;
+        }
+      }
+    }
+    return null;
+  };
+
+  return {
+    full_name: pickValue([
+      "full_name",
+      "fullname",
+      "name",
+      "respondent_name",
+      "person_name",
+      "respondent",
+      "youth_name",
+    ]),
+    email: pickValue(["email", "email_address", "emailaddress"]),
+    phone: pickValue(["phone", "phone_number", "phonenumber", "mobile", "telephone"]),
+    gender: pickValue(["gender", "sex"]),
+    district: pickValue([
+      "district",
+      "district_of_residence",
+      "districtname",
+      "residence_district",
+      "location",
+    ]),
+    partner_name: pickValue([
+      "partner_name",
+      "partnername",
+      "partner",
+      "institution",
+      "partner_institution",
+      "organization",
+      "organisation",
+      "partner_institution_name",
+    ]),
+    cohort_id: pickValue(["cohort_id", "cohortid", "cohort", "cohort_name", "cohortname"]),
+    program_type: pickValue(["program_type", "programtype", "program"]),
+    region: pickValue(["region", "region_name", "regionname"]),
+    youth_code: pickValue(["youth_code", "youthcode", "code"]),
+  };
+};
+
+const fetchKoboRecords = async (source) => {
+  const baseUrl = source?.apiUrl || source?.url || process.env.KOBO_API_URL || "https://kf.kobotoolbox.org";
+  const token = source?.token || process.env.KOBO_API_TOKEN;
+  const formId = source?.formId || source?.assetUid || source?.form_id;
+
+  let endpoint = source?.url || source?.endpoint || null;
+  if (!endpoint) {
+    if (!formId) {
+      throw new Error("Provide a Kobo form ID or a Kobo API URL.");
+    }
+    const normalizedBase = String(baseUrl).replace(/\/+$/, "");
+    endpoint = `${normalizedBase}/api/v2/assets/${encodeURIComponent(formId)}/data/`;
+  }
+
+  const headers = { Accept: "application/json" };
+  if (token) {
+    headers.Authorization = token.startsWith("Token ") ? token : `Token ${token}`;
+  }
+
+  const response = await fetch(endpoint, { headers });
+  if (!response.ok) {
+    throw new Error(`Kobo request failed with status ${response.status}`);
+  }
+
+  const payload = await response.json();
+  return extractKoboRecords(payload);
+};
+
 // Auth routes
 app.post(
   "/api/auth/register",
@@ -862,6 +1056,9 @@ app.get("/api/dashboard", authenticateToken, async (req, res) => {
   try {
     const isYbf = req.user && req.user.role === "ybf";
     const allowedCohorts = isYbf ? await getUserCohorts(req.user.id) : null;
+    const scope = isYbf
+      ? { clause: "", values: [] }
+      : getScopeFilters(req, "y.program_type", "COALESCE(y.region, p.region)");
 
     if (isYbf && (!allowedCohorts || allowedCohorts.length === 0)) {
       return res.json({
@@ -876,8 +1073,8 @@ app.get("/api/dashboard", authenticateToken, async (req, res) => {
         avgAttendance: null,
         outputProgress: {
           businessPlan: { completed: 0, inProgress: 0, notStarted: 0 },
+          businessIdeas: { completed: 0, inProgress: 0, notStarted: 0 },
           cv: { completed: 0, inProgress: 0, notStarted: 0 },
-          applicationLetter: { completed: 0, inProgress: 0, notStarted: 0 },
         },
         sessionAttendance: [],
         cohorts: [],
@@ -886,9 +1083,9 @@ app.get("/api/dashboard", authenticateToken, async (req, res) => {
     }
 
     const cohortFilter = isYbf ? "AND y.cohort_id = ANY($1)" : "";
-    const sessionCohortFilter = isYbf ? "WHERE s.cohort_id = ANY($1)" : "";
-    const caseCohortFilter = isYbf ? "WHERE y.cohort_id = ANY($1)" : "";
-    const params = isYbf ? [allowedCohorts] : [];
+    const sessionCohortFilter = isYbf ? "AND s.cohort_id = ANY($1)" : "";
+    const caseCohortFilter = isYbf ? "AND y.cohort_id = ANY($1)" : "";
+    const params = isYbf ? [allowedCohorts] : scope.values;
 
     const [
       youthRes,
@@ -909,7 +1106,9 @@ app.get("/api/dashboard", authenticateToken, async (req, res) => {
       yearBreakdownRes,
     ] = await Promise.all([
       pool.query(
-        `SELECT COUNT(*) FROM youth y WHERE y.deleted_by IS NULL ${cohortFilter}`,
+        `SELECT COUNT(*) FROM youth y
+         LEFT JOIN partner_institution p ON p.id = y.partner_institution_id
+         WHERE y.deleted_by IS NULL ${cohortFilter}${scope.clause}`,
         params,
       ),
       isYbf
@@ -920,25 +1119,33 @@ app.get("/api/dashboard", authenticateToken, async (req, res) => {
             [allowedCohorts],
           )
         : pool.query(
-            "SELECT COUNT(*) FROM partner_institution WHERE deleted_by IS NULL",
+            `SELECT COUNT(DISTINCT p.id) FROM partner_institution p
+             LEFT JOIN cohort c ON c.partner_institution_id = p.id
+             WHERE p.deleted_by IS NULL${scope.clause}`,
+            scope.values,
           ),
       pool.query(
-        `SELECT COUNT(*) FROM session s ${sessionCohortFilter}`,
-        isYbf ? [allowedCohorts] : [],
+        `SELECT COUNT(*) FROM session s
+         LEFT JOIN cohort c ON c.id = s.cohort_id
+         LEFT JOIN partner_institution p ON p.id = c.partner_institution_id
+         ${sessionCohortFilter}${scope.clause}`,
+        isYbf ? [allowedCohorts] : scope.values,
       ),
       pool.query(
         `SELECT COUNT(*) FROM case_note cn
          JOIN youth y ON y.id = cn.youth_id
-         ${caseCohortFilter}`,
-        isYbf ? [allowedCohorts] : [],
+         LEFT JOIN partner_institution p ON p.id = y.partner_institution_id
+         WHERE y.deleted_by IS NULL ${caseCohortFilter}${scope.clause}`,
+        isYbf ? [allowedCohorts] : scope.values,
       ),
       isYbf
         ? Promise.resolve({ rows: [{ count: 0 }] })
         : pool.query("SELECT COUNT(*) FROM users"),
       pool.query(
         `SELECT COUNT(*) FROM youth y
+         LEFT JOIN partner_institution p ON p.id = y.partner_institution_id
          LEFT JOIN attendance_record a ON a.youth_id = y.id
-         WHERE a.id IS NULL AND y.deleted_by IS NULL ${cohortFilter}`,
+         WHERE a.id IS NULL AND y.deleted_by IS NULL ${cohortFilter}${scope.clause}`,
         params,
       ),
       pool.query(
@@ -946,8 +1153,9 @@ app.get("/api/dashboard", authenticateToken, async (req, res) => {
            SELECT y.id,
                   CASE WHEN COUNT(a.id)=0 THEN 0 ELSE (COUNT(a.id) FILTER (WHERE a.status='Present')::float / NULLIF(COUNT(a.id),0)::float) * 100 END AS pct
            FROM youth y
+           LEFT JOIN partner_institution p ON p.id = y.partner_institution_id
            LEFT JOIN attendance_record a ON a.youth_id = y.id
-           WHERE y.deleted_by IS NULL ${cohortFilter}
+           WHERE y.deleted_by IS NULL ${cohortFilter}${scope.clause}
            GROUP BY y.id
          ) t
          WHERE t.pct < 70`,
@@ -958,7 +1166,8 @@ app.get("/api/dashboard", authenticateToken, async (req, res) => {
            CASE WHEN COUNT(a.id)=0 THEN NULL ELSE (SUM(CASE WHEN a.status='Present' THEN 1 ELSE 0 END)::float / COUNT(a.id)::float) * 100 END AS avg_attendance
          FROM attendance_record a
          JOIN youth y ON y.id = a.youth_id
-         WHERE y.deleted_by IS NULL ${cohortFilter}`,
+         LEFT JOIN partner_institution p ON p.id = y.partner_institution_id
+         WHERE y.deleted_by IS NULL ${cohortFilter}${scope.clause}`,
         params,
       ),
       isYbf
@@ -1071,14 +1280,12 @@ app.get("/api/dashboard", authenticateToken, async (req, res) => {
         businessPlan: { completed: 0, inProgress: 0, notStarted: 0 },
         businessIdeas: { completed: 0, inProgress: 0, notStarted: 0 },
         cv: { completed: 0, inProgress: 0, notStarted: 0 },
-        applicationLetter: { completed: 0, inProgress: 0, notStarted: 0 },
       };
       const typeMap = {
         "Business Plan": "businessPlan",
         "Business Ideas": "businessIdeas",
-        CV: "cv",
-        "Application Letter": "applicationLetter",
-        "Cover Letter": "applicationLetter",
+        CV: "businessIdeas",
+        "Cover Letter": "cv",
       };
       for (const row of outputRes.rows) {
         const key = typeMap[row.milestone_type];
@@ -1140,6 +1347,7 @@ app.get(
         return res.json(result.rows);
       }
 
+      const scope = getScopeFilters(req, "p.program_type", "p.region");
       const result = await pool.query(
         `SELECT p.*, COALESCE(c.cohort_count, 0) AS cohorts_count,
                 ybf.assigned_ybf_id,
@@ -1159,8 +1367,9 @@ app.get(
          JOIN users u ON u.id = ypa.user_id AND u.role = 'ybf'
          WHERE ypa.partner_institution_id = p.id
        ) ybf ON true
-       WHERE p.deleted_by IS NULL
+       WHERE p.deleted_by IS NULL${scope.clause}
        ORDER BY p.created_at DESC`,
+        scope.values,
       );
       res.json(result.rows);
     } catch (err) {
@@ -1198,11 +1407,14 @@ app.get(
         return res.json(formatted);
       }
 
+      const scope = getScopeFilters(req, "p.program_type", "p.region");
       const result = await pool.query(
         `SELECT c.id, c.program_year, c.partner_institution_id, p.name AS partner_name
        FROM cohort c
        LEFT JOIN partner_institution p ON p.id = c.partner_institution_id
+       WHERE TRUE${scope.clause}
        ORDER BY c.program_year DESC, p.name ASC`,
+        scope.values,
       );
       const formatted = result.rows.map((row) => ({
         id: row.id,
@@ -1337,16 +1549,19 @@ app.get(
       const offset = (page - 1) * limit;
 
       // Count youth whose computed attendance percentage is < 70
+      const scope = getScopeFilters(req, "y.program_type", "COALESCE(y.region, p.region)");
       const countRes = await pool.query(
         `SELECT COUNT(*) FROM (
          SELECT y.id,
                 CASE WHEN COUNT(a.id)=0 THEN 0 ELSE (COUNT(a.id) FILTER (WHERE a.status='Present')::float / NULLIF(COUNT(a.id),0)::float) * 100 END AS pct
          FROM youth y
          LEFT JOIN attendance_record a ON a.youth_id = y.id
-         WHERE y.deleted_by IS NULL
+         LEFT JOIN partner_institution p ON p.id = y.partner_institution_id
+         WHERE y.deleted_by IS NULL${scope.clause}
          GROUP BY y.id
        ) t
        WHERE t.pct < 70`,
+        scope.values,
       );
 
       const rowsRes = await pool.query(
@@ -1356,12 +1571,12 @@ app.get(
        FROM youth y
        LEFT JOIN attendance_record a ON a.youth_id = y.id
        LEFT JOIN partner_institution p ON p.id = y.partner_institution_id
-       WHERE y.deleted_by IS NULL
+       WHERE y.deleted_by IS NULL${scope.clause}
        GROUP BY y.id, p.name
        HAVING CASE WHEN COUNT(a.id)=0 THEN 0 ELSE (COUNT(a.id) FILTER (WHERE a.status='Present')::float / NULLIF(COUNT(a.id),0)::float) * 100 END < 70
        ORDER BY y.enrolment_date DESC
-       LIMIT $1 OFFSET $2`,
-        [limit, offset],
+       LIMIT $${scope.values.length + 1} OFFSET $${scope.values.length + 2}`,
+        [...scope.values, limit, offset],
       );
 
       res.json({
@@ -1386,6 +1601,7 @@ app.get(
       const resource = (req.query.resource || "all").toString().toLowerCase();
       const workbook = new ExcelJS.Workbook();
       const datasets = [];
+      const scope = getScopeFilters(req, "p.program_type", "p.region");
 
       const pushWorksheet = (name, rows) => {
         const sheet = workbook.addWorksheet(name);
@@ -1406,19 +1622,31 @@ app.get(
 
       if (resource === "all" || resource === "youth") {
         const youthRes = await pool.query(
-          "SELECT * FROM youth WHERE deleted_by IS NULL ORDER BY created_at DESC",
+          `SELECT y.* FROM youth y
+           LEFT JOIN partner_institution p ON p.id = y.partner_institution_id
+           WHERE y.deleted_by IS NULL${scope.clause}
+           ORDER BY y.created_at DESC`,
+          scope.values,
         );
         datasets.push({ name: "Youth", rows: youthRes.rows });
       }
       if (resource === "all" || resource === "partners") {
         const partnersRes = await pool.query(
-          "SELECT * FROM partner_institution WHERE deleted_by IS NULL ORDER BY created_at DESC",
+          `SELECT p.* FROM partner_institution p
+           WHERE p.deleted_by IS NULL${scope.clause}
+           ORDER BY p.created_at DESC`,
+          scope.values,
         );
         datasets.push({ name: "Partners", rows: partnersRes.rows });
       }
       if (resource === "all" || resource === "sessions") {
         const sessionsRes = await pool.query(
-          "SELECT * FROM session ORDER BY session_date DESC",
+          `SELECT s.* FROM session s
+           LEFT JOIN cohort c ON c.id = s.cohort_id
+           LEFT JOIN partner_institution p ON p.id = c.partner_institution_id
+           WHERE TRUE${scope.clause}
+           ORDER BY s.session_date DESC`,
+          scope.values,
         );
         datasets.push({ name: "Sessions", rows: sessionsRes.rows });
       }
@@ -1438,9 +1666,12 @@ app.get(
         LEFT JOIN cohort c ON c.id = s.cohort_id
         LEFT JOIN partner_institution p ON p.id = c.partner_institution_id
         LEFT JOIN attendance_record a ON a.session_id = s.id
+        WHERE TRUE${scope.clause}
         GROUP BY s.id, s.session_date, s.topic, s.term_number, p.name, c.program_year
         ORDER BY s.session_date DESC
-      `);
+      `,
+          scope.values,
+        );
         datasets.push({ name: "Reports", rows: reportRes.rows });
       }
       if (resource === "all" || resource === "users") {
@@ -1480,9 +1711,29 @@ app.post(
   authorizeRoles("admin"),
   async (req, res) => {
     try {
-      const { resource = "youth", records } = req.body;
-      if (!Array.isArray(records)) {
-        return res.status(400).json({ error: "Expected a records array" });
+      const { resource = "youth", records, source } = req.body;
+      const sourcePayload = source || req.body;
+      const incomingRecords = Array.isArray(records)
+        ? records
+        : Array.isArray(sourcePayload?.records)
+          ? sourcePayload.records
+          : Array.isArray(sourcePayload?.data)
+            ? sourcePayload.data
+            : Array.isArray(sourcePayload?.results)
+              ? sourcePayload.results
+              : Array.isArray(sourcePayload?.rows)
+                ? sourcePayload.rows
+                : null;
+
+      let resolvedRecords = incomingRecords;
+      if (!resolvedRecords && (sourcePayload?.apiUrl || sourcePayload?.url || sourcePayload?.token || sourcePayload?.formId || sourcePayload?.assetUid || sourcePayload?.form_id || sourcePayload?.endpoint)) {
+        resolvedRecords = await fetchKoboRecords(sourcePayload);
+      } else if (!resolvedRecords && typeof records === "object" && records && !Array.isArray(records)) {
+        resolvedRecords = extractKoboRecords(records);
+      }
+
+      if (!Array.isArray(resolvedRecords)) {
+        return res.status(400).json({ error: "Expected a records array or a Kobo source definition" });
       }
 
       if (resource !== "youth") {
@@ -1491,14 +1742,15 @@ app.post(
 
       let imported = 0;
       let skipped = 0;
-      for (const row of records) {
-        const fullName = row.full_name || row.fullName || row.name || row["full_name"] || null;
+      for (const row of resolvedRecords) {
+        const normalized = normalizeKoboRecord(row);
+        const fullName = normalized.full_name;
         if (!fullName) {
           skipped += 1;
           continue;
         }
 
-        const partnerName = row.partner_name || row.partnerName || row.partner || row.institution || null;
+        const partnerName = normalized.partner_name;
         let partnerId = null;
         if (partnerName) {
           const partnerRes = await pool.query(
@@ -1508,7 +1760,7 @@ app.post(
           partnerId = partnerRes.rows[0]?.id || null;
         }
 
-        const cohortValue = row.cohort_id || row.cohortId || row.cohort || null;
+        const cohortValue = normalized.cohort_id;
         let cohortId = null;
         if (cohortValue) {
           const cohortRes = await pool.query(
@@ -1523,13 +1775,13 @@ app.post(
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
           [
             String(fullName),
-            row.gender || null,
-            row.district || row.district_of_residence || null,
-            row.date_of_birth || row.dob || null,
-            row.program_type || row.programType || null,
+            normalized.gender || null,
+            normalized.district || null,
+            null,
+            normalized.program_type || null,
             partnerId,
             cohortId,
-            row.region || null,
+            normalized.region || null,
           ],
         );
         imported += 1;
@@ -1572,7 +1824,13 @@ app.get(
           await pool.query(`${baseQuery} WHERE c.partner_institution_id = ANY($1) ORDER BY s.session_date ASC`, [partnerIds])
         ).rows;
       } else {
-        sessionRows = (await pool.query(`${baseQuery} ORDER BY s.session_date ASC`)).rows;
+        const scope = getScopeFilters(req, "p.program_type", "p.region");
+        sessionRows = (
+          await pool.query(
+            `${baseQuery} WHERE TRUE${scope.clause} ORDER BY s.session_date ASC`,
+            scope.values,
+          )
+        ).rows;
       }
 
       const lines = [
@@ -1628,6 +1886,7 @@ app.get(
       const offset = (page - 1) * limit;
 
       // Count of sessions below threshold
+      const scope = getScopeFilters(req, "p.program_type", "p.region", 2);
       const countQuery = `
       SELECT COUNT(*) FROM (
         SELECT s.id,
@@ -1635,6 +1894,9 @@ app.get(
                COUNT(a.id) FILTER (WHERE a.status = 'Present') AS present
         FROM session s
         LEFT JOIN attendance_record a ON a.session_id = s.id
+        LEFT JOIN cohort c ON c.id = s.cohort_id
+        LEFT JOIN partner_institution p ON p.id = c.partner_institution_id
+        WHERE TRUE${scope.clause}
         GROUP BY s.id
       ) t
       WHERE CASE WHEN t.total = 0 THEN 0 ELSE (t.present::float / NULLIF(t.total,0)::float) * 100 END < $1
@@ -1649,6 +1911,7 @@ app.get(
       LEFT JOIN attendance_record a ON a.session_id = s.id
       LEFT JOIN cohort c ON c.id = s.cohort_id
       LEFT JOIN partner_institution p ON p.id = c.partner_institution_id
+      WHERE TRUE${scope.clause}
       GROUP BY s.id, p.name, s.session_date
       HAVING CASE WHEN COUNT(a.id)=0 THEN 0 ELSE (COUNT(a.id) FILTER (WHERE a.status = 'Present')::float / NULLIF(COUNT(a.id),0)::float) * 100 END < $1
       ORDER BY s.session_date DESC
@@ -2027,6 +2290,16 @@ app.get(
         );
       }
       const extraFilter = filters.join("");
+
+      const programTypeFilter = buildProgramTypeClause(req, "y.program_type");
+      if (programTypeFilter.value) {
+        addFilter(programTypeFilter.clause.replace("$1", "$X"), programTypeFilter.value);
+      }
+
+      const regionFilter = buildRegionScopeClause(req, "COALESCE(y.region, p.region)");
+      if (regionFilter.value) {
+        addFilter(regionFilter.clause.replace("$1", "$X"), regionFilter.value);
+      }
 
       // If the user is a YBF, scope youth to their assigned cohorts
       const youthSelect = `
@@ -2410,10 +2683,13 @@ app.get(
         return res.json(result.rows.map(enrichSessionRow));
       }
 
+      const scope = getScopeFilters(req, "p.program_type", "p.region");
       const result = await pool.query(
         `${baseQuery}
+         WHERE TRUE${scope.clause}
          GROUP BY s.id, p.name
          ORDER BY s.session_date DESC`,
+        scope.values,
       );
       res.json(result.rows.map(enrichSessionRow));
     } catch (err) {
@@ -2565,6 +2841,7 @@ app.get(
         SELECT cn.*, y.full_name AS youth_name, u.name AS author_name
         FROM case_note cn
         LEFT JOIN youth y ON y.id = cn.youth_id
+        LEFT JOIN partner_institution p ON p.id = y.partner_institution_id
         LEFT JOIN users u ON u.id = cn.author_id`;
 
       if (req.user && req.user.role === "ybf") {
@@ -2579,9 +2856,12 @@ app.get(
         return res.json(result.rows);
       }
 
+      const scope = getScopeFilters(req, "y.program_type", "COALESCE(y.region, p.region)");
       const result = await pool.query(
         `${baseQuery}
+         WHERE TRUE${scope.clause}
          ORDER BY cn.created_at DESC`,
+        scope.values,
       );
       res.json(result.rows);
     } catch (err) {
@@ -2698,10 +2978,12 @@ app.get(
   authorizeRoles("admin", "program_manager", "ybf", "enumerator"),
   async (req, res) => {
     try {
+      let sql = null;
       const baseQuery = `
         SELECT om.*, y.full_name AS youth_name, y.cohort_id
         FROM output_milestone om
         JOIN youth y ON y.id = om.youth_id
+        LEFT JOIN partner_institution p ON p.id = y.partner_institution_id
         WHERE y.deleted_by IS NULL`;
 
       if (req.user && req.user.role === "ybf") {
@@ -2715,13 +2997,16 @@ app.get(
         return res.json(result.rows);
       }
 
-      const result = await pool.query(
-        `${baseQuery}
-         ORDER BY om.id DESC`,
-      );
+      const scope = getScopeFilters(req, "y.program_type", "COALESCE(y.region, p.region)");
+      // baseQuery already contains a WHERE clause (y.deleted_by IS NULL). Append scope.clause directly.
+      sql = `${baseQuery} ${scope.clause}
+        ORDER BY om.id DESC`;
+      console.log('OUTCOMES SQL:', sql, 'PARAMS:', scope.values);
+      const result = await pool.query(sql, scope.values);
       res.json(result.rows);
     } catch (err) {
-      res.status(500).json({ error: err.message });
+      // Include SQL/params in response for debugging of query construction
+      res.status(500).json({ error: err.message, sql: typeof sql === 'string' ? sql : null, params: (typeof scope !== 'undefined' && scope.values) ? scope.values : null });
     }
   },
 );
@@ -2803,10 +3088,49 @@ app.put(
         }
       }
 
+      // Load current milestone to inspect youth_id and existing type
+      const currentRes = await pool.query(
+        `SELECT id, youth_id, milestone_type FROM output_milestone WHERE id = $1 LIMIT 1`,
+        [id],
+      );
+      if (!currentRes.rows[0])
+        return res.status(404).json({ error: "Output milestone not found" });
+
+      const current = currentRes.rows[0];
+
+      // If caller requests a milestone_type change, ensure we don't create a duplicate
+      if (milestone_type && milestone_type !== current.milestone_type) {
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          const dupRes = await client.query(
+            `SELECT id FROM output_milestone WHERE youth_id = $1 AND milestone_type = $2 AND id <> $3 LIMIT 1 FOR UPDATE`,
+            [current.youth_id, milestone_type, id],
+          );
+          if (dupRes.rows[0]) {
+            // Merge: update existing duplicate row with new status (if provided)
+            const merged = await client.query(
+              `UPDATE output_milestone SET status = COALESCE($1, status), updated_at = NOW() WHERE id = $2 RETURNING *`,
+              [status, dupRes.rows[0].id],
+            );
+            // Remove the old row to avoid duplicate types
+            await client.query(`DELETE FROM output_milestone WHERE id = $1`, [id]);
+            await client.query('COMMIT');
+            return res.json(merged.rows[0]);
+          }
+          await client.query('COMMIT');
+        } catch (txErr) {
+          await client.query('ROLLBACK');
+          throw txErr;
+        } finally {
+          client.release();
+        }
+      }
+
       const result = await pool.query(
         `UPDATE output_milestone 
-       SET milestone_type = COALESCE($1, milestone_type), status = COALESCE($2, status), updated_at = NOW()
-       WHERE id = $3 RETURNING *`,
+         SET milestone_type = COALESCE($1, milestone_type), status = COALESCE($2, status), updated_at = NOW()
+         WHERE id = $3 RETURNING *`,
         [milestone_type, status, id],
       );
       if (result.rows.length === 0)
@@ -2841,6 +3165,33 @@ app.delete(
 // Reports — attendance summary
 app.get("/api/reports", authenticateToken, async (req, res) => {
   try {
+    if (req.user && req.user.role === "ybf") {
+      const allowed = await getUserCohorts(req.user.id);
+      if (!allowed || allowed.length === 0) return res.json([]);
+      const result = await pool.query(`
+        SELECT 
+          s.id,
+          s.session_date,
+          s.topic,
+          s.term_number,
+          p.name AS partner_name,
+          c.program_year AS cohort_year,
+          COUNT(a.id) FILTER (WHERE a.status = 'Present') AS present,
+          COUNT(a.id) FILTER (WHERE a.status = 'Absent') AS absent,
+          COUNT(a.id) FILTER (WHERE a.status = 'Excused') AS excused
+        FROM session s
+        LEFT JOIN cohort c ON c.id = s.cohort_id
+        LEFT JOIN partner_institution p ON p.id = c.partner_institution_id
+        LEFT JOIN attendance_record a ON a.session_id = s.id
+        WHERE s.cohort_id = ANY($1)
+        GROUP BY s.id, s.session_date, s.topic, s.term_number, p.name, c.program_year
+        ORDER BY s.session_date DESC
+      `,
+      [allowed]);
+      return res.json(result.rows);
+    }
+
+    const scope = getScopeFilters(req, "p.program_type", "p.region");
     const result = await pool.query(`
       SELECT 
         s.id,
@@ -2856,9 +3207,11 @@ app.get("/api/reports", authenticateToken, async (req, res) => {
       LEFT JOIN cohort c ON c.id = s.cohort_id
       LEFT JOIN partner_institution p ON p.id = c.partner_institution_id
       LEFT JOIN attendance_record a ON a.session_id = s.id
+      WHERE TRUE${scope.clause}
       GROUP BY s.id, s.session_date, s.topic, s.term_number, p.name, c.program_year
       ORDER BY s.session_date DESC
-    `);
+    `,
+    scope.values);
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -2876,7 +3229,8 @@ app.get(
         SELECT a.*, s.topic, s.session_date, s.cohort_id, y.full_name AS youth_name
         FROM attendance_record a
         JOIN session s ON a.session_id = s.id
-        JOIN youth y ON a.youth_id = y.id`;
+        JOIN youth y ON a.youth_id = y.id
+        LEFT JOIN partner_institution p ON p.id = y.partner_institution_id`;
 
       if (req.user && req.user.role === "ybf") {
         const allowed = await getUserCohorts(req.user.id);
@@ -2890,9 +3244,12 @@ app.get(
         return res.json(result.rows);
       }
 
+      const scope = getScopeFilters(req, "y.program_type", "COALESCE(y.region, p.region)");
       const result = await pool.query(
         `${baseQuery}
+         WHERE TRUE${scope.clause}
          ORDER BY s.session_date DESC, y.full_name`,
+        scope.values,
       );
       res.json(result.rows);
     } catch (err) {

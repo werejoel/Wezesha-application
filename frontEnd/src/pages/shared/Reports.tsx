@@ -36,9 +36,9 @@ const reportCategories = [
     id: "output",
     title: "Output Completion Report",
     description:
-      "Track business plans, business ideas, CVs, and application letters across output milestones.",
+      "Track business plans, business ideas, and CVs across output milestones.",
     icon: FileText,
-    filters: ["all", "Business Plan", "Business Ideas", "CV", "Application Letter"],
+    filters: ["all", "Business Plan", "Business Ideas", "CV"],
   },
   {
     id: "enrollment",
@@ -69,7 +69,6 @@ const reportFilterLabels: Record<string, Record<string, string>> = {
     "Business Plan": "Business Plan",
     "Business Ideas": "Business Ideas",
     CV: "CV",
-    "Application Letter": "Application Letter",
   },
   enrollment: {
     all: "All Youth",
@@ -163,6 +162,13 @@ export default function Reports() {
     return { totalSessions, totalPresent, totalAbsent, totalExcused };
   }, [reportsData]);
 
+  const normalizeOutcomeMilestoneType = (value: string) => {
+    const normalized = String(value || "").trim();
+    if (normalized.toLowerCase() === "cv") return "Business Ideas";
+    if (normalized.toLowerCase() === "cover letter") return "CV";
+    return normalized;
+  };
+
   const milestoneSummary = useMemo(() => {
     const items = new Map<
       string,
@@ -174,7 +180,8 @@ export default function Reports() {
       }
     >();
     outcomesData.forEach((item: any) => {
-      const milestoneType = item.milestone_type || "Unknown";
+      const milestoneType = normalizeOutcomeMilestoneType(item.milestone_type || "Unknown");
+      if (!milestoneType) return;
       const current = items.get(milestoneType) || {
         total: 0,
         completed: 0,

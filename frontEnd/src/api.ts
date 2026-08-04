@@ -280,8 +280,17 @@ export const updateUserStatus = (
     body: JSON.stringify({ status }),
   }).then(handleResponse);
 
-export const importKoboData = (resource: string, records: any[]) =>
-  post("/import/kobo", { resource, records });
+export const importKoboData = (resource: string, payload: any) => {
+  if (Array.isArray(payload)) {
+    return post("/import/kobo", { resource, records: payload });
+  }
+
+  if (payload && typeof payload === "object") {
+    return post("/import/kobo", { resource, ...payload });
+  }
+
+  return post("/import/kobo", { resource, records: payload });
+};
 
 export const downloadExport = (resource: string = "all") =>
   fetch(`${BASE_URL}/export?resource=${encodeURIComponent(resource)}`, {

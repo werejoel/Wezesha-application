@@ -297,8 +297,10 @@ console.log('Adding output milestones...');
 const milestoneYouth = ['Alice Wanjiru', 'Brian Odhiambo', 'Catherine Njeri', 'James Kiptoo'];
 const milestoneDefs = [
   { type: 'Business Plan', statuses: ['Completed', 'In Progress', 'Not Started', 'Completed'] },
+  // 'Cover Letter' was renamed to 'CV' in the system; keep CV as a milestone
   { type: 'CV', statuses: ['In Progress', 'Not Started', 'Completed', 'Completed'] },
-  { type: 'Application Letter', statuses: ['Not Started', 'Not Started', 'In Progress', 'Completed'] },
+  // Legacy 'CV' entries are now treated as 'Business Ideas'
+  { type: 'Business Ideas', statuses: ['Not Started', 'Not Started', 'In Progress', 'Completed'] },
 ];
 
 for (let i = 0; i < milestoneYouth.length; i++) {

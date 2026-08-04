@@ -112,6 +112,9 @@ export default function AdminSettings() {
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [importText, setImportText] = useState("[]");
+  const [koboApiUrl, setKoboApiUrl] = useState("");
+  const [koboApiToken, setKoboApiToken] = useState("");
+  const [koboFormId, setKoboFormId] = useState("");
   const [importingData, setImportingData] = useState(false);
   const [importStatus, setImportStatus] = useState<string | null>(null);
   const [userSearch, setUserSearch] = useState("");
@@ -203,24 +206,38 @@ export default function AdminSettings() {
     }
   };
 
-  const handleImportKobo = async () => {
+  const handleImportKobo = async (mode: "json" | "kobo" = "json") => {
     try {
-      const parsed = JSON.parse(importText);
-      if (!Array.isArray(parsed)) {
-        throw new Error("Paste a JSON array of records.");
-      }
       setImportingData(true);
-      const result = await importKoboData("youth", parsed);
+      let payload: any;
+
+      if (mode === "json") {
+        const parsed = JSON.parse(importText);
+        if (!Array.isArray(parsed)) {
+          throw new Error("Paste a JSON array of records.");
+        }
+        payload = parsed;
+      } else {
+        payload = {
+          source: {
+            apiUrl: koboApiUrl.trim() || undefined,
+            token: koboApiToken.trim() || undefined,
+            formId: koboFormId.trim() || undefined,
+          },
+        };
+      }
+
+      const result = await importKoboData("youth", payload);
       setImportStatus(`${result.imported} youth imported, ${result.skipped} skipped.`);
       toast({
-        title: "Kobo import complete",
+        title: mode === "kobo" ? "KoboToolbox import complete" : "Kobo import complete",
         description: `${result.imported} youth imported successfully.`,
       });
     } catch (err: any) {
       setImportStatus(null);
       toast({
         title: "Import failed",
-        description: err?.message || "Please review the JSON payload.",
+        description: err?.message || "Please review the payload and Kobo settings.",
         variant: "destructive",
       });
     } finally {
@@ -333,9 +350,41 @@ export default function AdminSettings() {
               onChange={(e) => setImportText(e.target.value)}
               placeholder='[{"full_name":"Jane Doe","partner_name":"Aga Khan","gender":"Female"}]'
             />
-            <div className="flex items-center gap-2">
-              <Button onClick={handleImportKobo} disabled={importingData}>
-                {importingData ? "Importing…" : "Import youth data"}
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="kobo-api-url">Kobo API URL</Label>
+                <Input
+                  id="kobo-api-url"
+                  value={koboApiUrl}
+                  onChange={(e) => setKoboApiUrl(e.target.value)}
+                  placeholder="https://kf.kobotoolbox.org"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="kobo-api-token">API token</Label>
+                <Input
+                  id="kobo-api-token"
+                  value={koboApiToken}
+                  onChange={(e) => setKoboApiToken(e.target.value)}
+                  placeholder="Token or API key"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="kobo-form-id">Form ID</Label>
+                <Input
+                  id="kobo-form-id"
+                  value={koboFormId}
+                  onChange={(e) => setKoboFormId(e.target.value)}
+                  placeholder="a1b2c3d4"
+                />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button onClick={() => handleImportKobo("json")} disabled={importingData}>
+                {importingData ? "Importing…" : "Import pasted JSON"}
+              </Button>
+              <Button variant="outline" onClick={() => handleImportKobo("kobo")} disabled={importingData}>
+                {importingData ? "Importing…" : "Import from KoboToolbox"}
               </Button>
               {importStatus && <span className="text-sm text-emerald-700">{importStatus}</span>}
             </div>

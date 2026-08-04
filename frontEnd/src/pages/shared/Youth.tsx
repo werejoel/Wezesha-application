@@ -77,7 +77,7 @@ type YouthData = {
   attendanceRate?: number;
   businessPlan?: string;
   cv?: string;
-  applicationLetter?: string;
+  businessIdeas?: string;
   employmentStatus?: string;
   riskFlag?: boolean;
   baselineIncome?: number;
@@ -139,9 +139,9 @@ function normalizeYouth(item: any): YouthData {
     attendanceRate: Number(item.attendance_rate ?? item.attendanceRate ?? 0),
     businessPlan:
       item.business_plan_status || item.businessPlan || "Not Started",
-    cv: item.cv_status || item.cv || "Not Started",
-    applicationLetter:
-      item.application_letter_status || item.applicationLetter || "Not Started",
+      cv: item.cv_status || item.cv || item.cover_letter_status || "Not Started",
+      businessIdeas:
+        item.business_ideas_status || item.businessIdeas || item.cv || item.application_letter_status || "Not Started",
     employmentStatus:
       item.employment_status || item.employmentStatus || "Unemployed",
     riskFlag: Boolean(item.risk_flag ?? item.riskFlag ?? false),
@@ -860,10 +860,8 @@ export default function Youth() {
                     <TableCell>
                       <div className="flex gap-1.5 items-center">
                         <MilestoneIndicator status={y.businessPlan || "Not Started"} />
+                        <MilestoneIndicator status={y.businessIdeas || "Not Started"} />
                         <MilestoneIndicator status={y.cv || "Not Started"} />
-                        <MilestoneIndicator
-                          status={y.applicationLetter || "Not Started"}
-                        />
                       </div>
                     </TableCell>
                     <TableCell>
