@@ -273,6 +273,21 @@ export default function YBFSessions() {
 
   const sessionFormValid = Object.keys(validateSessionForm()).length === 0;
 
+  const handleSubscribeCalendar = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+
+    if (!calendarUrl) {
+      toast({
+        title: "Sign in required",
+        description: "Please sign in again to open your calendar.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    window.open(calendarUrl, "_blank", "noopener,noreferrer");
+  };
+
   const handleCreateSession = async () => {
     const errs = validateSessionForm();
     if (Object.keys(errs).length > 0) {
@@ -334,15 +349,18 @@ export default function YBFSessions() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <a
-            href={calendarUrl}
-            target="_blank"
-            rel="noreferrer"
-            download="wezesha-sessions.ics"
-            className="inline-flex items-center rounded-lg border border-emerald-200 bg-white/80 px-3 py-2 text-sm font-medium text-emerald-700 shadow-sm hover:bg-emerald-50"
-          >
-            Subscribe to calendar
-          </a>
+          <div className="flex flex-col items-start">
+            <button
+              type="button"
+              onClick={handleSubscribeCalendar}
+              className="inline-flex items-center rounded-lg border border-emerald-200 bg-white/80 px-3 py-2 text-sm font-medium text-emerald-700 shadow-sm hover:bg-emerald-50"
+            >
+              Add to Calendar
+            </button>
+            <span className="mt-1 text-xs text-slate-500">
+              Open this in Outlook or Google Calendar
+            </span>
+          </div>
           <Dialog open={addOpen} onOpenChange={setAddOpen}>
             <DialogTrigger asChild>
               <Button className="bg-violet-600 hover:bg-violet-700 text-white shadow-sm">

@@ -1582,6 +1582,14 @@ app.get(
         "CALSCALE:GREGORIAN",
       ];
 
+      const escapeText = (value) =>
+        String(value ?? "")
+          .replace(/\\/g, "\\\\")
+          .replace(/;/g, "\\;")
+          .replace(/,/g, "\\,")
+          .replace(/\r/g, "")
+          .replace(/\n/g, "\\n");
+
       sessionRows.forEach((session) => {
         const dtStart = String(session.session_date || "").slice(0, 10).replace(/-/g, "");
         const summary = `${session.topic || "Session"} (${session.partner_name || "Wezesha"})`;
@@ -1591,15 +1599,15 @@ app.get(
         lines.push(`UID:${session.id}@wezesha`);
         lines.push(`DTSTAMP:${new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z")}`);
         lines.push(`DTSTART;VALUE=DATE:${dtStart}`);
-        lines.push(`SUMMARY:${summary}`);
-        lines.push(`LOCATION:${location}`);
-        lines.push(`DESCRIPTION:${description}`);
+        lines.push(`SUMMARY:${escapeText(summary)}`);
+        lines.push(`LOCATION:${escapeText(location)}`);
+        lines.push(`DESCRIPTION:${escapeText(description)}`);
         lines.push("END:VEVENT");
       });
 
       lines.push("END:VCALENDAR");
       res.setHeader("Content-Type", "text/calendar; charset=utf-8");
-      res.setHeader("Content-Disposition", `attachment; filename="wezesha-sessions-${req.user.id}.ics"`);
+      res.setHeader("Content-Disposition", `inline; filename="wezesha-sessions-${req.user.id}.ics"`);
       res.send(lines.join("\r\n"));
     } catch (err) {
       res.status(500).json({ error: err.message });
