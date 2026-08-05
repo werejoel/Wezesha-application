@@ -181,9 +181,6 @@ const ensureSchema = async () => {
     );
   }
 };
-ensureSchema().catch((err) =>
-  console.error("Schema bootstrap failed:", err.message),
-);
 
 const USER_STATUSES = ["active", "inactive", "blocked", "pending"];
 
@@ -248,19 +245,8 @@ const getUserRegionScope = (user) => {
   return normalizeRegionScope(user.region_scope || user.region || null);
 };
 
-const buildRegionScopeClause = (req, columnRef) => {
-  const role = String(req?.user?.role || "").toLowerCase();
-  if (role !== "program_supervisor") return { clause: "", value: null };
-  const scope = getUserRegionScope(req.user);
-  if (!scope) return { clause: "", value: null };
-  return {
-    clause: ` AND LOWER(${columnRef}) = LOWER($1)`,
-    value: scope,
-  };
-};
-
 const buildProgramTypeClause = (req, columnRef) => {
-  const role = String(req?.user?.role || "").toLowerCase();
+  const role = normalizeUserRole(req?.user?.role);
   if (role === "program_manager_out_of_school") {
     return { clause: ` AND LOWER(${columnRef}) = LOWER($1)`, value: "Out-of-school" };
   }
@@ -268,6 +254,17 @@ const buildProgramTypeClause = (req, columnRef) => {
     return { clause: ` AND LOWER(${columnRef}) = LOWER($1)`, value: "In-school" };
   }
   return { clause: "", value: null };
+};
+
+const buildRegionScopeClause = (req, columnRef) => {
+  const role = normalizeUserRole(req?.user?.role);
+  if (role !== "program_supervisor") return { clause: "", value: null };
+  const scope = getUserRegionScope(req.user);
+  if (!scope) return { clause: "", value: null };
+  return {
+    clause: ` AND LOWER(${columnRef}) = LOWER($1)`,
+    value: scope,
+  };
 };
 
 const getScopeFilters = (
@@ -371,6 +368,240 @@ const getInstructorPartnerIds = async (userId) => {
   );
   if (userRes.rows[0]?.assigned_to) ids.add(userRes.rows[0].assigned_to);
   return [...ids];
+};
+
+const ensurePartnerScope = async (req, res, partnerId) => {
+  if (!req.user || !partnerId) return false;
+  const role = normalizeUserRole(req.user.role);
+  if (
+    role === "admin" ||
+    role === "program_manager" ||
+    role === "program_leadership"
+  ) {
+    return true;
+  }
+  if (role === "ybf") {
+    const allowed = await getUserCohorts(req.user.id);
+    if (!allowed || allowed.length === 0) {
+      if (res) res.status(403).json({ error: "You do not have access to this partner" });
+      return false;
+    }
+    const allowedPartnerIds = await getPartnerIdsForCohorts(allowed);
+    if (!allowedPartnerIds.map(String).includes(String(partnerId))) {
+      if (res) res.status(403).json({ error: "You do not have access to this partner" });
+      return false;
+    }
+    return true;
+  }
+  if (role === "instructor") {
+    const partnerIds = await getInstructorPartnerIds(req.user.id);
+    if (!partnerIds.length) {
+      if (res) res.status(403).json({ error: "You do not have access to this partner" });
+      return false;
+    }
+    if (!partnerIds.map(String).includes(String(partnerId))) {
+      if (res) res.status(403).json({ error: "You do not have access to this partner" });
+      return false;
+    }
+    return true;
+  }
+
+  const scope = getScopeFilters(req, "p.program_type", "p.region", 2);
+  const params = [partnerId, ...scope.values];
+  const result = await pool.query(
+    `SELECT p.id
+     FROM partner_institution p
+     WHERE p.id = $1 AND p.deleted_by IS NULL${scope.clause}`,
+    params,
+  );
+  if (!result.rows[0]) {
+    if (res) res.status(403).json({ error: "You do not have access to this partner" });
+    return false;
+  }
+  return true;
+};
+
+const ensureCohortScope = async (req, res, cohortId) => {
+  if (!req.user || !cohortId) return false;
+  const role = normalizeUserRole(req.user.role);
+  if (
+    role === "admin" ||
+    role === "program_manager" ||
+    role === "program_leadership"
+  ) {
+    return true;
+  }
+  if (role === "ybf") {
+    const cohortRes = await pool.query(
+      `SELECT id FROM cohort WHERE id = $1 LIMIT 1`,
+      [cohortId],
+    );
+    if (!cohortRes.rows[0]) {
+      if (res) res.status(404).json({ error: "Cohort not found" });
+      return false;
+    }
+    const allowed = await getUserCohorts(req.user.id);
+    if (!hasCohortAccess(allowed, cohortId)) {
+      if (res) res.status(403).json({ error: "You do not have access to this cohort" });
+      return false;
+    }
+    return true;
+  }
+  if (role === "instructor") {
+    const partnerIds = await getInstructorPartnerIds(req.user.id);
+    if (!partnerIds.length) {
+      if (res) res.status(403).json({ error: "You do not have access to this cohort" });
+      return false;
+    }
+    const cohortRes = await pool.query(
+      `SELECT c.id FROM cohort c
+       LEFT JOIN partner_institution p ON p.id = c.partner_institution_id
+       WHERE c.id = $1 AND p.id = ANY($2)`,
+      [cohortId, partnerIds],
+    );
+    if (!cohortRes.rows[0]) {
+      if (res) res.status(403).json({ error: "You do not have access to this cohort" });
+      return false;
+    }
+    return true;
+  }
+
+  const scope = getScopeFilters(req, "p.program_type", "p.region", 2);
+  const params = [cohortId, ...scope.values];
+  const result = await pool.query(
+    `SELECT c.id
+     FROM cohort c
+     LEFT JOIN partner_institution p ON p.id = c.partner_institution_id
+     WHERE c.id = $1${scope.clause}`,
+    params,
+  );
+  if (!result.rows[0]) {
+    if (res) res.status(403).json({ error: "You do not have access to this cohort" });
+    return false;
+  }
+  return true;
+};
+
+const ensureSessionScope = async (req, res, sessionId) => {
+  if (!req.user || !sessionId) return false;
+  const role = normalizeUserRole(req.user.role);
+  if (
+    role === "admin" ||
+    role === "program_manager" ||
+    role === "program_leadership"
+  ) {
+    return true;
+  }
+  if (role === "ybf") {
+    const allowed = await getUserCohorts(req.user.id);
+    if (!allowed || allowed.length === 0) {
+      if (res) res.status(403).json({ error: "You do not have access to this session" });
+      return false;
+    }
+    const sessionRes = await pool.query(
+      `SELECT s.id FROM session s WHERE s.id = $1 AND s.cohort_id = ANY($2)`,
+      [sessionId, allowed],
+    );
+    if (!sessionRes.rows[0]) {
+      if (res) res.status(403).json({ error: "You do not have access to this session" });
+      return false;
+    }
+    return true;
+  }
+  if (role === "instructor") {
+    const partnerIds = await getInstructorPartnerIds(req.user.id);
+    if (!partnerIds.length) {
+      if (res) res.status(403).json({ error: "You do not have access to this session" });
+      return false;
+    }
+    const sessionRes = await pool.query(
+      `SELECT s.id
+       FROM session s
+       JOIN cohort c ON c.id = s.cohort_id
+       WHERE s.id = $1 AND c.partner_institution_id = ANY($2)`,
+      [sessionId, partnerIds],
+    );
+    if (!sessionRes.rows[0]) {
+      if (res) res.status(403).json({ error: "You do not have access to this session" });
+      return false;
+    }
+    return true;
+  }
+
+  const scope = getScopeFilters(req, "p.program_type", "p.region", 2);
+  const params = [sessionId, ...scope.values];
+  const result = await pool.query(
+    `SELECT s.id
+     FROM session s
+     LEFT JOIN cohort c ON c.id = s.cohort_id
+     LEFT JOIN partner_institution p ON p.id = c.partner_institution_id
+     WHERE s.id = $1${scope.clause}`,
+    params,
+  );
+  if (!result.rows[0]) {
+    if (res) res.status(403).json({ error: "You do not have access to this session" });
+    return false;
+  }
+  return true;
+};
+
+const ensureYouthScope = async (req, res, youthId) => {
+  if (!req.user || !youthId) return false;
+  const role = normalizeUserRole(req.user.role);
+  if (
+    role === "admin" ||
+    role === "program_manager" ||
+    role === "program_leadership"
+  ) {
+    return true;
+  }
+  if (role === "ybf") {
+    const youthRes = await pool.query(
+      `SELECT cohort_id FROM youth WHERE id = $1 AND deleted_by IS NULL`,
+      [youthId],
+    );
+    if (!youthRes.rows[0]) {
+      if (res) res.status(404).json({ error: "Youth not found" });
+      return false;
+    }
+    const allowed = await getUserCohorts(req.user.id);
+    if (!hasCohortAccess(allowed, youthRes.rows[0].cohort_id)) {
+      if (res) res.status(403).json({ error: "You do not have access to this youth" });
+      return false;
+    }
+    return true;
+  }
+  if (role === "instructor") {
+    const partnerIds = await getInstructorPartnerIds(req.user.id);
+    if (!partnerIds.length) {
+      if (res) res.status(403).json({ error: "You do not have access to this youth" });
+      return false;
+    }
+    const youthRes = await pool.query(
+      `SELECT y.id FROM youth y WHERE y.id = $1 AND y.partner_institution_id = ANY($2) AND y.deleted_by IS NULL`,
+      [youthId, partnerIds],
+    );
+    if (!youthRes.rows[0]) {
+      if (res) res.status(403).json({ error: "You do not have access to this youth" });
+      return false;
+    }
+    return true;
+  }
+
+  const scope = getScopeFilters(req, "y.program_type", "COALESCE(y.region, p.region)", 2);
+  const params = [youthId, ...scope.values];
+  const result = await pool.query(
+    `SELECT y.id
+     FROM youth y
+     LEFT JOIN partner_institution p ON p.id = y.partner_institution_id
+     WHERE y.id = $1 AND y.deleted_by IS NULL${scope.clause}`,
+    params,
+  );
+  if (!result.rows[0]) {
+    if (res) res.status(403).json({ error: "You do not have access to this youth" });
+    return false;
+  }
+  return true;
 };
 
 const assignInstructorToPartner = async (userId, partnerId) => {
@@ -922,7 +1153,8 @@ app.post(
         message: "If an account exists, a reset code has been generated.",
       });
     } catch (err) {
-      res.status(500).json({ error: err.message });
+      console.error("GET /api/youth error:", err);
+      res.status(500).json({ error: err.message, detail: err.stack });
     }
   },
 );
@@ -1056,9 +1288,13 @@ app.get("/api/dashboard", authenticateToken, async (req, res) => {
   try {
     const isYbf = req.user && req.user.role === "ybf";
     const allowedCohorts = isYbf ? await getUserCohorts(req.user.id) : null;
-    const scope = isYbf
+    const youthScope = isYbf
       ? { clause: "", values: [] }
       : getScopeFilters(req, "y.program_type", "COALESCE(y.region, p.region)");
+    const partnerScope = isYbf
+      ? { clause: "", values: [] }
+      : getScopeFilters(req, "p.program_type", "p.region");
+    const sessionScope = partnerScope;
 
     if (isYbf && (!allowedCohorts || allowedCohorts.length === 0)) {
       return res.json({
@@ -1085,7 +1321,7 @@ app.get("/api/dashboard", authenticateToken, async (req, res) => {
     const cohortFilter = isYbf ? "AND y.cohort_id = ANY($1)" : "";
     const sessionCohortFilter = isYbf ? "AND s.cohort_id = ANY($1)" : "";
     const caseCohortFilter = isYbf ? "AND y.cohort_id = ANY($1)" : "";
-    const params = isYbf ? [allowedCohorts] : scope.values;
+    const params = isYbf ? [allowedCohorts] : youthScope.values;
 
     const [
       youthRes,
@@ -1108,7 +1344,7 @@ app.get("/api/dashboard", authenticateToken, async (req, res) => {
       pool.query(
         `SELECT COUNT(*) FROM youth y
          LEFT JOIN partner_institution p ON p.id = y.partner_institution_id
-         WHERE y.deleted_by IS NULL ${cohortFilter}${scope.clause}`,
+         WHERE y.deleted_by IS NULL ${cohortFilter}${youthScope.clause}`,
         params,
       ),
       isYbf
@@ -1121,22 +1357,22 @@ app.get("/api/dashboard", authenticateToken, async (req, res) => {
         : pool.query(
             `SELECT COUNT(DISTINCT p.id) FROM partner_institution p
              LEFT JOIN cohort c ON c.partner_institution_id = p.id
-             WHERE p.deleted_by IS NULL${scope.clause}`,
-            scope.values,
+             WHERE p.deleted_by IS NULL${partnerScope.clause}`,
+            partnerScope.values,
           ),
       pool.query(
         `SELECT COUNT(*) FROM session s
          LEFT JOIN cohort c ON c.id = s.cohort_id
          LEFT JOIN partner_institution p ON p.id = c.partner_institution_id
-         ${sessionCohortFilter}${scope.clause}`,
-        isYbf ? [allowedCohorts] : scope.values,
+         WHERE TRUE ${sessionCohortFilter}${sessionScope.clause}`,
+        isYbf ? [allowedCohorts] : sessionScope.values,
       ),
       pool.query(
         `SELECT COUNT(*) FROM case_note cn
          JOIN youth y ON y.id = cn.youth_id
          LEFT JOIN partner_institution p ON p.id = y.partner_institution_id
-         WHERE y.deleted_by IS NULL ${caseCohortFilter}${scope.clause}`,
-        isYbf ? [allowedCohorts] : scope.values,
+         WHERE y.deleted_by IS NULL ${caseCohortFilter}${youthScope.clause}`,
+        isYbf ? [allowedCohorts] : youthScope.values,
       ),
       isYbf
         ? Promise.resolve({ rows: [{ count: 0 }] })
@@ -1145,7 +1381,7 @@ app.get("/api/dashboard", authenticateToken, async (req, res) => {
         `SELECT COUNT(*) FROM youth y
          LEFT JOIN partner_institution p ON p.id = y.partner_institution_id
          LEFT JOIN attendance_record a ON a.youth_id = y.id
-         WHERE a.id IS NULL AND y.deleted_by IS NULL ${cohortFilter}${scope.clause}`,
+         WHERE a.id IS NULL AND y.deleted_by IS NULL ${cohortFilter}${youthScope.clause}`,
         params,
       ),
       pool.query(
@@ -1155,7 +1391,7 @@ app.get("/api/dashboard", authenticateToken, async (req, res) => {
            FROM youth y
            LEFT JOIN partner_institution p ON p.id = y.partner_institution_id
            LEFT JOIN attendance_record a ON a.youth_id = y.id
-           WHERE y.deleted_by IS NULL ${cohortFilter}${scope.clause}
+           WHERE y.deleted_by IS NULL ${cohortFilter}${youthScope.clause}
            GROUP BY y.id
          ) t
          WHERE t.pct < 70`,
@@ -1167,7 +1403,7 @@ app.get("/api/dashboard", authenticateToken, async (req, res) => {
          FROM attendance_record a
          JOIN youth y ON y.id = a.youth_id
          LEFT JOIN partner_institution p ON p.id = y.partner_institution_id
-         WHERE y.deleted_by IS NULL ${cohortFilter}${scope.clause}`,
+         WHERE y.deleted_by IS NULL ${cohortFilter}${youthScope.clause}`,
         params,
       ),
       isYbf
@@ -1206,13 +1442,13 @@ app.get("/api/dashboard", authenticateToken, async (req, res) => {
             [allowedCohorts],
           )
         : Promise.resolve({ rows: [] }),
-      computeAvgSessionsPerYouth(cohortFilter, params),
-      computeYouthAt80Percent(cohortFilter, params),
+      computeAvgSessionsPerYouth(`${cohortFilter}${youthScope.clause}`, params),
+      computeYouthAt80Percent(`${cohortFilter}${youthScope.clause}`, params),
       pool.query(
         `SELECT COALESCE(y.region, p.region, 'Unassigned') AS label, COUNT(*) AS count
          FROM youth y
          LEFT JOIN partner_institution p ON p.id = y.partner_institution_id
-         WHERE y.deleted_by IS NULL ${cohortFilter}
+         WHERE y.deleted_by IS NULL ${cohortFilter}${youthScope.clause}
          GROUP BY COALESCE(y.region, p.region, 'Unassigned')
          ORDER BY count DESC`,
         params,
@@ -1220,7 +1456,7 @@ app.get("/api/dashboard", authenticateToken, async (req, res) => {
       pool.query(
         `SELECT COALESCE(y.program_type, 'Unassigned') AS label, COUNT(*) AS count
          FROM youth y
-         WHERE y.deleted_by IS NULL ${cohortFilter}
+         WHERE y.deleted_by IS NULL ${cohortFilter}${youthScope.clause}
          GROUP BY COALESCE(y.program_type, 'Unassigned')
          ORDER BY count DESC`,
         params,
@@ -1229,7 +1465,7 @@ app.get("/api/dashboard", authenticateToken, async (req, res) => {
         `SELECT COALESCE(y.program_year::text, c.program_year::text, 'Unassigned') AS label, COUNT(*) AS count
          FROM youth y
          LEFT JOIN cohort c ON c.id = y.cohort_id
-         WHERE y.deleted_by IS NULL ${cohortFilter}
+         WHERE y.deleted_by IS NULL ${cohortFilter}${youthScope.clause}
          GROUP BY COALESCE(y.program_year::text, c.program_year::text, 'Unassigned')
          ORDER BY count DESC`,
         params,
@@ -2070,6 +2306,27 @@ app.post(
     const partnerProgramType =
       normalizeProgramType(program_type || programType) || "In-school";
 
+    const role = normalizeUserRole(req.user.role);
+    if (role === "program_manager_out_of_school" && partnerProgramType !== "Out-of-school") {
+      return res.status(403).json({
+        error: "Out-of-school program managers can only create out-of-school partners.",
+      });
+    }
+    if (role === "program_manager_in_school" && partnerProgramType !== "In-school") {
+      return res.status(403).json({
+        error: "In-school program managers can only create in-school partners.",
+      });
+    }
+    if (role === "program_supervisor") {
+      const scope = getUserRegionScope(req.user);
+      const normalizedRegion = normalizeRegionScope(partnerRegion);
+      if (!scope || !normalizedRegion || normalizedRegion !== scope) {
+        return res.status(403).json({
+          error: "Program supervisors can only create partners within their region.",
+        });
+      }
+    }
+
     try {
       const result = await pool.query(
         `INSERT INTO partner_institution (name, district, type, location, region, program_type, contact_name, contact_phone, contact_email, partnership_date)
@@ -2168,6 +2425,37 @@ app.put(
         : null;
 
     try {
+      const role = normalizeUserRole(req.user.role);
+      const existingPartnerRes = await pool.query(
+        `SELECT id, program_type, region FROM partner_institution WHERE id = $1 AND deleted_by IS NULL`,
+        [id],
+      );
+      if (!existingPartnerRes.rows[0]) {
+        return res.status(404).json({ error: "Partner not found" });
+      }
+      if (!(await ensurePartnerScope(req, res, id))) return;
+
+      if (role === "program_manager_out_of_school" && partnerProgramType && partnerProgramType !== "Out-of-school") {
+        return res.status(403).json({
+          error: "Out-of-school program managers can only update out-of-school partners.",
+        });
+      }
+      if (role === "program_manager_in_school" && partnerProgramType && partnerProgramType !== "In-school") {
+        return res.status(403).json({
+          error: "In-school program managers can only update in-school partners.",
+        });
+      }
+      if (role === "program_supervisor") {
+        const existingRegion = existingPartnerRes.rows[0].region;
+        const effectiveRegion = normalizeRegionScope(partnerRegion || existingRegion);
+        const scope = getUserRegionScope(req.user);
+        if (!scope || !effectiveRegion || effectiveRegion !== scope) {
+          return res.status(403).json({
+            error: "Program supervisors can only update partners within their region.",
+          });
+        }
+      }
+
       const result = await pool.query(
         `UPDATE partner_institution 
        SET name = $1, district = $2, type = $3, location = $4, region = COALESCE($5, region),
@@ -2289,8 +2577,6 @@ app.get(
           Number(roster_year || rosterYear),
         );
       }
-      const extraFilter = filters.join("");
-
       const programTypeFilter = buildProgramTypeClause(req, "y.program_type");
       if (programTypeFilter.value) {
         addFilter(programTypeFilter.clause.replace("$1", "$X"), programTypeFilter.value);
@@ -2300,6 +2586,10 @@ app.get(
       if (regionFilter.value) {
         addFilter(regionFilter.clause.replace("$1", "$X"), regionFilter.value);
       }
+
+      // Build this only after role-based filters have been added. Otherwise a
+      // scoped manager supplies parameters that are absent from the SQL.
+      const extraFilter = filters.join("");
 
       // If the user is a YBF, scope youth to their assigned cohorts
       const youthSelect = `
@@ -2429,6 +2719,19 @@ app.post(
         });
       }
 
+      if (!(await ensureCohortScope(req, res, cohortId))) return;
+      const role = normalizeUserRole(req.user.role);
+      if (role === "program_manager_out_of_school" && resolvedProgramType !== "Out-of-school") {
+        return res.status(403).json({
+          error: "Out-of-school program managers can only create out-of-school youth.",
+        });
+      }
+      if (role === "program_manager_in_school" && resolvedProgramType !== "In-school") {
+        return res.status(403).json({
+          error: "In-school program managers can only create in-school youth.",
+        });
+      }
+      
       const cohortRes = await pool.query(
         `SELECT program_year FROM cohort WHERE id = $1 LIMIT 1`,
         [cohortId],
@@ -2519,8 +2822,9 @@ app.put(
     } = req.body;
 
     try {
+      if (!(await ensureYouthScope(req, res, id))) return;
       const existing = await pool.query(
-        `SELECT partner_institution_id, cohort_id FROM youth WHERE id = $1 AND deleted_by IS NULL`,
+        `SELECT partner_institution_id, cohort_id, program_type, region FROM youth WHERE id = $1 AND deleted_by IS NULL`,
         [id],
       );
       if (existing.rows.length === 0)
@@ -2556,6 +2860,7 @@ app.put(
       }
 
       if (!(await ensureYbfCohortAccess(req, res, resolvedCohortId))) return;
+      if (!(await ensureCohortScope(req, res, resolvedCohortId))) return;
 
       let programYear = null;
       if (resolvedCohortId) {
@@ -2570,6 +2875,24 @@ app.put(
         typeof program_type === "string"
           ? normalizeProgramType(program_type)
           : existing.rows[0]?.program_type;
+      if (typeof program_type === "string" && !resolvedProgramType) {
+        return res.status(400).json({
+          error: "Invalid program type. Use In-school or Out-of-school.",
+        });
+      }
+      if (!resolvedProgramType) resolvedProgramType = existing.rows[0]?.program_type || "In-school";
+
+      const role = normalizeUserRole(req.user.role);
+      if (role === "program_manager_out_of_school" && resolvedProgramType !== "Out-of-school") {
+        return res.status(403).json({
+          error: "Out-of-school program managers can only update out-of-school youth.",
+        });
+      }
+      if (role === "program_manager_in_school" && resolvedProgramType !== "In-school") {
+        return res.status(403).json({
+          error: "In-school program managers can only update in-school youth.",
+        });
+      }
       if (typeof program_type === "string" && !resolvedProgramType) {
         return res.status(400).json({
           error: "Invalid program type. Use In-school or Out-of-school.",
@@ -2623,6 +2946,7 @@ app.delete(
   async (req, res) => {
     const { id } = req.params;
     try {
+      if (!(await ensureYouthScope(req, res, id))) return;
       const result = await pool.query(
         "UPDATE youth SET deleted_by = $1, deleted_at = NOW() WHERE id = $2 AND deleted_by IS NULL RETURNING *",
         [req.user.id, id],
@@ -2719,6 +3043,8 @@ app.post(
 
       if (req.user && req.user.role === "ybf") {
         if (!(await ensureYbfCohortAccess(req, res, cohort_id))) return;
+      } else if (!(await ensureCohortScope(req, res, cohort_id))) {
+        return;
       }
 
       const scheduleCheck = validateSessionSchedule(session_date);
@@ -2787,6 +3113,9 @@ app.put(
       session_number,
     } = req.body;
     try {
+      if (!(await ensureSessionScope(req, res, id))) return;
+      if (cohort_id && !(await ensureCohortScope(req, res, cohort_id))) return;
+
       const result = await pool.query(
         `UPDATE session 
        SET cohort_id = $1, topic = $2, session_date = $3, venue = $4, term_number = $5, session_number = $6, updated_at = NOW()
@@ -2882,21 +3211,7 @@ app.post(
         ? req.body.follow_up_required
         : false;
     try {
-      if (req.user && req.user.role === "ybf") {
-        const youthRes = await pool.query(
-          `SELECT cohort_id FROM youth WHERE id = $1 AND deleted_by IS NULL`,
-          [youth_id],
-        );
-        if (!youthRes.rows[0]) {
-          return res.status(404).json({ error: "Youth not found" });
-        }
-        const allowed = await getUserCohorts(req.user.id);
-        if (!hasCohortAccess(allowed, youthRes.rows[0].cohort_id)) {
-          return res
-            .status(403)
-            .json({ error: "You do not have access to this youth" });
-        }
-      }
+      if (!(await ensureYouthScope(req, res, youth_id))) return;
 
       const result = await pool.query(
         `INSERT INTO case_note (youth_id, author_id, category, note_text, follow_up_due, follow_up_required)
@@ -2997,9 +3312,13 @@ app.get(
         return res.json(result.rows);
       }
 
-      const scope = getScopeFilters(req, "y.program_type", "COALESCE(y.region, p.region)");
+      const scope = getScopeFilters(
+        req,
+        "COALESCE(y.program_type, p.program_type)",
+        "COALESCE(y.region, p.region)",
+      );
       // baseQuery already contains a WHERE clause (y.deleted_by IS NULL). Append scope.clause directly.
-      sql = `${baseQuery} ${scope.clause}
+      sql = `${baseQuery}${scope.clause}
         ORDER BY om.id DESC`;
       console.log('OUTCOMES SQL:', sql, 'PARAMS:', scope.values);
       const result = await pool.query(sql, scope.values);
@@ -3019,21 +3338,7 @@ app.post(
   async (req, res) => {
     const { youth_id, milestone_type, status } = req.body;
     try {
-      if (req.user && req.user.role === "ybf") {
-        const youthRes = await pool.query(
-          `SELECT cohort_id FROM youth WHERE id = $1 AND deleted_by IS NULL`,
-          [youth_id],
-        );
-        if (!youthRes.rows[0]) {
-          return res.status(404).json({ error: "Youth not found" });
-        }
-        const allowed = await getUserCohorts(req.user.id);
-        if (!hasCohortAccess(allowed, youthRes.rows[0].cohort_id)) {
-          return res
-            .status(403)
-            .json({ error: "You do not have access to this youth" });
-        }
-      }
+      if (!(await ensureYouthScope(req, res, youth_id))) return;
 
       const existing = await pool.query(
         `SELECT id FROM output_milestone WHERE youth_id = $1 AND milestone_type = $2 LIMIT 1`,
@@ -3636,4 +3941,18 @@ app.delete(
 );
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+const startServer = async () => {
+  try {
+    // The youth endpoint depends on columns created in ensureSchema. Do not
+    // accept requests until that bootstrap has completed.
+    await ensureSchema();
+  } catch (err) {
+    console.error("Schema bootstrap failed:", err.message);
+  }
+
+  // Keep the API available when an optional migration cannot be applied to an
+  // existing database. The affected route reports its own database errors.
+  app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+};
+
+startServer();

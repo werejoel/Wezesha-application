@@ -1,5 +1,11 @@
 // frontEnd/src/api.ts
 const BASE_URL = `${import.meta.env.VITE_API_URL}/api`;
+
+const clearStoredSession = () => {
+  localStorage.removeItem("token");
+  localStorage.removeItem("user");
+};
+
 const getAuthHeaders = () => {
   const token = localStorage.getItem("token");
   const base = {
@@ -107,8 +113,7 @@ export const register = (
   });
 
 export const logout = () => {
-  localStorage.removeItem("token");
-  localStorage.removeItem("user");
+  clearStoredSession();
 };
 
 export const requestPasswordReset = (email: string) =>
@@ -118,8 +123,19 @@ export const resetPassword = (email: string, token: string, password: string) =>
   post("/auth/reset-password", { email, token, password });
 
 export const getCurrentUser = () => {
+  const token = localStorage.getItem("token");
   const user = localStorage.getItem("user");
-  return user ? normalizeUser(JSON.parse(user)) : null;
+  if (!token || !user) {
+    clearStoredSession();
+    return null;
+  }
+
+  try {
+    return normalizeUser(JSON.parse(user));
+  } catch {
+    clearStoredSession();
+    return null;
+  }
 };
 
 export const getMe = () => get("/auth/me").then((data) => normalizeUser(data));
