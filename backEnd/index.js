@@ -8,9 +8,24 @@ const pool = require("./db");
 require("dotenv").config();
 
 const app = express();
+
 app.disable("x-powered-by");
-app.use(cors());
+
+app.use(
+  cors({
+    origin: [
+      "https://wezeshaimpact.netlify.app",
+      "http://localhost:5173"
+    ],
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    credentials: true
+  })
+);
+
+app.options("*", cors());
+
 app.use(express.json());
+
 app.use((req, res, next) => {
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("X-Content-Type-Options", "nosniff");
