@@ -41,6 +41,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { DashboardFilterBreakdown } from "@/components/DashboardFilterBreakdown";
+import { INSTITUTIONAL_SESSION_TOTAL } from "@/constants/regions";
 
 const CHART_COLORS = [
   "hsl(152, 55%, 33%)",
@@ -199,10 +201,6 @@ const ProgramManagerDashboard = () => {
       name: "Instructor",
       value: partners?.filter((p) => p.role === "Instructor").length || 0,
     },
-    {
-      name: "Enumerator",
-      value: partners?.filter((p) => p.role === "Enumerator").length || 0,
-    },
   ];
 
   const systemUsers = partners?.length + youth?.length || 0;
@@ -244,7 +242,7 @@ const ProgramManagerDashboard = () => {
       {/* ── Header ── */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">
+          <h1 style={{color:"hsl(152, 55%, 33%)"}} className="text-3xl font-bold text-gray-900">
             Program Manager Dashboard
           </h1>
           <p className="text-gray-600 mt-1">
@@ -365,11 +363,18 @@ const ProgramManagerDashboard = () => {
           description="Active partnerships"
         />
         <StatCard
-          title="Sessions Conducted"
-          value={stats?.totalSessions || 0}
+          title="Avg Sessions / Youth"
+          value={stats?.avgSessionsPerYouth ?? 0}
           icon={GraduationCap}
           trend={{ value: 15, label: "increase" }}
-          description="This month"
+          description={`Of ${stats?.expectedSessionTotal ?? INSTITUTIONAL_SESSION_TOTAL} program sessions`}
+        />
+        <StatCard
+          title="Youth at 80% Attendance"
+          value={stats?.youthAt80Percent ?? 0}
+          icon={Users}
+          trend={{ value: 5, label: "increase" }}
+          description="Attended ≥80% of sessions"
         />
         <StatCard
           title="Case Notes"
@@ -379,6 +384,8 @@ const ProgramManagerDashboard = () => {
           description="Active follow-ups"
         />
       </div>
+
+      <DashboardFilterBreakdown breakdown={stats?.filterBreakdown} />
 
       {/* ── Program Overview + Recent Activity ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

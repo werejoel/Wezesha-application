@@ -13,6 +13,10 @@ const Reports = () => {
     case 'admin':
       return <AdminReports />;
     case 'program_manager':
+    case 'program_leadership':
+    case 'program_manager_out_of_school':
+    case 'program_manager_in_school':
+    case 'program_supervisor':
       return <ProgramManagerReports />;
     default:
       return <div className="text-sm text-muted-foreground">You are not authorized to view this page.</div>;

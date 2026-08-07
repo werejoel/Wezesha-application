@@ -9,6 +9,7 @@ import {
   Users,
   CalendarCheck,
   TrendingUp,
+  Loader2,
 } from "lucide-react";
 import { downloadExport, getOutcomes, getReports, getYouth } from "@/api";
 import { ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
@@ -35,9 +36,9 @@ const reportCategories = [
     id: "output",
     title: "Output Completion Report",
     description:
-      "Track business plan, CV, and cover letter progress across output milestones.",
+      "Track business plans, business ideas, and CVs across output milestones.",
     icon: FileText,
-    filters: ["all", "Business Plan", "CV", "Application Letter"],
+    filters: ["all", "Business Plan", "Business Ideas", "CV"],
   },
   {
     id: "enrollment",
@@ -66,8 +67,8 @@ const reportFilterLabels: Record<string, Record<string, string>> = {
   output: {
     all: "All Milestones",
     "Business Plan": "Business Plan",
+    "Business Ideas": "Business Ideas",
     CV: "CV",
-    "Application Letter": "Cover Letter",
   },
   enrollment: {
     all: "All Youth",
@@ -131,7 +132,7 @@ export default function Reports() {
   }) as UseQueryResult<any[], Error>;
   const youthQuery = useQuery({
     queryKey: ["youth"] as const,
-    queryFn: getYouth,
+    queryFn: () => getYouth(),
   }) as UseQueryResult<any[], Error>;
   const outcomesQuery = useQuery({
     queryKey: ["outcomes"] as const,
@@ -161,6 +162,13 @@ export default function Reports() {
     return { totalSessions, totalPresent, totalAbsent, totalExcused };
   }, [reportsData]);
 
+  const normalizeOutcomeMilestoneType = (value: string) => {
+    const normalized = String(value || "").trim();
+    if (normalized.toLowerCase() === "cv") return "Business Ideas";
+    if (normalized.toLowerCase() === "cover letter") return "CV";
+    return normalized;
+  };
+
   const milestoneSummary = useMemo(() => {
     const items = new Map<
       string,
@@ -172,7 +180,8 @@ export default function Reports() {
       }
     >();
     outcomesData.forEach((item: any) => {
-      const milestoneType = item.milestone_type || "Unknown";
+      const milestoneType = normalizeOutcomeMilestoneType(item.milestone_type || "Unknown");
+      if (!milestoneType) return;
       const current = items.get(milestoneType) || {
         total: 0,
         completed: 0,
@@ -288,7 +297,10 @@ export default function Reports() {
       </div>
 
       {isLoading ? (
-        <div className="reports-loading">Loading reports…</div>
+        <div className="reports-loading">
+          <Loader2 className="h-10 w-10 animate-spin text-primary" />
+          <p className="mt-3 text-sm font-medium">Loading reports…</p>
+        </div>
       ) : (
         <>
           <div className="reports-metrics-grid">
@@ -447,7 +459,7 @@ export default function Reports() {
             <CardContent>
               {selectedReport === "attendance" && (
                 <div className="space-y-4">
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto reports-table-wrapper">
                     <table className="reports-table w-full table-auto border-collapse">
                       <thead>
                         <tr className="text-left text-xs text-muted-foreground">

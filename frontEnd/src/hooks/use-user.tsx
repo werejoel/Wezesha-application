@@ -5,7 +5,19 @@ interface User {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'program_manager' | 'ybf' | 'instructor' | 'enumerator';
+  role:
+    | 'admin'
+    | 'program_manager'
+    | 'program_leadership'
+    | 'program_manager_out_of_school'
+    | 'program_manager_in_school'
+    | 'program_supervisor'
+    | 'ybf'
+    | 'instructor';
+  status?: 'active' | 'inactive' | 'blocked' | 'pending';
+  assigned_to?: string | null;
+  assigned_partner_name?: string | null;
+  pendingApproval?: boolean;
 }
 
 interface UserContextType {
@@ -50,7 +62,6 @@ export const useUser = () => {
       isProgramManager: () => false,
       isYBF: () => false,
       isInstructor: () => false,
-      isEnumerator: () => false,
     };
     return fallback;
   }
@@ -60,10 +71,18 @@ export const useUser = () => {
   };
 
   const isAdmin = () => hasRole(['admin']);
-  const isProgramManager = () => hasRole(['admin', 'program_manager']);
+  const isProgramManager = () =>
+    hasRole([
+      'admin',
+      'program_manager',
+      'program_leadership',
+      'program_manager_out_of_school',
+      'program_manager_in_school',
+      'program_supervisor',
+    ]);
   const isYBF = () => hasRole(['ybf']);
   const isInstructor = () => hasRole(['instructor']);
-  const isEnumerator = () => hasRole(['enumerator']);
+
 
   return {
     ...context,
@@ -72,6 +91,5 @@ export const useUser = () => {
     isProgramManager,
     isYBF,
     isInstructor,
-    isEnumerator,
   };
 };

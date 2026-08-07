@@ -22,16 +22,26 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Building2, Plus, Users, UserCheck, Phone, Mail, Edit3, Trash2 } from "lucide-react";
+import {
+  Building2,
+  Plus,
+  Users,
+  UserCheck,
+  Phone,
+  Mail,
+  Edit3,
+  Trash2,
+} from "lucide-react";
 import { StatCard } from "@/components/StatCard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogTrigger } from "@/components/ui/dialog";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+  FormActions,
+  FormDialogShell,
+  FormFieldError,
+  FormSection,
+  formSelectClass,
+} from "@/components/FormDialogShell";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,12 +53,15 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useUser } from "@/hooks/use-user";
+import { REGIONS, PROGRAM_TYPES } from "@/constants/regions";
 
 type Partner = {
   id: string;
   name: string;
   type: string;
   location: string;
+  region: string;
+  programType: string;
   district: string;
   contactName: string;
   contactPhone: string;
@@ -57,6 +70,7 @@ type Partner = {
   startDate: string;
   cohortsCount: number;
   assignedYBF: string;
+  assignedYbfId?: string;
 };
 
 type Personnel = {
@@ -98,12 +112,16 @@ const defaultPartnerForm = {
   name: "",
   type: "TVET",
   location: "",
+  region: REGIONS[0],
+  programType: "In-school" as "In-school" | "Out-of-school",
   district: "",
   contactName: "",
   contactPhone: "",
   contactEmail: "",
   status: "Active",
   startDate: new Date().toISOString().slice(0, 10),
+  programYear: String(new Date().getFullYear()),
+  assignedYbfId: "",
 };
 
 const PHONE_RE = /^\+?[0-9 \-]{7,20}$/;
@@ -125,12 +143,14 @@ const normalizeRole = (role: string | undefined | null) => {
 };
 
 const normalizePartner = (partner: any): Partner => ({
-  id: partner.id,
+  id: String(partner.id),
   name: partner.name || "Unknown institution",
   type: (partner.type || partner.institution_type || "TVET")
     .toString()
     .toUpperCase(),
   location: partner.location || partner.location || "-",
+  region: partner.region || partner.location || "-",
+  programType: partner.program_type || partner.programType || "In-school",
   district: partner.district || "-",
   contactName: partner.contact_name || "-",
   contactPhone: partner.contact_phone || "-",
@@ -138,7 +158,13 @@ const normalizePartner = (partner: any): Partner => ({
   status: partner.status || "Active",
   startDate: partner.partnership_date || partner.created_at || "",
   cohortsCount: partner.cohorts_count ?? 0,
-  assignedYBF: partner.assignedYBF || "-",
+  assignedYBF:
+    partner.assigned_ybf_names ||
+    partner.assigned_ybf_name ||
+    partner.assignedYBF ||
+    partner.assigned_ybf ||
+    "-",
+  assignedYbfId: partner.assigned_ybf_id || partner.assignedYbfId || "",
 });
 
 const normalizePersonnel = (person: any): Personnel => ({
@@ -174,13 +200,18 @@ export default function Partners() {
   const [personnelForm, setPersonnelForm] =
     useState<PersonnelForm>(defaultPersonnelForm);
   const [editingPartner, setEditingPartner] = useState<Partner | null>(null);
-  const [editingPersonnel, setEditingPersonnel] = useState<Personnel | null>(null);
+  const [editingPersonnel, setEditingPersonnel] = useState<Personnel | null>(
+    null,
+  );
   const [deleteTarget, setDeleteTarget] = useState<{
     type: "partner" | "personnel";
     id: string;
     name: string;
   } | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [institutionTab, setInstitutionTab] = useState<
+    "all" | "In-school" | "Out-of-school"
+  >("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -235,8 +266,7 @@ export default function Partners() {
     if (partnerForm.district && partnerForm.district.length > MAX.district)
       errs.district = `District must be ≤ ${MAX.district} chars`;
     if (!partnerForm.type) errs.type = "Partner type is required";
-    if (partnerForm.location && partnerForm.location.length > MAX.location)
-      errs.location = `Location must be ≤ ${MAX.location} chars`;
+    if (!partnerForm.region) errs.region = "Region is required";
     if (
       partnerForm.contactName &&
       partnerForm.contactName.length > MAX.contactName
@@ -254,6 +284,13 @@ export default function Partners() {
       !/^\S+@\S+\.\S+$/.test(partnerForm.contactEmail)
     )
       errs.contactEmail = "Contact email is invalid";
+    if (!editingPartner) {
+      const year = Number(partnerForm.programYear);
+      if (!partnerForm.programYear || !partnerForm.programYear.trim())
+        errs.programYear = "Program year is required to create a cohort";
+      else if (!Number.isInteger(year) || year < 2000 || year > 2100)
+        errs.programYear = "Enter a valid year (2000–2100)";
+    }
     return errs;
   };
 
@@ -281,9 +318,12 @@ export default function Partners() {
   const partnerFormValid = Object.keys(validatePartnerForm()).length === 0;
   const personnelFormValid = Object.keys(validatePersonnelForm()).length === 0;
 
-  const filteredPartners = partners;
+  const filteredPartners =
+    institutionTab === "all"
+      ? partners
+      : partners.filter((p) => p.programType === institutionTab);
   const filteredPersonnel = personnel;
-  const partnerColumnCount = 9 + (canEditPartner || canDeletePartner ? 1 : 0);
+  const partnerColumnCount = 10 + (canEditPartner || canDeletePartner ? 1 : 0);
   const personnelColumnCount = 6 + (canManagePersonnel ? 1 : 0);
 
   const openEditPartner = (partner: Partner) => {
@@ -292,6 +332,10 @@ export default function Partners() {
       name: partner.name,
       type: partner.type as "TVET" | "CBO",
       location: partner.location,
+      region: partner.region !== "-" ? partner.region : REGIONS[0],
+      programType: (partner.programType === "Out-of-school"
+        ? "Out-of-school"
+        : "In-school") as "In-school" | "Out-of-school",
       district: partner.district,
       contactName: partner.contactName,
       contactPhone: partner.contactPhone,
@@ -300,6 +344,8 @@ export default function Partners() {
       startDate: partner.startDate
         ? new Date(partner.startDate).toISOString().slice(0, 10)
         : new Date().toISOString().slice(0, 10),
+      programYear: String(new Date().getFullYear()),
+      assignedYbfId: partner.assignedYbfId || "",
     });
     setPartnerAddOpen(true);
   };
@@ -312,8 +358,8 @@ export default function Partners() {
         person.role === "YBF"
           ? "YBF"
           : person.role === "Instructor"
-          ? "Instructor"
-          : "Enumerator",
+            ? "Instructor"
+            : "Enumerator",
       contact: person.contact === "-" ? "" : person.contact,
       email: person.email === "-" ? "" : person.email,
       assignedTo: person.assignedTo === "-" ? "" : person.assignedTo,
@@ -360,17 +406,24 @@ export default function Partners() {
         return;
       }
 
-      const payload = {
+      const payload: Record<string, unknown> = {
         name: partnerForm.name,
         district: partnerForm.district,
         type: partnerForm.type,
-        location: partnerForm.location,
+        region: partnerForm.region,
+        location: partnerForm.region,
+        program_type: partnerForm.programType,
         contact_name: partnerForm.contactName,
         contact_phone: partnerForm.contactPhone,
         contact_email: partnerForm.contactEmail,
         partnership_date: partnerForm.startDate,
         status: partnerForm.status,
+        assigned_ybf_id: partnerForm.assignedYbfId || null,
       };
+
+      if (!editingPartner) {
+        payload.program_year = Number(partnerForm.programYear);
+      }
 
       if (editingPartner) {
         const updated = await updatePartner(editingPartner.id, payload);
@@ -381,7 +434,10 @@ export default function Partners() {
         );
       } else {
         const created = await createPartner(payload);
-        setPartners((prev) => [normalizePartner(created), ...prev]);
+        setPartners((prev) => [
+          normalizePartner({ ...created, cohorts_count: 1 }),
+          ...prev,
+        ]);
       }
 
       setPartnerAddOpen(false);
@@ -471,129 +527,140 @@ export default function Partners() {
           {canManagePersonnel && (
             <Dialog open={personnelAddOpen} onOpenChange={setPersonnelAddOpen}>
               <DialogTrigger asChild>
-                <Button variant="secondary">
+                <Button
+                  variant="secondary"
+                  className="bg-sky-100 text-sky-900 hover:bg-sky-200 border border-sky-200"
+                >
                   <Plus className="h-4 w-4 mr-1" /> Add Personnel
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-lg">
-                <DialogHeader>
-                  <DialogTitle>
-                    {editingPersonnel ? "Edit Personnel Record" : "Add Personnel Record"}
-                  </DialogTitle>
-                </DialogHeader>
+              <FormDialogShell
+                theme="personnel"
+                icon={UserCheck}
+                title={
+                  editingPersonnel
+                    ? "Edit Personnel Record"
+                    : "Add Personnel Record"
+                }
+                subtitle="Manage YBFs, instructors, and enumerators"
+              >
                 {personnelFormError ? (
-                  <div className="rounded-lg border border-destructive/10 bg-destructive/5 p-3 text-sm text-destructive">
+                  <div className="rounded-lg border border-destructive/10 bg-destructive/5 p-3 text-sm text-destructive mb-4">
                     {personnelFormError}
                   </div>
                 ) : null}
-                <div className="grid gap-4">
-                  <div>
-                    <Label htmlFor="personnel-name">Name</Label>
-                    <Input
-                      id="personnel-name"
-                      value={personnelForm.name}
-                      onChange={(e) => {
-                        setPersonnelForm({
-                          ...personnelForm,
-                          name: e.target.value,
-                        });
-                        setPersonnelFieldErrors({
-                          ...personnelFieldErrors,
-                          name: "",
-                        });
-                      }}
-                      maxLength={MAX.name}
-                      placeholder="Jane Doe"
-                    />
-                    {personnelFieldErrors.name && (
-                      <p className="text-sm text-destructive mt-1">
-                        {personnelFieldErrors.name}
-                      </p>
-                    )}
-                  </div>
-                  <div className="grid sm:grid-cols-2 gap-4">
+                <div className="space-y-4">
+                  <FormSection theme="personnel" title="Staff identity">
                     <div>
-                      <Label htmlFor="personnel-role">Role</Label>
-                      <select
-                        id="personnel-role"
-                        value={personnelForm.role}
-                        onChange={(e) => {
-                          setPersonnelForm({
-                            ...personnelForm,
-                            role: e.target.value as PersonnelForm["role"],
-                          });
-                          setPersonnelFieldErrors({
-                            ...personnelFieldErrors,
-                            role: "",
-                          });
-                        }}
-                        className="w-full rounded-lg border bg-card px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-                      >
-                        <option value="YBF">Youth Business Fellow</option>
-                        <option value="Instructor">Instructor</option>
-                        <option value="Enumerator">Enumerator</option>
-                      </select>
-                    </div>
-                    <div>
-                      <Label htmlFor="personnel-email">Email</Label>
+                      <Label htmlFor="personnel-name">Name</Label>
                       <Input
-                        id="personnel-email"
-                        type="email"
-                        value={personnelForm.email}
+                        id="personnel-name"
+                        value={personnelForm.name}
                         onChange={(e) => {
                           setPersonnelForm({
                             ...personnelForm,
-                            email: e.target.value,
+                            name: e.target.value,
                           });
                           setPersonnelFieldErrors({
                             ...personnelFieldErrors,
-                            email: "",
+                            name: "",
                           });
                         }}
-                        maxLength={MAX.contactEmail}
-                        placeholder="staff@wezesha.org"
+                        maxLength={MAX.name}
+                        placeholder="Kabanda James"
+                        className="bg-white/80"
                       />
-                      <div className="flex items-center text-sm text-muted-foreground mt-1">
-                        <Mail className="h-4 w-4 mr-2" />
-                        <span>
-                          Use a work or institutional email when available.
-                        </span>
-                      </div>
-                      {personnelFieldErrors.email && (
-                        <p className="text-sm text-destructive mt-1">
-                          {personnelFieldErrors.email}
-                        </p>
-                      )}
+                      <FormFieldError message={personnelFieldErrors.name} />
                     </div>
-                  </div>
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="personnel-contact">Phone</Label>
-                      <Input
-                        id="personnel-contact"
-                        value={personnelForm.contact}
-                        onChange={(e) => {
-                          setPersonnelForm({
-                            ...personnelForm,
-                            contact: e.target.value,
-                          });
-                          setPersonnelFieldErrors({
-                            ...personnelFieldErrors,
-                            contact: "",
-                          });
-                        }}
-                        maxLength={MAX.contactPhone}
-                        placeholder="+254700000000"
-                      />
-                      <div className="flex items-center text-sm text-muted-foreground mt-1">
-                        <Phone className="h-4 w-4 mr-2" />
-                        <span>International format, e.g. +254712345678</span>
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="personnel-role">Role</Label>
+                        <select
+                          id="personnel-role"
+                          value={personnelForm.role}
+                          onChange={(e) => {
+                            setPersonnelForm({
+                              ...personnelForm,
+                              role: e.target.value as PersonnelForm["role"],
+                            });
+                            setPersonnelFieldErrors({
+                              ...personnelFieldErrors,
+                              role: "",
+                            });
+                          }}
+                          className={formSelectClass}
+                        >
+                          <option value="YBF">Youth Business Fellow</option>
+                          <option value="Instructor">Instructor</option>
+                          <option value="Enumerator">Enumerator</option>
+                        </select>
                       </div>
-                      {personnelFieldErrors.contact && (
-                        <p className="text-sm text-destructive mt-1">
-                          {personnelFieldErrors.contact}
-                        </p>
-                      )}
+                      <div>
+                        <Label htmlFor="personnel-status">Status</Label>
+                        <select
+                          id="personnel-status"
+                          value={personnelForm.status}
+                          onChange={(e) =>
+                            setPersonnelForm({
+                              ...personnelForm,
+                              status: e.target.value as PersonnelForm["status"],
+                            })
+                          }
+                          className={formSelectClass}
+                        >
+                          <option value="Active">Active</option>
+                          <option value="Inactive">Inactive</option>
+                        </select>
+                      </div>
+                    </div>
+                  </FormSection>
+                  <FormSection theme="personnel" title="Contact & assignment">
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="personnel-email">Email</Label>
+                        <Input
+                          id="personnel-email"
+                          type="email"
+                          value={personnelForm.email}
+                          onChange={(e) => {
+                            setPersonnelForm({
+                              ...personnelForm,
+                              email: e.target.value,
+                            });
+                            setPersonnelFieldErrors({
+                              ...personnelFieldErrors,
+                              email: "",
+                            });
+                          }}
+                          maxLength={MAX.contactEmail}
+                          placeholder="staff@wezesha.org"
+                          className="bg-white/80"
+                        />
+                        <FormFieldError message={personnelFieldErrors.email} />
+                      </div>
+                      <div>
+                        <Label htmlFor="personnel-contact">Phone</Label>
+                        <Input
+                          id="personnel-contact"
+                          value={personnelForm.contact}
+                          onChange={(e) => {
+                            setPersonnelForm({
+                              ...personnelForm,
+                              contact: e.target.value,
+                            });
+                            setPersonnelFieldErrors({
+                              ...personnelFieldErrors,
+                              contact: "",
+                            });
+                          }}
+                          maxLength={MAX.contactPhone}
+                          placeholder="+254700000000"
+                          className="bg-white/80"
+                        />
+                        <FormFieldError
+                          message={personnelFieldErrors.contact}
+                        />
+                      </div>
                     </div>
                     <div>
                       <Label htmlFor="personnel-assigned">Assigned To</Label>
@@ -607,317 +674,393 @@ export default function Partners() {
                           })
                         }
                         placeholder="Institution or area"
+                        className="bg-white/80"
                       />
                     </div>
-                  </div>
-                  {personnelForm.role === "YBF" && (
-                    <div>
-                      <Label htmlFor="personnel-year">Program Year Start</Label>
-                      <Input
-                        id="personnel-year"
-                        value={personnelForm.programYearStart}
-                        onChange={(e) =>
-                          setPersonnelForm({
-                            ...personnelForm,
-                            programYearStart: e.target.value,
-                          })
-                        }
-                        placeholder="2024"
-                      />
-                    </div>
-                  )}
-                  {personnelForm.role === "Instructor" && (
-                    <div>
-                      <Label htmlFor="personnel-subject">Subject Area</Label>
-                      <Input
-                        id="personnel-subject"
-                        value={personnelForm.subjectArea}
-                        onChange={(e) =>
-                          setPersonnelForm({
-                            ...personnelForm,
-                            subjectArea: e.target.value,
-                          })
-                        }
-                        placeholder="Business Studies"
-                      />
-                    </div>
-                  )}
-                  {personnelForm.role === "Enumerator" && (
-                    <div>
-                      <Label htmlFor="personnel-area">
-                        Geographic Area / Cohort
-                      </Label>
-                      <Input
-                        id="personnel-area"
-                        value={personnelForm.geographicArea}
-                        onChange={(e) =>
-                          setPersonnelForm({
-                            ...personnelForm,
-                            geographicArea: e.target.value,
-                          })
-                        }
-                        placeholder="Nairobi, Kisumu"
-                      />
-                    </div>
-                  )}
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="personnel-status">Status</Label>
-                      <select
-                        id="personnel-status"
-                        value={personnelForm.status}
-                        onChange={(e) =>
-                          setPersonnelForm({
-                            ...personnelForm,
-                            status: e.target.value as PersonnelForm["status"],
-                          })
-                        }
-                        className="w-full rounded-lg border bg-card px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-                      >
-                        <option value="Active">Active</option>
-                        <option value="Inactive">Inactive</option>
-                      </select>
-                    </div>
-                    <div className="flex items-end justify-end gap-2">
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          setPersonnelAddOpen(false);
-                          setPersonnelFieldErrors({});
-                        }}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        onClick={handleSavePersonnel}
-                        disabled={!personnelFormValid}
-                      >
-                        {editingPersonnel ? "Update" : "Save"}
-                      </Button>
-                    </div>
-                  </div>
+                    {personnelForm.role === "YBF" && (
+                      <div>
+                        <Label htmlFor="personnel-year">
+                          Program Year Start
+                        </Label>
+                        <Input
+                          id="personnel-year"
+                          value={personnelForm.programYearStart}
+                          onChange={(e) =>
+                            setPersonnelForm({
+                              ...personnelForm,
+                              programYearStart: e.target.value,
+                            })
+                          }
+                          placeholder="2024"
+                          className="bg-white/80"
+                        />
+                      </div>
+                    )}
+                    {personnelForm.role === "Instructor" && (
+                      <div>
+                        <Label htmlFor="personnel-subject">Subject Area</Label>
+                        <Input
+                          id="personnel-subject"
+                          value={personnelForm.subjectArea}
+                          onChange={(e) =>
+                            setPersonnelForm({
+                              ...personnelForm,
+                              subjectArea: e.target.value,
+                            })
+                          }
+                          placeholder="Business Studies"
+                          className="bg-white/80"
+                        />
+                      </div>
+                    )}
+                    {personnelForm.role === "Enumerator" && (
+                      <div>
+                        <Label htmlFor="personnel-area">
+                          Geographic Area / Cohort
+                        </Label>
+                        <Input
+                          id="personnel-area"
+                          value={personnelForm.geographicArea}
+                          onChange={(e) =>
+                            setPersonnelForm({
+                              ...personnelForm,
+                              geographicArea: e.target.value,
+                            })
+                          }
+                          placeholder="Kampala , Uganda or Cohort 2024"
+                          className="bg-white/80"
+                        />
+                      </div>
+                    )}
+                  </FormSection>
+                  <FormActions
+                    theme="personnel"
+                    onCancel={() => {
+                      setPersonnelAddOpen(false);
+                      setPersonnelFieldErrors({});
+                    }}
+                    onSubmit={handleSavePersonnel}
+                    submitLabel={
+                      editingPersonnel ? "Update Personnel" : "Save Personnel"
+                    }
+                    disabled={!personnelFormValid}
+                  />
                 </div>
-              </DialogContent>
+              </FormDialogShell>
             </Dialog>
           )}
           {canAddPartner && (
             <Dialog open={partnerAddOpen} onOpenChange={setPartnerAddOpen}>
               <DialogTrigger asChild>
-                <Button>
-                  <Plus className="h-4 w-4 mr-1" /> Add Partner
+                <Button className="bg-secondary text-secondary-foreground hover:bg-secondary/90">
+                  <Plus className="h-4 w-4 mr-1" /> Add Partner Institution
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-lg">
-                <DialogHeader>
-                  <DialogTitle>
-                    {editingPartner ? "Edit Partner" : "Add New Partner"}
-                  </DialogTitle>
-                </DialogHeader>
+              <FormDialogShell
+                theme="partner"
+                icon={Building2}
+                title={editingPartner ? "Edit Partner" : "Add New Partner"}
+                subtitle="Register an institutional partner and optional cohort"
+              >
                 {partnerFormError ? (
-                  <div className="rounded-lg border border-destructive/10 bg-destructive/5 p-3 text-sm text-destructive">
+                  <div className="rounded-lg border border-destructive/10 bg-destructive/5 p-3 text-sm text-destructive mb-4">
                     {partnerFormError}
                   </div>
                 ) : null}
-                <div className="grid gap-4">
-                  <div>
-                    <Label htmlFor="partner-name">Institution Name</Label>
-                    <Input
-                      id="partner-name"
-                      value={partnerForm.name}
-                      onChange={(e) =>
-                        setPartnerForm({ ...partnerForm, name: e.target.value })
-                      }
-                      maxLength={MAX.name}
-                      placeholder="E.g. City Youth Centre"
-                    />
-                  </div>
-                  <div className="grid sm:grid-cols-2 gap-4">
+                <div className="space-y-4">
+                  <FormSection theme="partner" title="Institution details">
                     <div>
-                      <Label htmlFor="partner-location">
-                        Physical Location
-                      </Label>
+                      <Label htmlFor="partner-name">Institution Name</Label>
                       <Input
-                        id="partner-location"
-                        value={partnerForm.location}
-                        onChange={(e) =>
-                          setPartnerForm({
-                            ...partnerForm,
-                            location: e.target.value,
-                          })
-                        }
-                        maxLength={MAX.location}
-                        placeholder="Nairobi CBD"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="partner-district">District</Label>
-                      <Input
-                        id="partner-district"
-                        value={partnerForm.district}
-                        onChange={(e) =>
-                          setPartnerForm({
-                            ...partnerForm,
-                            district: e.target.value,
-                          })
-                        }
-                        maxLength={MAX.district}
-                        placeholder="Nairobi"
-                      />
-                    </div>
-                  </div>
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="partner-type">Type</Label>
-                      <select
-                        id="partner-type"
-                        value={partnerForm.type}
-                        onChange={(e) =>
-                          setPartnerForm({
-                            ...partnerForm,
-                            type: e.target.value as "TVET" | "CBO",
-                          })
-                        }
-                        className="w-full rounded-lg border bg-card px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-                      >
-                        <option value="TVET">TVET</option>
-                        <option value="CBO">CBO</option>
-                      </select>
-                    </div>
-                    <div>
-                      <Label htmlFor="partner-status">Status</Label>
-                      <select
-                        id="partner-status"
-                        value={partnerForm.status}
-                        onChange={(e) =>
-                          setPartnerForm({
-                            ...partnerForm,
-                            status: e.target.value as "Active" | "Inactive",
-                          })
-                        }
-                        className="w-full rounded-lg border bg-card px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-                      >
-                        <option value="Active">Active</option>
-                        <option value="Inactive">Inactive</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="partner-contact">Contact Name</Label>
-                      <Input
-                        id="partner-contact"
-                        value={partnerForm.contactName}
+                        id="partner-name"
+                        value={partnerForm.name}
                         onChange={(e) => {
                           setPartnerForm({
                             ...partnerForm,
-                            contactName: e.target.value,
+                            name: e.target.value,
                           });
                           setPartnerFieldErrors({
                             ...partnerFieldErrors,
-                            contactName: "",
+                            name: "",
                           });
                         }}
-                        maxLength={MAX.contactName}
-                        placeholder="James Mwangi"
+                        maxLength={MAX.name}
+                        placeholder="E.g. City Youth Centre"
+                        className="bg-white/80"
                       />
-                      {partnerFieldErrors.contactName && (
-                        <p className="text-sm text-destructive mt-1">
-                          {partnerFieldErrors.contactName}
-                        </p>
-                      )}
+                      <FormFieldError message={partnerFieldErrors.name} />
                     </div>
-                    <div>
-                      <Label htmlFor="partner-phone">Contact Phone</Label>
-                      <Input
-                        id="partner-phone"
-                        value={partnerForm.contactPhone}
-                        onChange={(e) => {
-                          setPartnerForm({
-                            ...partnerForm,
-                            contactPhone: e.target.value,
-                          });
-                          setPartnerFieldErrors({
-                            ...partnerFieldErrors,
-                            contactPhone: "",
-                          });
-                        }}
-                        maxLength={MAX.contactPhone}
-                        placeholder="+254712345678"
-                      />
-                      <div className="flex items-center text-sm text-muted-foreground mt-1">
-                        <Phone className="h-4 w-4 mr-2" />
-                        <span>International format, e.g. +254712345678</span>
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="partner-region">Region</Label>
+                        <select
+                          id="partner-region"
+                          value={partnerForm.region}
+                          onChange={(e) =>
+                            setPartnerForm({
+                              ...partnerForm,
+                              region: e.target.value,
+                            })
+                          }
+                          className={formSelectClass}
+                        >
+                          {REGIONS.map((r) => (
+                            <option key={r} value={r}>
+                              {r}
+                            </option>
+                          ))}
+                        </select>
+                        <FormFieldError message={partnerFieldErrors.region} />
                       </div>
-                      {partnerFieldErrors.contactPhone && (
-                        <p className="text-sm text-destructive mt-1">
-                          {partnerFieldErrors.contactPhone}
-                        </p>
-                      )}
+                      <div>
+                        <Label htmlFor="partner-district">District</Label>
+                        <Input
+                          id="partner-district"
+                          value={partnerForm.district}
+                          onChange={(e) => {
+                            setPartnerForm({
+                              ...partnerForm,
+                              district: e.target.value,
+                            });
+                            setPartnerFieldErrors({
+                              ...partnerFieldErrors,
+                              district: "",
+                            });
+                          }}
+                          maxLength={MAX.district}
+                          placeholder=" Kampala"
+                          className="bg-white/80"
+                        />
+                        <FormFieldError message={partnerFieldErrors.district} />
+                      </div>
                     </div>
-                  </div>
-                  <div>
-                    <Label htmlFor="partner-email">Contact Email</Label>
-                    <Input
-                      id="partner-email"
-                      value={partnerForm.contactEmail}
-                      onChange={(e) => {
-                        setPartnerForm({
-                          ...partnerForm,
-                          contactEmail: e.target.value,
-                        });
-                        setPartnerFieldErrors({
-                          ...partnerFieldErrors,
-                          contactEmail: "",
-                        });
-                      }}
-                      maxLength={MAX.contactEmail}
-                      placeholder="partner@domain.com"
-                    />
-                    <div className="flex items-center text-sm text-muted-foreground mt-1">
-                      <Mail className="h-4 w-4 mr-2" />
-                      <span>Use an institutional email where possible.</span>
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="partner-program-type">Program Type</Label>
+                        <select
+                          id="partner-program-type"
+                          value={partnerForm.programType}
+                          onChange={(e) =>
+                            setPartnerForm({
+                              ...partnerForm,
+                              programType: e.target.value as
+                                | "In-school"
+                                | "Out-of-school",
+                            })
+                          }
+                          className={formSelectClass}
+                        >
+                          {PROGRAM_TYPES.map((p) => (
+                            <option key={p} value={p}>
+                              {p}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <Label htmlFor="partner-type">Institution Type</Label>
+                        <select
+                          id="partner-type"
+                          value={partnerForm.type}
+                          onChange={(e) =>
+                            setPartnerForm({
+                              ...partnerForm,
+                              type: e.target.value as "TVET" | "CBO",
+                            })
+                          }
+                          className={formSelectClass}
+                        >
+                          <option value="TVET">TVET</option>
+                          <option value="CBO">CBO</option>
+                        </select>
+                      </div>
+                      <div>
+                        <Label htmlFor="partner-status">Status</Label>
+                        <select
+                          id="partner-status"
+                          value={partnerForm.status}
+                          onChange={(e) =>
+                            setPartnerForm({
+                              ...partnerForm,
+                              status: e.target.value as "Active" | "Inactive",
+                            })
+                          }
+                          className={formSelectClass}
+                        >
+                          <option value="Active">Active</option>
+                          <option value="Inactive">Inactive</option>
+                        </select>
+                      </div>
                     </div>
-                    {partnerFieldErrors.contactEmail && (
-                      <p className="text-sm text-destructive mt-1">
-                        {partnerFieldErrors.contactEmail}
-                      </p>
-                    )}
-                  </div>
-                  <div className="grid sm:grid-cols-2 gap-4">
+                  </FormSection>
+
+                  <FormSection theme="partner" title="Contact information">
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="partner-contact">Contact Name</Label>
+                        <Input
+                          id="partner-contact"
+                          value={partnerForm.contactName}
+                          onChange={(e) => {
+                            setPartnerForm({
+                              ...partnerForm,
+                              contactName: e.target.value,
+                            });
+                            setPartnerFieldErrors({
+                              ...partnerFieldErrors,
+                              contactName: "",
+                            });
+                          }}
+                          maxLength={MAX.contactName}
+                          placeholder="Were Joel"
+                          className="bg-white/80"
+                        />
+                        <FormFieldError
+                          message={partnerFieldErrors.contactName}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="partner-phone">Contact Phone</Label>
+                        <Input
+                          id="partner-phone"
+                          value={partnerForm.contactPhone}
+                          onChange={(e) => {
+                            setPartnerForm({
+                              ...partnerForm,
+                              contactPhone: e.target.value,
+                            });
+                            setPartnerFieldErrors({
+                              ...partnerFieldErrors,
+                              contactPhone: "",
+                            });
+                          }}
+                          maxLength={MAX.contactPhone}
+                          placeholder="+256705672545"
+                          className="bg-white/80"
+                        />
+                        <FormFieldError
+                          message={partnerFieldErrors.contactPhone}
+                        />
+                      </div>
+                    </div>
                     <div>
-                      <Label htmlFor="partner-start">Start Date</Label>
+                      <Label htmlFor="partner-email">Contact Email</Label>
                       <Input
-                        id="partner-start"
-                        type="date"
-                        value={partnerForm.startDate}
-                        onChange={(e) =>
+                        id="partner-email"
+                        value={partnerForm.contactEmail}
+                        onChange={(e) => {
                           setPartnerForm({
                             ...partnerForm,
-                            startDate: e.target.value,
-                          })
-                        }
+                            contactEmail: e.target.value,
+                          });
+                          setPartnerFieldErrors({
+                            ...partnerFieldErrors,
+                            contactEmail: "",
+                          });
+                        }}
+                        maxLength={MAX.contactEmail}
+                        placeholder="partner@institution.org"
+                        className="bg-white/80"
+                      />
+                      <FormFieldError
+                        message={partnerFieldErrors.contactEmail}
                       />
                     </div>
-                    <div className="flex items-end justify-end gap-2">
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          setPartnerAddOpen(false);
-                          setPartnerFieldErrors({});
-                        }}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        onClick={handleSavePartner}
-                        disabled={!partnerFormValid}
-                      >
-                        {editingPartner ? "Update Partner" : "Save Partner"}
-                      </Button>
+                  </FormSection>
+
+                  <FormSection theme="partner" title="Partnership & cohort">
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="partner-ybf">Assigned YBF</Label>
+                        <select
+                          id="partner-ybf"
+                          value={partnerForm.assignedYbfId}
+                          onChange={(e) =>
+                            setPartnerForm({
+                              ...partnerForm,
+                              assignedYbfId: e.target.value,
+                            })
+                          }
+                          className={formSelectClass}
+                        >
+                          <option value="">No YBF assigned</option>
+                          {personnel
+                            .filter((person) => person.role === "YBF")
+                            .map((person) => (
+                              <option key={person.id} value={person.id}>
+                                {person.name} ({person.email})
+                              </option>
+                            ))}
+                        </select>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Assign a YBF to this partner. A YBF can be linked to
+                          multiple institutions without losing access to previous ones.
+                        </p>
+                      </div>
+                      {!editingPartner ? (
+                        <div>
+                          <Label htmlFor="partner-cohort-year">
+                            Cohort Program Year
+                          </Label>
+                          <Input
+                            id="partner-cohort-year"
+                            type="number"
+                            min={2000}
+                            max={2100}
+                            value={partnerForm.programYear}
+                            onChange={(e) => {
+                              setPartnerForm({
+                                ...partnerForm,
+                                programYear: e.target.value,
+                              });
+                              setPartnerFieldErrors({
+                                ...partnerFieldErrors,
+                                programYear: "",
+                              });
+                            }}
+                            placeholder={String(new Date().getFullYear())}
+                            className="bg-white/80"
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Creates an initial cohort for this partner.
+                          </p>
+                          <FormFieldError
+                            message={partnerFieldErrors.programYear}
+                          />
+                        </div>
+                      ) : null}
+                      <div>
+                        <Label htmlFor="partner-start">Start Date</Label>
+                        <Input
+                          id="partner-start"
+                          type="date"
+                          value={partnerForm.startDate}
+                          onChange={(e) =>
+                            setPartnerForm({
+                              ...partnerForm,
+                              startDate: e.target.value,
+                            })
+                          }
+                          className="bg-white/80"
+                        />
+                      </div>
                     </div>
-                  </div>
+                  </FormSection>
+
+                  <FormActions
+                    theme="partner"
+                    onCancel={() => {
+                      setPartnerAddOpen(false);
+                      setPartnerFieldErrors({});
+                    }}
+                    onSubmit={handleSavePartner}
+                    submitLabel={
+                      editingPartner ? "Update Partner" : "Save Partner"
+                    }
+                    disabled={!partnerFormValid}
+                  />
                 </div>
-              </DialogContent>
+              </FormDialogShell>
             </Dialog>
           )}
         </div>
@@ -985,7 +1128,32 @@ export default function Partners() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="partners">
+        <TabsContent value="partners" className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant={institutionTab === "all" ? "default" : "outline"}
+              onClick={() => setInstitutionTab("all")}
+            >
+              All Institutions
+            </Button>
+            <Button
+              size="sm"
+              variant={institutionTab === "In-school" ? "default" : "outline"}
+              onClick={() => setInstitutionTab("In-school")}
+            >
+              In-school
+            </Button>
+            <Button
+              size="sm"
+              variant={
+                institutionTab === "Out-of-school" ? "default" : "outline"
+              }
+              onClick={() => setInstitutionTab("Out-of-school")}
+            >
+              Out-of-school
+            </Button>
+          </div>
           <Card>
             <CardContent className="p-0 overflow-x-auto">
               <Table>
@@ -993,14 +1161,17 @@ export default function Partners() {
                   <TableRow>
                     <TableHead>Institution</TableHead>
                     <TableHead>Type</TableHead>
-                    <TableHead>Location</TableHead>
+                    <TableHead>Program</TableHead>
+                    <TableHead>Region</TableHead>
                     <TableHead>District</TableHead>
                     <TableHead>Contact</TableHead>
                     <TableHead>Start Date</TableHead>
                     <TableHead>Cohorts</TableHead>
                     <TableHead>YBF</TableHead>
                     <TableHead>Status</TableHead>
-                    {(canEditPartner || canDeletePartner) && <TableHead>Actions</TableHead>}
+                    {(canEditPartner || canDeletePartner) && (
+                      <TableHead>Actions</TableHead>
+                    )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1010,7 +1181,7 @@ export default function Partners() {
                         colSpan={partnerColumnCount}
                         className="text-center py-10 text-sm text-muted-foreground"
                       >
-                        Loading partners from backend...
+                        Loading partners please wait...
                       </TableCell>
                     </TableRow>
                   ) : filteredPartners.length > 0 ? (
@@ -1026,7 +1197,10 @@ export default function Partners() {
                             {p.type}
                           </Badge>
                         </TableCell>
-                        <TableCell>{p.location}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">{p.programType}</Badge>
+                        </TableCell>
+                        <TableCell>{p.region}</TableCell>
                         <TableCell>{p.district}</TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {p.contactName}
@@ -1099,8 +1273,7 @@ export default function Partners() {
               <div>
                 <CardTitle>Personnel Records</CardTitle>
                 <p className="text-sm text-muted-foreground">
-                  Youth Business Fellows, instructors and enumerators loaded
-                  from the backend.
+                  Youth Business Fellows, instructors and enumerators loaded.
                 </p>
               </div>
             </CardHeader>
@@ -1124,7 +1297,7 @@ export default function Partners() {
                         colSpan={personnelColumnCount}
                         className="text-center py-10 text-sm text-muted-foreground"
                       >
-                        Loading personnel from backend...
+                        Loading personnel please wait...
                       </TableCell>
                     </TableRow>
                   ) : filteredPersonnel.length > 0 ? (

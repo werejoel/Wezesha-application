@@ -65,6 +65,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import { DashboardFilterBreakdown } from "@/components/DashboardFilterBreakdown";
+import { INSTITUTIONAL_SESSION_TOTAL } from "@/constants/regions";
 
 const CHART_COLORS = [
   "hsl(152, 55%, 33%)",
@@ -160,23 +162,35 @@ function SystemHealthGauge({ score }: { score: number }) {
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { data: stats, isLoading: statsLoading } = useQuery({
+  const { data: stats, isLoading: statsLoading } = useQuery<any, Error, any>({
     queryKey: ["dashboard"],
-    queryFn: getDashboardStats,
+    queryFn: () => getDashboardStats(),
   });
   const [usersPage, setUsersPage] = useState(1);
   const [usersPageSize, setUsersPageSize] = useState(10);
-  const { data: youthData, isLoading: youthLoading } = useQuery({
+  const { data: youthData, isLoading: youthLoading } = useQuery<
+    any,
+    Error,
+    any
+  >({
     queryKey: ["youth"],
-    queryFn: getYouth,
+    queryFn: () => getYouth(),
   });
-  const { data: partnersData, isLoading: partnersLoading } = useQuery({
+  const { data: partnersData, isLoading: partnersLoading } = useQuery<
+    any,
+    Error,
+    any
+  >({
     queryKey: ["partners"],
-    queryFn: getPartners,
+    queryFn: () => getPartners(),
   });
-  const { data: sessionsData, isLoading: sessionsLoading } = useQuery({
+  const { data: sessionsData, isLoading: sessionsLoading } = useQuery<
+    any,
+    Error,
+    any
+  >({
     queryKey: ["sessions"],
-    queryFn: getSessions,
+    queryFn: () => getSessions(),
   });
   const { data: usersData, isLoading: usersLoading } = useQuery<
     any,
@@ -184,20 +198,25 @@ export default function AdminDashboard() {
     any
   >({
     queryKey: ["users", usersPage, usersPageSize],
-    queryFn: async () =>
-      await getUsers({ page: usersPage, limit: usersPageSize }),
+    queryFn: () => getUsers({ page: usersPage, limit: usersPageSize }),
   });
-  const { data: atRiskListData, isLoading: atRiskListLoading } = useQuery({
+  const { data: atRiskListData, isLoading: atRiskListLoading } = useQuery<
+    any,
+    Error,
+    any
+  >({
     queryKey: ["youth", "atRisk"],
     queryFn: () => getAtRiskYouth({ limit: 5, page: 1 }),
   });
-  const { data: lowAttendanceData, isLoading: lowAttendanceLoading } = useQuery(
-    {
-      queryKey: ["sessions", "lowAttendance"],
-      queryFn: () =>
-        getLowAttendanceSessions({ threshold: 70, limit: 5, page: 1 }),
-    },
-  );
+  const { data: lowAttendanceData, isLoading: lowAttendanceLoading } = useQuery<
+    any,
+    Error,
+    any
+  >({
+    queryKey: ["sessions", "lowAttendance"],
+    queryFn: () =>
+      getLowAttendanceSessions({ threshold: 70, limit: 5, page: 1 }),
+  });
 
   const [usersSearch, setUsersSearch] = useState("");
 
@@ -392,11 +411,15 @@ export default function AdminDashboard() {
     totalYouth: 0,
     totalPartners: 0,
     totalSessions: 0,
+    avgSessionsPerYouth: 0,
+    youthAt80Percent: 0,
+    expectedSessionTotal: INSTITUTIONAL_SESSION_TOTAL,
     totalCases: 0,
     totalUsers: 0,
     pendingSyncs: 0,
     atRiskCount: 0,
     avgAttendance: null,
+    filterBreakdown: undefined,
   };
   const youth = youthData || [];
   const partners = partnersData || [];
@@ -442,11 +465,6 @@ export default function AdminDashboard() {
     {
       name: "Instructor",
       value: users.filter((u: any) => u.role?.toLowerCase() === "instructor")
-        .length,
-    },
-    {
-      name: "Enumerator",
-      value: users.filter((u: any) => u.role?.toLowerCase() === "enumerator")
         .length,
     },
   ];
@@ -594,7 +612,10 @@ export default function AdminDashboard() {
               })}
             </span>
           </div>
-          <h1 className="page-title flex items-center gap-2">
+          <h1
+            className="page-title flex items-center gap-2"
+            style={{ alignItems: "center", color: "hsl(152, 55%, 33%)" }}
+          >
             Admin Dashboard
           </h1>
           <p className="page-description">
@@ -603,16 +624,13 @@ export default function AdminDashboard() {
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <Button
+            style={{ backgroundColor: "hsl(152, 55%, 33%)", color: "white" }}
             variant="default"
             size="sm"
-            className="h-8 gap-1.5 text-xs bg-sky-600 text-white hover:bg-sky-700 shadow-sm shadow-sky-200"
+            className="h-8 gap-1.5 text-xs bg-sky-600 text-white shadow-sm hover:shadow-md"
             onClick={() => downloadExportFile("all", "wezesha-data.xlsx")}
           >
-            <Download className="h-3.5 w-3.5" /> Export
-          </Button>
-          <Button variant="outline" size="icon" className="h-8 w-8 relative">
-            <Bell className="h-3.5 w-3.5" />
-            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-destructive rounded-full" />
+            <Download className="h-3.5 w-3.5" /> Export Data
           </Button>
         </div>
       </div>
@@ -676,10 +694,16 @@ export default function AdminDashboard() {
           variant="success"
         />
         <StatCard
-          title="Active Sessions"
-          value={dashboardStats.totalSessions}
+          title="Avg Sessions / Youth"
+          value={dashboardStats.avgSessionsPerYouth ?? 0}
           icon={GraduationCap}
           variant="warning"
+        />
+        <StatCard
+          title="Youth at 80%"
+          value={dashboardStats.youthAt80Percent ?? 0}
+          icon={Users}
+          variant="success"
         />
         <StatCard
           title="Active Cases"
@@ -694,6 +718,8 @@ export default function AdminDashboard() {
           variant="default"
         />
       </div>
+
+      <DashboardFilterBreakdown breakdown={dashboardStats.filterBreakdown} />
 
       {/* ── System Usage Trend + Role Distribution ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -1198,27 +1224,32 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full table-auto border-collapse">
+          <div className="overflow-x-auto rounded-3xl border border-border bg-card shadow-sm ring-1 ring-inset ring-slate-200/40 dark:border-slate-700 dark:ring-slate-800/40">
+            <table className="w-full table-auto border-separate border-spacing-y-2 bg-transparent text-sm">
               <thead>
-                <tr className="text-left text-xs text-muted-foreground">
-                  <th className="px-3 py-2">Name</th>
-                  <th className="px-3 py-2">Email</th>
-                  <th className="px-3 py-2">Role</th>
-                  <th className="px-3 py-2">Created</th>
+                <tr className="bg-slate-900/95 text-left text-xs uppercase tracking-[0.14em] text-slate-300">
+                  <th className="px-4 py-3">Name</th>
+                  <th className="px-4 py-3">Email</th>
+                  <th className="px-4 py-3">Role</th>
+                  <th className="px-4 py-3">Created</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredUsers.map((u: any) => (
-                  <tr key={u.id} className="border-t">
-                    <td className="px-3 py-2">
+                  <tr
+                    key={u.id}
+                    className="rounded-3xl border border-transparent bg-white shadow-sm transition duration-200 hover:border-primary/20 hover:bg-primary/5 odd:bg-slate-50 even:bg-white dark:border-slate-800 dark:bg-slate-950 dark:odd:bg-slate-950/70 dark:even:bg-slate-900/70"
+                  >
+                    <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">
                       {u.name || u.full_name || u.email}
                     </td>
-                    <td className="px-3 py-2 text-xs text-muted-foreground">
+                    <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
                       {u.email}
                     </td>
-                    <td className="px-3 py-2">{u.role}</td>
-                    <td className="px-3 py-2 text-xs text-muted-foreground">
+                    <td className="px-4 py-3 text-slate-700 dark:text-slate-300">
+                      {u.role}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
                       {u.created_at
                         ? new Date(u.created_at).toLocaleDateString()
                         : "-"}
@@ -1397,7 +1428,6 @@ export default function AdminDashboard() {
                       <option value="program_manager">Program Manager</option>
                       <option value="ybf">YBF</option>
                       <option value="instructor">Instructor</option>
-                      <option value="enumerator">Enumerator</option>
                     </select>
                     <Button
                       type="submit"
@@ -1441,8 +1471,7 @@ export default function AdminDashboard() {
                       <option value="admin">Admin</option>
                       <option value="program_manager">Program Manager</option>
                       <option value="ybf">YBF</option>
-                      <option value="instructor">Instructor</option>
-                      <option value="enumerator">Enumerator</option>
+                      <option value="instructor">Instructor</option>  
                     </select>
                   </div>
                   <div className="flex items-center gap-2 mt-3">
@@ -1490,7 +1519,7 @@ export default function AdminDashboard() {
                       <option value={10}>10</option>
                       <option value={25}>25</option>
                     </select>
-                  </div>
+                  </div>   
                   <Button onClick={handleChangeUserRole} className="h-10">
                     Save Role
                   </Button>
@@ -1548,6 +1577,10 @@ export default function AdminDashboard() {
                   </p>
                   <div className="flex flex-wrap gap-2">
                     <Button
+                      style={{
+                        backgroundColor: "hsl(152, 55%, 33%)",
+                        color: "white",
+                      }}
                       variant="default"
                       className="h-10 bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm shadow-emerald-200"
                       onClick={() => downloadExportFile("youth", "youth.xlsx")}
@@ -1555,6 +1588,10 @@ export default function AdminDashboard() {
                       Export Youth
                     </Button>
                     <Button
+                      style={{
+                        backgroundColor: "hsl(152, 55%, 33%)",
+                        color: "hsl(152, 55%, 33%)",
+                      }}
                       variant="default"
                       className="h-10 bg-orange-500 text-white hover:bg-orange-600 shadow-sm shadow-orange-200"
                       onClick={() =>
@@ -1564,6 +1601,10 @@ export default function AdminDashboard() {
                       Export Partners
                     </Button>
                     <Button
+                      style={{
+                        backgroundColor: "hsl(152, 55%, 33%)",
+                        color: "white",
+                      }}
                       variant="default"
                       className="h-10 bg-violet-600 text-white hover:bg-violet-700 shadow-sm shadow-violet-200"
                       onClick={() =>
@@ -1573,8 +1614,12 @@ export default function AdminDashboard() {
                       Export Sessions
                     </Button>
                     <Button
+                      style={{
+                        backgroundColor: "hsl(152, 55%, 33%)",
+                        color: "white",
+                      }}
                       variant="default"
-                      className="h-10 bg-sky-600 text-white hover:bg-sky-700 shadow-sm shadow-sky-200"
+                      className="h-10  text-white hover:bg-sky-700 shadow-sm shadow-sky-200"
                       onClick={() =>
                         downloadExportFile("all", "wezesha-data.xlsx")
                       }

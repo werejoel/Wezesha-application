@@ -1,5 +1,11 @@
 // frontEnd/src/api.ts
 const BASE_URL = `${import.meta.env.VITE_API_URL}/api`;
+
+const clearStoredSession = () => {
+  localStorage.removeItem("token");
+  localStorage.removeItem("user");
+};
+
 const getAuthHeaders = () => {
   const token = localStorage.getItem("token");
   const base = {
@@ -14,6 +20,26 @@ const normalizeRole = (role: string | undefined | null) => {
   const normalized = role.toString().trim().toLowerCase();
   if (normalized === "program manager" || normalized === "program_manager")
     return "program_manager";
+  if (
+    normalized === "program_leadership" ||
+    normalized === "program leadership"
+  )
+    return "program_leadership";
+  if (
+    normalized === "program_manager_out_of_school" ||
+    normalized === "program manager out of school"
+  )
+    return "program_manager_out_of_school";
+  if (
+    normalized === "program_manager_in_school" ||
+    normalized === "program manager in school"
+  )
+    return "program_manager_in_school";
+  if (
+    normalized === "program_supervisor" ||
+    normalized === "program supervisor"
+  )
+    return "program_supervisor";
   if (normalized === "ybf") return "ybf";
   if (normalized === "instructor") return "instructor";
   if (normalized === "enumerator") return "enumerator";
@@ -26,6 +52,8 @@ const normalizeUser = (user: any) => {
   return {
     ...user,
     role: normalizeRole(user.role),
+    status: user.status || "active",
+    pendingApproval: Boolean(user.pendingApproval),
   };
 };
 
@@ -85,14 +113,32 @@ export const register = (
   });
 
 export const logout = () => {
-  localStorage.removeItem("token");
-  localStorage.removeItem("user");
+  clearStoredSession();
 };
 
+export const requestPasswordReset = (email: string) =>
+  post("/auth/forgot-password", { email });
+
+export const resetPassword = (email: string, token: string, password: string) =>
+  post("/auth/reset-password", { email, token, password });
+
 export const getCurrentUser = () => {
+  const token = localStorage.getItem("token");
   const user = localStorage.getItem("user");
-  return user ? normalizeUser(JSON.parse(user)) : null;
+  if (!token || !user) {
+    clearStoredSession();
+    return null;
+  }
+
+  try {
+    return normalizeUser(JSON.parse(user));
+  } catch {
+    clearStoredSession();
+    return null;
+  }
 };
+
+export const getMe = () => get("/auth/me").then((data) => normalizeUser(data));
 
 // Dashboard
 export const getDashboardStats = () => get("/dashboard");
@@ -103,23 +149,27 @@ export const getCohorts = () => get("/cohorts");
 export const getPersonnel = () => get("/personnel");
 export const createPersonnel = (data: object) => post("/personnel", data);
 export const createPartner = (data: object) => post("/partners", data);
+
 export const updatePartner = (id: string, data: object) =>
   fetch(`${BASE_URL}/partners/${id}`, {
     method: "PUT",
     headers: getAuthHeaders(),
     body: JSON.stringify(data),
   }).then(handleResponse);
+
 export const deletePartner = (id: string) =>
   fetch(`${BASE_URL}/partners/${id}`, {
     method: "DELETE",
     headers: getAuthHeaders(),
   }).then(handleResponse);
+
 export const updatePersonnel = (id: string, data: object) =>
   fetch(`${BASE_URL}/personnel/${id}`, {
     method: "PUT",
     headers: getAuthHeaders(),
     body: JSON.stringify(data),
   }).then(handleResponse);
+
 export const deletePersonnel = (id: string) =>
   fetch(`${BASE_URL}/personnel/${id}`, {
     method: "DELETE",
@@ -127,7 +177,24 @@ export const deletePersonnel = (id: string) =>
   }).then(handleResponse);
 
 // Youth
-export const getYouth = () => get("/youth");
+export const getYouth = (filters?: {
+  region?: string;
+  programType?: string;
+  programYear?: string | number;
+  rosterYear?: string | number;
+}) => {
+  const params = new URLSearchParams();
+  if (filters?.region && filters.region !== "all")
+    params.set("region", filters.region);
+  if (filters?.programType && filters.programType !== "all")
+    params.set("program_type", filters.programType);
+  if (filters?.programYear && filters.programYear !== "all")
+    params.set("program_year", String(filters.programYear));
+  if (filters?.rosterYear)
+    params.set("roster_year", String(filters.rosterYear));
+  const qs = params.toString();
+  return get(`/youth${qs ? `?${qs}` : ""}`);
+};
 export const createYouth = (data: object) => post("/youth", data);
 export const updateYouth = (id: string, data: object) =>
   fetch(`${BASE_URL}/youth/${id}`, {
@@ -205,7 +272,8 @@ export const createUser = (
   email: string,
   password: string,
   role: string,
-) => post("/auth/register", { name, email, password, role });
+  regionScope?: string,
+) => post("/auth/register", { name, email, password, role, region_scope: regionScope });
 export const updateUser = (id: string, data: object) =>
   fetch(`${BASE_URL}/users/${id}`, {
     method: "PUT",
@@ -217,6 +285,28 @@ export const deleteUser = (id: string) =>
     method: "DELETE",
     headers: getAuthHeaders(),
   }).then(handleResponse);
+
+export const updateUserStatus = (
+  id: string,
+  status: "active" | "inactive" | "blocked" | "pending",
+) =>
+  fetch(`${BASE_URL}/users/${id}/status`, {
+    method: "PATCH",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ status }),
+  }).then(handleResponse);
+
+export const importKoboData = (resource: string, payload: any) => {
+  if (Array.isArray(payload)) {
+    return post("/import/kobo", { resource, records: payload });
+  }
+
+  if (payload && typeof payload === "object") {
+    return post("/import/kobo", { resource, ...payload });
+  }
+
+  return post("/import/kobo", { resource, records: payload });
+};
 
 export const downloadExport = (resource: string = "all") =>
   fetch(`${BASE_URL}/export?resource=${encodeURIComponent(resource)}`, {
@@ -248,6 +338,14 @@ export const updateAttendance = (id: string, data: object) =>
     headers: getAuthHeaders(),
     body: JSON.stringify(data),
   }).then(handleResponse);
+
+export const createBulkAttendance = (
+  records: {
+    session_id: string | number;
+    youth_id: string | number;
+    status: string;
+  }[],
+) => post("/attendance/bulk", { records });
 
 //Risk endpoints
 export const getAtRiskYouth = (

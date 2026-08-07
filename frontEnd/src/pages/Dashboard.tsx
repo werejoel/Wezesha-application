@@ -3,7 +3,6 @@ import AdminDashboard from "@/pages/admin/AdminDashboard";
 import ProgramManagerDashboard from "@/pages/program-manager/ProgramManagerDashboard";
 import YBFDashboard from "@/pages/ybf/YBFDashboard";
 import InstructorDashboard from "@/pages/instructor/InstructorDashboard";
-import EnumeratorDashboard from "@/pages/enumerator/EnumeratorDashboard";
 
 // Main dashboard component that renders different views based on user role
 const Dashboard = () => {
@@ -17,15 +16,17 @@ const Dashboard = () => {
     case 'admin':
       return <AdminDashboard />;
     case 'program_manager':
+    case 'program_leadership':
+    case 'program_manager_out_of_school':
+    case 'program_manager_in_school':
+    case 'program_supervisor':
       return <ProgramManagerDashboard />;
     case 'ybf':
       return <YBFDashboard />;
     case 'instructor':
       return <InstructorDashboard />;
-    case 'enumerator':
-      return <EnumeratorDashboard />;
     default:
-      return <EnumeratorDashboard />; // Fallback to enumerator dashboard if role is unrecognized
+      return <ProgramManagerDashboard />;
   }
 }
 export default Dashboard;

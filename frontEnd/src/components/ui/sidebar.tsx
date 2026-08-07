@@ -218,22 +218,32 @@ Sidebar.displayName = "Sidebar";
 
 const SidebarTrigger = React.forwardRef<React.ElementRef<typeof Button>, React.ComponentProps<typeof Button>>(
   ({ className, onClick, ...props }, ref) => {
-    const { toggleSidebar } = useSidebar();
+    const { toggleSidebar, state } = useSidebar();
+    const isCollapsed = state === "collapsed";
 
     return (
       <Button
         ref={ref}
         data-sidebar="trigger"
-        variant="ghost"
+        variant="secondary"
         size="icon"
-        className={cn("h-7 w-7", className)}
+        aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        className={cn(
+          "h-9 w-9 rounded-full border border-border bg-slate-100 text-slate-900 shadow-sm transition-all duration-200 focus-visible:ring-primary/50 hover:bg-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800",
+          className,
+        )}
         onClick={(event) => {
           onClick?.(event);
           toggleSidebar();
         }}
         {...props}
       >
-        <PanelLeft />
+        <PanelLeft
+          className={cn(
+            "h-4 w-4 transition-transform duration-200",
+            isCollapsed && "rotate-180",
+          )}
+        />
         <span className="sr-only">Toggle Sidebar</span>
       </Button>
     );

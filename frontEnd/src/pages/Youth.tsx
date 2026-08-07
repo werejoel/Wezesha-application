@@ -15,6 +15,10 @@ const Youth = () => {
     case 'admin':
       return <AdminYouth />;
     case 'program_manager':
+    case 'program_leadership':
+    case 'program_manager_out_of_school':
+    case 'program_manager_in_school':
+    case 'program_supervisor':
       return <ProgramManagerYouth />;
     case 'ybf':
       return <YBFYouth />;
