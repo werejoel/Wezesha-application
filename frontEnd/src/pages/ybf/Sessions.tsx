@@ -101,6 +101,14 @@ export default function YBFSessions() {
   const [cohorts, setCohorts] = useState<
     { id: string; label: string }[]
   >([]);
+  const calendarUrl = (() => {
+    const baseUrl = `${import.meta.env.VITE_API_URL || window.location.origin}/api/sessions/calendar.ics`;
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    if (!token) return baseUrl;
+
+    const separator = baseUrl.includes("?") ? "&" : "?";
+    return `${baseUrl}${separator}token=${encodeURIComponent(token)}`;
+  })();
   const [sessionForm, setSessionForm] = useState(defaultSessionForm);
   const [sessionErrors, setSessionErrors] = useState<Record<string, string>>(
     {},
@@ -265,6 +273,21 @@ export default function YBFSessions() {
 
   const sessionFormValid = Object.keys(validateSessionForm()).length === 0;
 
+  const handleSubscribeCalendar = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+
+    if (!calendarUrl) {
+      toast({
+        title: "Sign in required",
+        description: "Please sign in again to open your calendar.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    window.open(calendarUrl, "_blank", "noopener,noreferrer");
+  };
+
   const handleCreateSession = async () => {
     const errs = validateSessionForm();
     if (Object.keys(errs).length > 0) {
@@ -325,153 +348,167 @@ export default function YBFSessions() {
             individual.
           </p>
         </div>
-        <Dialog open={addOpen} onOpenChange={setAddOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-violet-600 hover:bg-violet-700 text-white shadow-sm">
-              <Plus className="h-4 w-4 mr-1" /> Add Session
-            </Button>
-          </DialogTrigger>
-          <FormDialogShell
-            theme="session"
-            icon={CalendarCheck}
-            title="Schedule New Session"
-            subtitle="Plan a session for one of your assigned cohorts"
-          >
-            <div className="space-y-4">
-              <FormSection theme="session" title="Session details">
-                <div>
-                  <Label htmlFor="ybf-session-cohort">Cohort</Label>
-                  {cohorts.length > 0 ? (
-                    <Select
-                      value={sessionForm.cohortId || undefined}
-                      onValueChange={(v) => {
-                        setSessionForm({ ...sessionForm, cohortId: v });
-                        setSessionErrors((p) => ({ ...p, cohortId: "" }));
-                      }}
-                    >
-                      <SelectTrigger
-                        id="ybf-session-cohort"
-                        className="bg-white/80"
+        <div className="flex items-center gap-2">
+          <div className="flex flex-col items-start">
+            <button
+              type="button"
+              onClick={handleSubscribeCalendar}
+              className="inline-flex items-center rounded-lg border border-emerald-200 bg-white/80 px-3 py-2 text-sm font-medium text-emerald-700 shadow-sm hover:bg-emerald-50"
+            >
+              Add to Calendar
+            </button>
+            <span className="mt-1 text-xs text-slate-500">
+              Open this in Outlook or Google Calendar
+            </span>
+          </div>
+          <Dialog open={addOpen} onOpenChange={setAddOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-violet-600 hover:bg-violet-700 text-white shadow-sm">
+                <Plus className="h-4 w-4 mr-1" /> Add Session
+              </Button>
+            </DialogTrigger>
+            <FormDialogShell
+              theme="session"
+              icon={CalendarCheck}
+              title="Schedule New Session"
+              subtitle="Plan a session for one of your assigned cohorts"
+            >
+              <div className="space-y-4">
+                <FormSection theme="session" title="Session details">
+                  <div>
+                    <Label htmlFor="ybf-session-cohort">Cohort</Label>
+                    {cohorts.length > 0 ? (
+                      <Select
+                        value={sessionForm.cohortId || undefined}
+                        onValueChange={(v) => {
+                          setSessionForm({ ...sessionForm, cohortId: v });
+                          setSessionErrors((p) => ({ ...p, cohortId: "" }));
+                        }}
                       >
-                        <SelectValue placeholder="Select cohort" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {cohorts.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.label}
-                          </SelectItem>
+                        <SelectTrigger
+                          id="ybf-session-cohort"
+                          className="bg-white/80"
+                        >
+                          <SelectValue placeholder="Select cohort" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {cohorts.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <p className="text-sm text-muted-foreground border border-dashed rounded-lg p-3">
+                        No cohorts assigned. Add a partner institution first.
+                      </p>
+                    )}
+                    <FormFieldError message={sessionErrors.cohortId} />
+                  </div>
+                  <div>
+                    <Label htmlFor="ybf-session-topic">Topic</Label>
+                    <Input
+                      id="ybf-session-topic"
+                      value={sessionForm.topic}
+                      onChange={(e) => {
+                        setSessionForm({
+                          ...sessionForm,
+                          topic: e.target.value,
+                        });
+                        setSessionErrors((p) => ({ ...p, topic: "" }));
+                      }}
+                      placeholder="Business planning workshop"
+                      className="bg-white/80"
+                    />
+                    <FormFieldError message={sessionErrors.topic} />
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="ybf-session-date">Date</Label>
+                      <Input
+                        id="ybf-session-date"
+                        type="date"
+                        value={sessionForm.session_date}
+                        onChange={(e) =>
+                          setSessionForm({
+                            ...sessionForm,
+                            session_date: e.target.value,
+                          })
+                        }
+                        className="bg-white/80"
+                      />
+                      <FormFieldError message={sessionErrors.session_date} />
+                    </div>
+                    <div>
+                      <Label htmlFor="ybf-session-number">Session #</Label>
+                      <Input
+                        id="ybf-session-number"
+                        type="number"
+                        min={1}
+                        value={String(sessionForm.sessionNumber)}
+                        onChange={(e) =>
+                          setSessionForm({
+                            ...sessionForm,
+                            sessionNumber: Number(e.target.value),
+                          })
+                        }
+                        className="bg-white/80"
+                      />
+                      <FormFieldError message={sessionErrors.sessionNumber} />
+                    </div>
+                  </div>
+                </FormSection>
+
+                <FormSection theme="session" title="Logistics">
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="ybf-session-term">Term</Label>
+                      <select
+                        id="ybf-session-term"
+                        value={sessionForm.term}
+                        onChange={(e) =>
+                          setSessionForm({
+                            ...sessionForm,
+                            term: e.target.value as (typeof SESSION_TERMS)[number],
+                          })
+                        }
+                        className={formSelectClass}
+                      >
+                        {SESSION_TERMS.map((t) => (
+                          <option key={t} value={t}>
+                            {t}
+                          </option>
                         ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <p className="text-sm text-muted-foreground border border-dashed rounded-lg p-3">
-                      No cohorts assigned. Add a partner institution first.
-                    </p>
-                  )}
-                  <FormFieldError message={sessionErrors.cohortId} />
-                </div>
-                <div>
-                  <Label htmlFor="ybf-session-topic">Topic</Label>
-                  <Input
-                    id="ybf-session-topic"
-                    value={sessionForm.topic}
-                    onChange={(e) => {
-                      setSessionForm({
-                        ...sessionForm,
-                        topic: e.target.value,
-                      });
-                      setSessionErrors((p) => ({ ...p, topic: "" }));
-                    }}
-                    placeholder="Business planning workshop"
-                    className="bg-white/80"
-                  />
-                  <FormFieldError message={sessionErrors.topic} />
-                </div>
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="ybf-session-date">Date</Label>
-                    <Input
-                      id="ybf-session-date"
-                      type="date"
-                      value={sessionForm.session_date}
-                      onChange={(e) =>
-                        setSessionForm({
-                          ...sessionForm,
-                          session_date: e.target.value,
-                        })
-                      }
-                      className="bg-white/80"
-                    />
-                    <FormFieldError message={sessionErrors.session_date} />
+                      </select>
+                    </div>
+                    <div>
+                      <Label htmlFor="ybf-session-venue">Venue</Label>
+                      <Input
+                        id="ybf-session-venue"
+                        value={sessionForm.venue}
+                        onChange={(e) =>
+                          setSessionForm({ ...sessionForm, venue: e.target.value })
+                        }
+                        placeholder="Main hall"
+                        className="bg-white/80"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <Label htmlFor="ybf-session-number">Session #</Label>
-                    <Input
-                      id="ybf-session-number"
-                      type="number"
-                      min={1}
-                      value={String(sessionForm.sessionNumber)}
-                      onChange={(e) =>
-                        setSessionForm({
-                          ...sessionForm,
-                          sessionNumber: Number(e.target.value),
-                        })
-                      }
-                      className="bg-white/80"
-                    />
-                    <FormFieldError message={sessionErrors.sessionNumber} />
-                  </div>
-                </div>
-              </FormSection>
+                </FormSection>
 
-              <FormSection theme="session" title="Logistics">
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="ybf-session-term">Term</Label>
-                    <select
-                      id="ybf-session-term"
-                      value={sessionForm.term}
-                      onChange={(e) =>
-                        setSessionForm({
-                          ...sessionForm,
-                          term: e.target.value as (typeof SESSION_TERMS)[number],
-                        })
-                      }
-                      className={formSelectClass}
-                    >
-                      {SESSION_TERMS.map((t) => (
-                        <option key={t} value={t}>
-                          {t}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <Label htmlFor="ybf-session-venue">Venue</Label>
-                    <Input
-                      id="ybf-session-venue"
-                      value={sessionForm.venue}
-                      onChange={(e) =>
-                        setSessionForm({ ...sessionForm, venue: e.target.value })
-                      }
-                      placeholder="Main hall"
-                      className="bg-white/80"
-                    />
-                  </div>
-                </div>
-              </FormSection>
-
-              <FormFieldError message={sessionErrors.submit} />
-              <FormActions
-                theme="session"
-                onCancel={() => setAddOpen(false)}
-                onSubmit={handleCreateSession}
-                submitLabel={creating ? "Scheduling…" : "Schedule Session"}
-                disabled={!sessionFormValid || creating || cohorts.length === 0}
-              />
-            </div>
-          </FormDialogShell>
-        </Dialog>
+                <FormFieldError message={sessionErrors.submit} />
+                <FormActions
+                  theme="session"
+                  onCancel={() => setAddOpen(false)}
+                  onSubmit={handleCreateSession}
+                  submitLabel={creating ? "Scheduling…" : "Schedule Session"}
+                  disabled={!sessionFormValid || creating || cohorts.length === 0}
+                />
+              </div>
+            </FormDialogShell>
+          </Dialog>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

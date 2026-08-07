@@ -34,7 +34,7 @@ import { useTheme, type ThemeMode } from "@/hooks/use-theme";
 import { useUser } from "@/hooks/use-user";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { getUsers, updateUserStatus } from "@/api";
+import { downloadExport, getUsers, importKoboData, updateUserStatus } from "@/api";
 
 const ORG_KEY = "wezesha_org_name";
 const NOTIFY_KEY = "wezesha_email_notifications";
@@ -111,6 +111,12 @@ export default function AdminSettings() {
 
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
+  const [importText, setImportText] = useState("[]");
+  const [koboApiUrl, setKoboApiUrl] = useState("");
+  const [koboApiToken, setKoboApiToken] = useState("");
+  const [koboFormId, setKoboFormId] = useState("");
+  const [importingData, setImportingData] = useState(false);
+  const [importStatus, setImportStatus] = useState<string | null>(null);
   const [userSearch, setUserSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | UserStatus>("all");
   const [statusUpdating, setStatusUpdating] = useState<string | null>(null);
@@ -179,6 +185,64 @@ export default function AdminSettings() {
       title: "Settings saved",
       description: "Your preferences have been updated.",
     });
+  };
+
+  const handleExportData = async (resource: string) => {
+    try {
+      const blob = await downloadExport(resource);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `wezesha-${resource}-export.xlsx`;
+      link.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Export ready", description: `Downloaded ${resource} data.` });
+    } catch (err: any) {
+      toast({
+        title: "Export failed",
+        description: err?.message || "Could not generate the export.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleImportKobo = async (mode: "json" | "kobo" = "json") => {
+    try {
+      setImportingData(true);
+      let payload: any;
+
+      if (mode === "json") {
+        const parsed = JSON.parse(importText);
+        if (!Array.isArray(parsed)) {
+          throw new Error("Paste a JSON array of records.");
+        }
+        payload = parsed;
+      } else {
+        payload = {
+          source: {
+            apiUrl: koboApiUrl.trim() || undefined,
+            token: koboApiToken.trim() || undefined,
+            formId: koboFormId.trim() || undefined,
+          },
+        };
+      }
+
+      const result = await importKoboData("youth", payload);
+      setImportStatus(`${result.imported} youth imported, ${result.skipped} skipped.`);
+      toast({
+        title: mode === "kobo" ? "KoboToolbox import complete" : "Kobo import complete",
+        description: `${result.imported} youth imported successfully.`,
+      });
+    } catch (err: any) {
+      setImportStatus(null);
+      toast({
+        title: "Import failed",
+        description: err?.message || "Please review the payload and Kobo settings.",
+        variant: "destructive",
+      });
+    } finally {
+      setImportingData(false);
+    }
   };
 
   const handleStatusChange = async (target: ManagedUser, status: UserStatus) => {
@@ -261,6 +325,72 @@ export default function AdminSettings() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="border-primary/20">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Shield className="h-4 w-4 text-primary" />
+            Data import and export
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => handleExportData("youth")}>
+              Export youth data
+            </Button>
+            <Button variant="outline" onClick={() => handleExportData("sessions")}>
+              Export sessions
+            </Button>
+          </div>
+          <div className="space-y-2">
+            <Label>Paste cleaned Kobo/KoBoCollect JSON</Label>
+            <textarea
+              className="min-h-36 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+              value={importText}
+              onChange={(e) => setImportText(e.target.value)}
+              placeholder='[{"full_name":"Jane Doe","partner_name":"Aga Khan","gender":"Female"}]'
+            />
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="kobo-api-url">Kobo API URL</Label>
+                <Input
+                  id="kobo-api-url"
+                  value={koboApiUrl}
+                  onChange={(e) => setKoboApiUrl(e.target.value)}
+                  placeholder="https://kf.kobotoolbox.org"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="kobo-api-token">API token</Label>
+                <Input
+                  id="kobo-api-token"
+                  value={koboApiToken}
+                  onChange={(e) => setKoboApiToken(e.target.value)}
+                  placeholder="Token or API key"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="kobo-form-id">Form ID</Label>
+                <Input
+                  id="kobo-form-id"
+                  value={koboFormId}
+                  onChange={(e) => setKoboFormId(e.target.value)}
+                  placeholder="a1b2c3d4"
+                />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button onClick={() => handleImportKobo("json")} disabled={importingData}>
+                {importingData ? "Importing…" : "Import pasted JSON"}
+              </Button>
+              <Button variant="outline" onClick={() => handleImportKobo("kobo")} disabled={importingData}>
+                {importingData ? "Importing…" : "Import from KoboToolbox"}
+              </Button>
+              {importStatus && <span className="text-sm text-emerald-700">{importStatus}</span>}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="border-primary/20">
         <CardHeader className="pb-3">

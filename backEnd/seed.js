@@ -7,14 +7,14 @@ async function seed() {
 
   try {
     await client.query('BEGIN');
-    console.log('🌱 Starting seed...');
+    console.log('Starting seed...');
 
     // Ensure users table has role column
     await client.query(`
       ALTER TABLE users 
       ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'enumerator'
     `);
-    console.log('✅ Users table updated with role column');
+    console.log(' Users table updated with role column');
 
     // 1. Partners
     console.log('Adding partners...');
@@ -47,7 +47,7 @@ async function seed() {
       );
       if (res.rows[0]) partnerMap[p.name] = res.rows[0].id;
     }
-    console.log(`✅ ${Object.keys(partnerMap).length} partners added`);
+    console.log(` ${Object.keys(partnerMap).length} partners added`);
 
     // 2. YBFs
     console.log('Adding YBFs...');
@@ -71,7 +71,7 @@ async function seed() {
         [y.name, y.contact_phone, y.contact_email]
       );
     }
-    console.log(`✅ ${ybfs.length} YBFs added`);
+    console.log(` ${ybfs.length} YBFs added`);
 
     // 3. Cohorts — cohort uses partner_institution_id + program_year (no name column)
     console.log('Adding cohorts...');
@@ -88,7 +88,6 @@ async function seed() {
     for (const c of cohortDefs) {
       const partnerId = partnerMap[c.partnerName];
       if (!partnerId) continue;
-
       const existingCohort = await client.query(
         `SELECT id FROM cohort WHERE partner_institution_id = $1 AND program_year = $2 LIMIT 1`,
         [partnerId, c.program_year]
@@ -106,18 +105,24 @@ async function seed() {
       );
       if (res.rows[0]) cohortMap[`${c.partnerName}-${c.program_year}`] = res.rows[0].id;
     }
-    console.log(`✅ ${Object.keys(cohortMap).length} cohorts added`);
+    console.log(` ${Object.keys(cohortMap).length} cohorts added`);
 
     // 4. Youth
 console.log('Adding youth...');
 const names = ['Alice Wanjiru','Brian Odhiambo','Catherine Njeri','Daniel Kipchoge','Esther Auma','Francis Mutua','Grace Nyambura','Henry Oloo','Irene Wambui','James Kiptoo','Karen Muthoni','Leonard Onyango','Mercy Cherop','Nelson Maina','Olive Awuor','Patrick Mugo','Queen Achieng','Robert Njoroge','Susan Chepkoech','Timothy Wekesa','Ursula Mwende','Victor Ouma','Winnie Naliaka','Xavier Kibet','Yvonne Moraa','Zack Githae','Angela Wairimu','Ben Otieno','Clara Jepchirchir','Dennis Mwangi','Emily Nekesa','Fred Kamau','Gladys Atieno','Hugo Ndirangu','Ivy Jeptoo','Jack Musyoka','Kate Aoko','Liam Kigen','Monica Wafula','Noel Karanja'];
 const partnerNames = ['Nairobi Technical Institute','Kisumu Youth CBO','Mombasa Polytechnic','Nakuru Skills Centre','Thika Technical Training'];
 const districts = ['Nairobi','Kisumu','Mombasa','Nakuru','Kiambu'];
+const employmentStatuses = ['Employed Full-time', 'Employed Part-time', 'Self-employed', 'Unemployed'];
 const youthMap = {};
 
 for (let i = 0; i < names.length; i++) {
   const partnerName = partnerNames[i % 5];
   const partnerId = partnerMap[partnerName];
+  const employmentStatus = employmentStatuses[i % employmentStatuses.length];
+  const baselineIncome = 2500 + (i % 5) * 1500;
+  const currentIncome = baselineIncome + [0, 2000, 4000, 6000, 8000][i % 5];
+  const hasBusiness = i % 3 === 0;
+  const aboveIpl = currentIncome > 7500;
 
   // Find ANY cohort that belongs to this partner
   const cohortRes = await client.query(
@@ -126,7 +131,7 @@ for (let i = 0; i < names.length; i++) {
   );
 
   if (!cohortRes.rows[0]) {
-    console.log(`⚠️ No cohort found for ${partnerName}, skipping ${names[i]}`);
+    console.log(`No cohort found for ${partnerName}, skipping ${names[i]}`);
     continue;
   }
 
@@ -141,21 +146,27 @@ for (let i = 0; i < names.length; i++) {
     `INSERT INTO youth (
        full_name, date_of_birth, gender, nationality,
        district_of_residence, region, partner_institution_id,
-       cohort_id, program_type, program_year, enrolment_date
+       cohort_id, program_type, program_year, enrolment_date,
+       employment_status, baseline_income, current_income, has_business, above_ipl
      )
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
      ON CONFLICT DO NOTHING
      RETURNING id, full_name`,
     [
       names[i], dob, gender, 'Kenyan',
       district, district, partnerId,
       cohortId, programType, programYear,
-      `2024-${String((i % 6) + 1).padStart(2, '0')}-${String((i % 28) + 1).padStart(2, '0')}`
+      `2024-${String((i % 6) + 1).padStart(2, '0')}-${String((i % 28) + 1).padStart(2, '0')}`,
+      employmentStatus,
+      baselineIncome,
+      currentIncome,
+      hasBusiness,
+      aboveIpl,
     ]
   );
   if (res.rows[0]) youthMap[names[i]] = res.rows[0].id;
 }
-console.log(`✅ ${Object.keys(youthMap).length} youth added`);
+console.log(`${Object.keys(youthMap).length} youth added`);
   // 5. Sessions
 console.log('Adding sessions...');
 const sessionDefs = [
@@ -190,7 +201,7 @@ for (const s of sessionDefs) {
     [cohortRes.rows[0].id, s.topic, s.date, s.venue, s.term_number, s.session_number]
   );
 }
-console.log(`✅ ${sessionDefs.length} sessions added`);
+console.log(` ${sessionDefs.length} sessions added`);
 
 // 5.5 Attendance records for at-risk youth
 console.log('Adding attendance records...');
@@ -237,7 +248,7 @@ for (const [youthName, youthId] of Object.entries(youthMap)) {
     );
   }
 }
-console.log('✅ Attendance records added');
+console.log('Attendance records added');
 
 // 6. Default system accounts (admin + program manager only)
 console.log('Adding default system accounts...');
@@ -256,13 +267,13 @@ const defaultUsers = [
   {
     name: 'System Administrator',
     email: 'admin@wezesha.org',
-    password: 'Admin@Wezesha2026',
+    password: 'admin@1234',
     role: 'admin',
   },
   {
     name: 'Program Manager',
     email: 'manager@wezesha.org',
-    password: 'Manager@Wezesha2026',
+    password: 'manager@1234',
     role: 'program_manager',
   },
 ];
@@ -279,15 +290,17 @@ for (const user of defaultUsers) {
     [user.name, user.email, hashedPassword, user.role]
   );
 }
-console.log(`✅ ${defaultUsers.length} default accounts ready (admin + program manager)`);
+console.log(` ${defaultUsers.length} default accounts ready (admin + program manager)`);
 
 // 6.6 Output milestones for sample youth
 console.log('Adding output milestones...');
 const milestoneYouth = ['Alice Wanjiru', 'Brian Odhiambo', 'Catherine Njeri', 'James Kiptoo'];
 const milestoneDefs = [
   { type: 'Business Plan', statuses: ['Completed', 'In Progress', 'Not Started', 'Completed'] },
+  // 'Cover Letter' was renamed to 'CV' in the system; keep CV as a milestone
   { type: 'CV', statuses: ['In Progress', 'Not Started', 'Completed', 'Completed'] },
-  { type: 'Application Letter', statuses: ['Not Started', 'Not Started', 'In Progress', 'Completed'] },
+  // Legacy 'CV' entries are now treated as 'Business Ideas'
+  { type: 'Business Ideas', statuses: ['Not Started', 'Not Started', 'In Progress', 'Completed'] },
 ];
 
 for (let i = 0; i < milestoneYouth.length; i++) {
@@ -306,7 +319,7 @@ for (let i = 0; i < milestoneYouth.length; i++) {
     );
   }
 }
-console.log('✅ Output milestones added');
+console.log(' Output milestones added');
 
 // Get admin user id for case notes
 const adminUserRes = await client.query(
@@ -345,16 +358,16 @@ for (const cn of caseNotes) {
     [youthId, adminUserId, cn.category, cn.note, cn.followUp || null, !!cn.followUp]
   );
 }
-console.log(`✅ ${caseNotes.length} case notes added`);
+console.log(` ${caseNotes.length} case notes added`);
 
 
 
     await client.query('COMMIT');
-    console.log('\n🎉 Seed completed successfully!');
+    console.log('\n Seed completed successfully!');
 
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error('❌ Seed failed:', err.message);
+    console.error(' Seed failed:', err.message);
   } finally {
     client.release();
     process.exit();

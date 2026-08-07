@@ -18,6 +18,7 @@ import AdminSettings from "./pages/admin/Settings";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
+import ForgotPassword from "./pages/auth/ForgotPassword";
 
 const queryClient = new QueryClient();
 
@@ -51,10 +52,11 @@ const App = () => (
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route
               path="/*"
               element={
-                <RoleProtectedRoute allowedRoles={['admin', 'program_manager', 'ybf', 'instructor', 'enumerator']}>
+                <RoleProtectedRoute allowedRoles={['admin', 'program_manager', 'program_leadership', 'program_manager_out_of_school', 'program_manager_in_school', 'program_supervisor', 'ybf', 'instructor']}>
                   <AppLayout>
                     <Routes>
                       <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -62,7 +64,7 @@ const App = () => (
                       <Route
                         path="/users"
                         element={
-                          <RoleProtectedRoute allowedRoles={["admin"]}>
+                          <RoleProtectedRoute allowedRoles={["admin", "program_manager", "program_leadership", "program_manager_out_of_school", "program_manager_in_school", "program_supervisor"]}>
                             <AdminUsers />
                           </RoleProtectedRoute>
                         }
@@ -78,7 +80,7 @@ const App = () => (
                       <Route
                         path="/partners"
                         element={
-                          <RoleProtectedRoute allowedRoles={['admin', 'program_manager', 'ybf']}>
+                          <RoleProtectedRoute allowedRoles={['admin', 'program_manager', 'program_leadership', 'program_manager_out_of_school', 'program_manager_in_school', 'program_supervisor', 'ybf']}>
                             <Partners />
                           </RoleProtectedRoute>
                         }
@@ -86,7 +88,7 @@ const App = () => (
                       <Route
                         path="/youth"
                         element={
-                          <RoleProtectedRoute allowedRoles={['admin', 'program_manager', 'ybf', 'instructor']}>
+                          <RoleProtectedRoute allowedRoles={['admin', 'program_manager', 'program_leadership', 'program_manager_out_of_school', 'program_manager_in_school', 'program_supervisor', 'ybf', 'instructor']}>
                             <Youth />
                           </RoleProtectedRoute>
                         }
@@ -94,7 +96,7 @@ const App = () => (
                       <Route
                         path="/sessions"
                         element={
-                          <RoleProtectedRoute allowedRoles={['admin', 'program_manager', 'ybf', 'instructor', 'enumerator']}>
+                          <RoleProtectedRoute allowedRoles={['admin', 'program_manager', 'program_leadership', 'program_manager_out_of_school', 'program_manager_in_school', 'program_supervisor', 'ybf', 'instructor']}>
                             <Sessions />
                           </RoleProtectedRoute>
                         }
@@ -102,7 +104,7 @@ const App = () => (
                       <Route
                         path="/cases"
                         element={
-                          <RoleProtectedRoute allowedRoles={['admin', 'program_manager', 'ybf', 'enumerator']}>
+                          <RoleProtectedRoute allowedRoles={['admin', 'program_manager', 'program_leadership', 'program_manager_out_of_school', 'program_manager_in_school', 'program_supervisor', 'ybf']}>
                             <Cases />
                           </RoleProtectedRoute>
                         }
@@ -110,7 +112,7 @@ const App = () => (
                       <Route
                         path="/outcomes"
                         element={
-                          <RoleProtectedRoute allowedRoles={['admin', 'program_manager', 'ybf']}>
+                          <RoleProtectedRoute allowedRoles={['admin', 'program_manager', 'program_leadership', 'program_manager_out_of_school', 'program_manager_in_school', 'program_supervisor', 'ybf']}>
                             <Outcomes />
                           </RoleProtectedRoute>
                         }
@@ -118,7 +120,7 @@ const App = () => (
                       <Route
                         path="/reports"
                         element={
-                          <RoleProtectedRoute allowedRoles={['admin', 'program_manager']}>
+                          <RoleProtectedRoute allowedRoles={['admin', 'program_manager', 'program_leadership', 'program_manager_out_of_school', 'program_manager_in_school', 'program_supervisor']}>
                             <Reports />
                           </RoleProtectedRoute>
                         }

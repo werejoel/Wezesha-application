@@ -52,6 +52,7 @@ import {
   updateYouth,
 } from "@/api";
 import { useUser } from "@/hooks/use-user";
+import { REGIONS, PROGRAM_TYPES } from "@/constants/regions";
 import {
   FormActions,
   FormDialogShell,
@@ -76,7 +77,7 @@ type YouthData = {
   attendanceRate?: number;
   businessPlan?: string;
   cv?: string;
-  applicationLetter?: string;
+  businessIdeas?: string;
   employmentStatus?: string;
   riskFlag?: boolean;
   baselineIncome?: number;
@@ -138,9 +139,9 @@ function normalizeYouth(item: any): YouthData {
     attendanceRate: Number(item.attendance_rate ?? item.attendanceRate ?? 0),
     businessPlan:
       item.business_plan_status || item.businessPlan || "Not Started",
-    cv: item.cv_status || item.cv || "Not Started",
-    applicationLetter:
-      item.application_letter_status || item.applicationLetter || "Not Started",
+      cv: item.cv_status || item.cv || item.cover_letter_status || "Not Started",
+      businessIdeas:
+        item.business_ideas_status || item.businessIdeas || item.cv || item.application_letter_status || "Not Started",
     employmentStatus:
       item.employment_status || item.employmentStatus || "Unemployed",
     riskFlag: Boolean(item.risk_flag ?? item.riskFlag ?? false),
@@ -414,8 +415,11 @@ function YouthFormFields({
 }
 
 export default function Youth() {
-  const { isProgramManager, isYBF, user } = useUser();
+  const { isProgramManager, user } = useUser();
   const [filter, setFilter] = useState<"all" | "at-risk">("all");
+  const [regionFilter, setRegionFilter] = useState("all");
+  const [programTypeFilter, setProgramTypeFilter] = useState("all");
+  const [yearFilter, setYearFilter] = useState("all");
   const [youthList, setYouthList] = useState<YouthData[]>([]);
   const [partners, setPartners] = useState<PartnerOption[]>([]);
   const [cohorts, setCohorts] = useState<CohortOption[]>([]);
@@ -427,13 +431,16 @@ export default function Youth() {
   const [form, setForm] = useState<YouthFormState>(emptyForm);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  const canEnroll = isProgramManager() || isYBF();
-  const canEdit = isProgramManager() || isYBF();
+  const canEdit = isProgramManager();
   const canDelete = isProgramManager() || user?.role === "admin";
 
   const reloadData = async () => {
     const [youthRows, partnerRows, cohortRows] = await Promise.all([
-      getYouth(),
+      getYouth({
+        region: regionFilter,
+        programType: programTypeFilter,
+        programYear: yearFilter,
+      }),
       getPartners(),
       getCohorts(),
     ]);
@@ -474,7 +481,7 @@ export default function Youth() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [regionFilter, programTypeFilter, yearFilter]);
 
   useEffect(() => {
     if (!addOpen) return;
@@ -528,6 +535,18 @@ export default function Youth() {
   };
 
   const formValid = Object.keys(validateYouthForm()).length === 0;
+
+  const yearOptions = useMemo(() => {
+    const years = new Set<number>();
+    youthList.forEach((y) => {
+      const match = y.cohort?.match(/\b(20\d{2})\b/);
+      if (match) years.add(Number(match[1]));
+    });
+    cohorts.forEach((c) => {
+      if (c.year) years.add(c.year);
+    });
+    return Array.from(years).sort((a, b) => b - a);
+  }, [youthList, cohorts]);
 
   const filtered = youthList.filter((y) =>
     filter === "at-risk" ? y.riskFlag : true,
@@ -644,41 +663,9 @@ export default function Youth() {
         <div>
           <h1 className="page-title">Youth Enrollment & Profiling</h1>
           <p className="page-description">
-            Manage youth registration and baseline data
+            View and filter youth records by region, program type, and year
           </p>
         </div>
-        {canEnroll && (
-          <Dialog open={addOpen} onOpenChange={setAddOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-primary hover:bg-primary/90">
-                <Plus className="h-4 w-4 mr-1" /> Enroll Youth
-              </Button>
-            </DialogTrigger>
-            <FormDialogShell
-              theme="youth"
-              icon={UserPlus}
-              title="Enroll New Youth"
-              subtitle="Register a youth participant in your assigned cohort"
-            >
-              <YouthFormFields
-                form={form}
-                setForm={setForm}
-                fieldErrors={fieldErrors}
-                setFieldErrors={setFieldErrors}
-                partners={partners}
-                filteredCohorts={filteredCohorts}
-              />
-              <FormFieldError message={fieldErrors.submit} />
-              <FormActions
-                theme="youth"
-                onCancel={() => setAddOpen(false)}
-                onSubmit={handleEnroll}
-                submitLabel="Enroll Youth"
-                disabled={!formValid || partners.length === 0}
-              />
-            </FormDialogShell>
-          </Dialog>
-        )}
       </div>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
@@ -756,7 +743,47 @@ export default function Youth() {
         />
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2 items-center">
+        <span className="text-sm text-muted-foreground mr-1">Filters:</span>
+        <Select value={regionFilter} onValueChange={setRegionFilter}>
+          <SelectTrigger className="w-[160px] h-8">
+            <SelectValue placeholder="Region" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Regions</SelectItem>
+            {REGIONS.map((r) => (
+              <SelectItem key={r} value={r}>
+                {r}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={programTypeFilter} onValueChange={setProgramTypeFilter}>
+          <SelectTrigger className="w-[160px] h-8">
+            <SelectValue placeholder="Program" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Programs</SelectItem>
+            {PROGRAM_TYPES.map((p) => (
+              <SelectItem key={p} value={p}>
+                {p}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={yearFilter} onValueChange={setYearFilter}>
+          <SelectTrigger className="w-[140px] h-8">
+            <SelectValue placeholder="Year" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Years</SelectItem>
+            {yearOptions.map((y) => (
+              <SelectItem key={y} value={String(y)}>
+                {y}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Button
           variant={filter === "all" ? "default" : "outline"}
           size="sm"
@@ -782,6 +809,7 @@ export default function Youth() {
                 <TableHead>Gender</TableHead>
                 <TableHead>Partner</TableHead>
                 <TableHead>Program</TableHead>
+                <TableHead>Region</TableHead>
                 <TableHead>Attendance</TableHead>
                 <TableHead>Outputs</TableHead>
                 <TableHead>Employment</TableHead>
@@ -793,7 +821,7 @@ export default function Youth() {
               {loadingYouth ? (
                 <TableRow>
                   <TableCell
-                    colSpan={canEdit || canDelete ? 9 : 8}
+                    colSpan={canEdit || canDelete ? 10 : 9}
                     className="text-center py-10 text-muted-foreground"
                   >
                     Loading youth records…
@@ -802,7 +830,7 @@ export default function Youth() {
               ) : filtered.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={canEdit || canDelete ? 9 : 8}
+                    colSpan={canEdit || canDelete ? 10 : 9}
                     className="text-center py-10 text-muted-foreground"
                   >
                     No youth records found.
@@ -817,6 +845,7 @@ export default function Youth() {
                     <TableCell>
                       <Badge variant="secondary">{y.programType}</Badge>
                     </TableCell>
+                    <TableCell>{y.region || "—"}</TableCell>
                     <TableCell>
                       <span
                         className={
@@ -831,10 +860,8 @@ export default function Youth() {
                     <TableCell>
                       <div className="flex gap-1.5 items-center">
                         <MilestoneIndicator status={y.businessPlan || "Not Started"} />
+                        <MilestoneIndicator status={y.businessIdeas || "Not Started"} />
                         <MilestoneIndicator status={y.cv || "Not Started"} />
-                        <MilestoneIndicator
-                          status={y.applicationLetter || "Not Started"}
-                        />
                       </div>
                     </TableCell>
                     <TableCell>

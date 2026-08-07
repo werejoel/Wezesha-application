@@ -14,6 +14,10 @@ const Partners = () => {
     case 'admin':
       return <AdminPartners />;
     case 'program_manager':
+    case 'program_leadership':
+    case 'program_manager_out_of_school':
+    case 'program_manager_in_school':
+    case 'program_supervisor':
       return <ProgramManagerPartners />;
     case 'ybf':
       return <YBFPartners />;

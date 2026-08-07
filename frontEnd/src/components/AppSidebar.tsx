@@ -7,13 +7,11 @@ import {
   TrendingUp,
   BarChart3,
   Leaf,
-  LogOut,
   ChevronRight,
   Settings,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
-import { useLocation, useNavigate } from "react-router-dom";
-import { logout } from "@/api";
+import { useLocation } from "react-router-dom";
 import { useUser } from "@/hooks/use-user";
 import {
   Sidebar,
@@ -46,6 +44,43 @@ const roleSidebarItems: Record<string, typeof mainItems> = {
   program_manager: [
     mainItems[0],
     mainItems[1],
+    mainItems[2],
+    mainItems[3],
+    mainItems[4],
+    mainItems[5],
+    mainItems[6],
+    mainItems[7],
+  ],
+  program_leadership: [
+    mainItems[0],
+    mainItems[1],
+    mainItems[2],
+    mainItems[3],
+    mainItems[4],
+    mainItems[5],
+    mainItems[6],
+    mainItems[7],
+  ],
+  program_manager_out_of_school: [
+    mainItems[0],
+    mainItems[1],
+    mainItems[3],
+    mainItems[4],
+    mainItems[5],
+    mainItems[6],
+    mainItems[7],
+  ],
+  program_manager_in_school: [
+    mainItems[0],
+    mainItems[1],
+    mainItems[3],
+    mainItems[4],
+    mainItems[5],
+    mainItems[6],
+    mainItems[7],
+  ],
+  program_supervisor: [
+    mainItems[0],
     mainItems[3],
     mainItems[4],
     mainItems[5],
@@ -68,14 +103,7 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
-  const navigate = useNavigate();
-  const { user, refreshUser } = useUser();
-
-  const handleLogout = () => {
-    logout();
-    refreshUser();
-    navigate("/login");
-  };
+  const { user } = useUser();
 
   const menuItems = user
     ? (roleSidebarItems[user.role] ?? roleSidebarItems.enumerator)
@@ -198,28 +226,8 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* ── Footer / Logout ── */}
-        <SidebarGroup className="mt-auto pb-2">
-          {!collapsed && (
-            <div className="mx-3 mb-2 h-px bg-sidebar-border/40" />
-          )}
-          <SidebarGroupContent>
-            <SidebarMenu className="px-1.5">
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  onClick={handleLogout}
-                  className={cn(
-                    "group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm w-full transition-all duration-150",
-                    "text-sidebar-foreground/50 hover:text-red-500 hover:bg-red-500/10",
-                  )}
-                >
-                  <LogOut className="h-4 w-4 flex-shrink-0 transition-colors group-hover:text-red-500" />
-                  {!collapsed && <span>Logout</span>}
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {/* ── Footer spacing */}
+        <SidebarGroup className="mt-auto pb-2" />
       </SidebarContent>
     </Sidebar>
   );

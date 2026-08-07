@@ -54,9 +54,9 @@ type YouthMilestones = {
 
 const MILESTONE_TYPE_ALIASES: Record<string, MilestoneType> = {
   "Business Plan": "Business Plan",
-  CV: "CV",
-  "Application Letter": "Application Letter",
-  "Cover Letter": "Application Letter",
+  "Business Ideas": "Business Ideas",
+  CV: "Business Ideas",
+  "Cover Letter": "CV",
 };
 
 const normalizeMilestoneType = (value: string): MilestoneType | null => {
@@ -73,8 +73,8 @@ const defaultMilestones = (): Record<
   { status: MilestoneStatus }
 > => ({
   "Business Plan": { status: "Not Started" },
+  "Business Ideas": { status: "Not Started" },
   CV: { status: "Not Started" },
-  "Application Letter": { status: "Not Started" },
 });
 
 const MILESTONE_META: Record<
@@ -86,15 +86,15 @@ const MILESTONE_META: Record<
     bar: "bg-emerald-500",
     badge: "bg-emerald-100 text-emerald-800 border-emerald-200",
   },
+  "Business Ideas": {
+    color: "text-cyan-700",
+    bar: "bg-cyan-500",
+    badge: "bg-cyan-100 text-cyan-800 border-cyan-200",
+  },
   CV: {
     color: "text-sky-700",
     bar: "bg-sky-500",
     badge: "bg-sky-100 text-sky-800 border-sky-200",
-  },
-  "Application Letter": {
-    color: "text-violet-700",
-    bar: "bg-violet-500",
-    badge: "bg-violet-100 text-violet-800 border-violet-200",
   },
 };
 
@@ -184,8 +184,8 @@ export default function YBFOutcomes() {
       { completed: number; inProgress: number; notStarted: number }
     > = {
       "Business Plan": { completed: 0, inProgress: 0, notStarted: 0 },
+      "Business Ideas": { completed: 0, inProgress: 0, notStarted: 0 },
       CV: { completed: 0, inProgress: 0, notStarted: 0 },
-      "Application Letter": { completed: 0, inProgress: 0, notStarted: 0 },
     };
     let completed = 0;
     let inProgress = 0;
@@ -277,11 +277,11 @@ export default function YBFOutcomes() {
   return (
     <div className="space-y-6">
       <div className="rounded-xl bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 border border-emerald-200/60 p-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="page-title text-emerald-900">Output Tracking</h1>
             <p className="page-description text-emerald-800/70">
-              Track business plan, CV, and cover letter progress across your
+              Track output progress (Business Plan, Business Ideas, CV) across your
               cohort youth.
             </p>
           </div>
@@ -426,13 +426,13 @@ export default function YBFOutcomes() {
             </div>
           ) : (
             <Table>
-              <TableHeader>
+                <TableHeader>
                 <TableRow className="bg-emerald-50/50 hover:bg-emerald-50/50">
                   <TableHead>Youth</TableHead>
                   <TableHead>Partner</TableHead>
-                  <TableHead>Business Plan</TableHead>
-                  <TableHead>CV</TableHead>
-                  <TableHead>Cover Letter</TableHead>
+                  {MILESTONE_TYPES.map((t) => (
+                    <TableHead key={t}>{t}</TableHead>
+                  ))}
                   <TableHead className="text-right">Progress</TableHead>
                 </TableRow>
               </TableHeader>

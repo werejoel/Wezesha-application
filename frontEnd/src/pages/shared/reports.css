@@ -5,9 +5,14 @@
 }
 
 .reports-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
     border-radius: 1rem;
     border: 1px solid var(--border);
-    background: rgba(248, 250, 252, 0.9);
+    background: rgba(248, 250, 252, 0.95);
     padding: 2rem;
     text-align: center;
     color: var(--muted-foreground);
@@ -191,14 +196,38 @@
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
+    background: var(--background);
+}
+
+.reports-table td {
+    color: var(--foreground);
+}
+
+.reports-table tbody tr {
+    background: transparent;
 }
 
 .reports-table tbody tr:nth-child(odd) {
-    background: rgba(248, 250, 252, 0.8);
+    background: transparent;
 }
 
 .reports-table tbody tr:hover {
-    background: rgba(34, 197, 94, 0.08);
+    background: rgba(248, 250, 252, 0.9);
+}
+
+.dark .reports-table tbody tr:hover {
+    background: hsla(216, 53%, 24%, 0.85);
+}
+
+.reports-table tbody tr:hover td,
+.reports-table tbody tr:hover th {
+    color: var(--foreground);
+}
+
+.reports-table th::selection,
+.reports-table td::selection {
+    background: rgba(30, 64, 175, 0.45);
+    color: var(--foreground);
 }
 
 .reports-panel {

@@ -53,12 +53,15 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useUser } from "@/hooks/use-user";
+import { REGIONS, PROGRAM_TYPES } from "@/constants/regions";
 
 type Partner = {
   id: string;
   name: string;
   type: string;
   location: string;
+  region: string;
+  programType: string;
   district: string;
   contactName: string;
   contactPhone: string;
@@ -109,6 +112,8 @@ const defaultPartnerForm = {
   name: "",
   type: "TVET",
   location: "",
+  region: REGIONS[0],
+  programType: "In-school" as "In-school" | "Out-of-school",
   district: "",
   contactName: "",
   contactPhone: "",
@@ -144,6 +149,8 @@ const normalizePartner = (partner: any): Partner => ({
     .toString()
     .toUpperCase(),
   location: partner.location || partner.location || "-",
+  region: partner.region || partner.location || "-",
+  programType: partner.program_type || partner.programType || "In-school",
   district: partner.district || "-",
   contactName: partner.contact_name || "-",
   contactPhone: partner.contact_phone || "-",
@@ -202,6 +209,9 @@ export default function Partners() {
     name: string;
   } | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [institutionTab, setInstitutionTab] = useState<
+    "all" | "In-school" | "Out-of-school"
+  >("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -256,8 +266,7 @@ export default function Partners() {
     if (partnerForm.district && partnerForm.district.length > MAX.district)
       errs.district = `District must be ≤ ${MAX.district} chars`;
     if (!partnerForm.type) errs.type = "Partner type is required";
-    if (partnerForm.location && partnerForm.location.length > MAX.location)
-      errs.location = `Location must be ≤ ${MAX.location} chars`;
+    if (!partnerForm.region) errs.region = "Region is required";
     if (
       partnerForm.contactName &&
       partnerForm.contactName.length > MAX.contactName
@@ -309,9 +318,12 @@ export default function Partners() {
   const partnerFormValid = Object.keys(validatePartnerForm()).length === 0;
   const personnelFormValid = Object.keys(validatePersonnelForm()).length === 0;
 
-  const filteredPartners = partners;
+  const filteredPartners =
+    institutionTab === "all"
+      ? partners
+      : partners.filter((p) => p.programType === institutionTab);
   const filteredPersonnel = personnel;
-  const partnerColumnCount = 9 + (canEditPartner || canDeletePartner ? 1 : 0);
+  const partnerColumnCount = 10 + (canEditPartner || canDeletePartner ? 1 : 0);
   const personnelColumnCount = 6 + (canManagePersonnel ? 1 : 0);
 
   const openEditPartner = (partner: Partner) => {
@@ -320,6 +332,10 @@ export default function Partners() {
       name: partner.name,
       type: partner.type as "TVET" | "CBO",
       location: partner.location,
+      region: partner.region !== "-" ? partner.region : REGIONS[0],
+      programType: (partner.programType === "Out-of-school"
+        ? "Out-of-school"
+        : "In-school") as "In-school" | "Out-of-school",
       district: partner.district,
       contactName: partner.contactName,
       contactPhone: partner.contactPhone,
@@ -394,7 +410,9 @@ export default function Partners() {
         name: partnerForm.name,
         district: partnerForm.district,
         type: partnerForm.type,
-        location: partnerForm.location,
+        region: partnerForm.region,
+        location: partnerForm.region,
+        program_type: partnerForm.programType,
         contact_name: partnerForm.contactName,
         contact_phone: partnerForm.contactPhone,
         contact_email: partnerForm.contactEmail,
@@ -774,22 +792,25 @@ export default function Partners() {
                     </div>
                     <div className="grid sm:grid-cols-2 gap-4">
                       <div>
-                        <Label htmlFor="partner-location">
-                          Physical Location
-                        </Label>
-                        <Input
-                          id="partner-location"
-                          value={partnerForm.location}
+                        <Label htmlFor="partner-region">Region</Label>
+                        <select
+                          id="partner-region"
+                          value={partnerForm.region}
                           onChange={(e) =>
                             setPartnerForm({
                               ...partnerForm,
-                              location: e.target.value,
+                              region: e.target.value,
                             })
                           }
-                          maxLength={MAX.location}
-                          placeholder="Kampala YMCA Building"
-                          className="bg-white/80"
-                        />
+                          className={formSelectClass}
+                        >
+                          {REGIONS.map((r) => (
+                            <option key={r} value={r}>
+                              {r}
+                            </option>
+                          ))}
+                        </select>
+                        <FormFieldError message={partnerFieldErrors.region} />
                       </div>
                       <div>
                         <Label htmlFor="partner-district">District</Label>
@@ -815,7 +836,29 @@ export default function Partners() {
                     </div>
                     <div className="grid sm:grid-cols-2 gap-4">
                       <div>
-                        <Label htmlFor="partner-type">Type</Label>
+                        <Label htmlFor="partner-program-type">Program Type</Label>
+                        <select
+                          id="partner-program-type"
+                          value={partnerForm.programType}
+                          onChange={(e) =>
+                            setPartnerForm({
+                              ...partnerForm,
+                              programType: e.target.value as
+                                | "In-school"
+                                | "Out-of-school",
+                            })
+                          }
+                          className={formSelectClass}
+                        >
+                          {PROGRAM_TYPES.map((p) => (
+                            <option key={p} value={p}>
+                              {p}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <Label htmlFor="partner-type">Institution Type</Label>
                         <select
                           id="partner-type"
                           value={partnerForm.type}
@@ -1085,7 +1128,32 @@ export default function Partners() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="partners">
+        <TabsContent value="partners" className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant={institutionTab === "all" ? "default" : "outline"}
+              onClick={() => setInstitutionTab("all")}
+            >
+              All Institutions
+            </Button>
+            <Button
+              size="sm"
+              variant={institutionTab === "In-school" ? "default" : "outline"}
+              onClick={() => setInstitutionTab("In-school")}
+            >
+              In-school
+            </Button>
+            <Button
+              size="sm"
+              variant={
+                institutionTab === "Out-of-school" ? "default" : "outline"
+              }
+              onClick={() => setInstitutionTab("Out-of-school")}
+            >
+              Out-of-school
+            </Button>
+          </div>
           <Card>
             <CardContent className="p-0 overflow-x-auto">
               <Table>
@@ -1093,7 +1161,8 @@ export default function Partners() {
                   <TableRow>
                     <TableHead>Institution</TableHead>
                     <TableHead>Type</TableHead>
-                    <TableHead>Location</TableHead>
+                    <TableHead>Program</TableHead>
+                    <TableHead>Region</TableHead>
                     <TableHead>District</TableHead>
                     <TableHead>Contact</TableHead>
                     <TableHead>Start Date</TableHead>
@@ -1128,7 +1197,10 @@ export default function Partners() {
                             {p.type}
                           </Badge>
                         </TableCell>
-                        <TableCell>{p.location}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">{p.programType}</Badge>
+                        </TableCell>
+                        <TableCell>{p.region}</TableCell>
                         <TableCell>{p.district}</TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {p.contactName}

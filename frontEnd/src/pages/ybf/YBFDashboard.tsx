@@ -37,13 +37,16 @@ type DashboardData = {
   totalYouth: number;
   totalPartners: number;
   totalSessions: number;
+  avgSessionsPerYouth?: number;
+  youthAt80Percent?: number;
+  expectedSessionTotal?: number;
   totalCases: number;
   atRiskCount: number;
   avgAttendance: number | null;
   outputProgress?: {
     businessPlan: OutputProgress;
+    businessIdeas: OutputProgress;
     cv: OutputProgress;
-    applicationLetter: OutputProgress;
   };
   sessionAttendance?: { session: string; date: string; attendance: number }[];
   cohorts?: { id: string; label: string; youthCount: number }[];
@@ -87,8 +90,8 @@ export default function YBFDashboard() {
 
   const output = dashboard.outputProgress || {
     businessPlan: { completed: 0, inProgress: 0, notStarted: 0 },
+    businessIdeas: { completed: 0, inProgress: 0, notStarted: 0 },
     cv: { completed: 0, inProgress: 0, notStarted: 0 },
-    applicationLetter: { completed: 0, inProgress: 0, notStarted: 0 },
   };
 
   const sessionChart = (dashboard.sessionAttendance || []).map((s) => ({
@@ -98,8 +101,8 @@ export default function YBFDashboard() {
 
   const outputItems = [
     { label: "Business Plans", key: output.businessPlan, icon: ClipboardList },
+    { label: "Business Ideas", key: output.businessIdeas, icon: TrendingUp },
     { label: "CVs", key: output.cv, icon: CheckCircle2 },
-    { label: "Cover Letters", key: output.applicationLetter, icon: TrendingUp },
   ];
 
   return (
@@ -238,10 +241,16 @@ export default function YBFDashboard() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <StatCard
-          title="Sessions"
-          value={dashboard.totalSessions}
-          subtitle="In your assigned cohorts"
+          title="Avg Sessions / Youth"
+          value={dashboard.avgSessionsPerYouth ?? 0}
+          subtitle={`Of ${dashboard.expectedSessionTotal ?? 18} sessions`}
           icon={CalendarCheck}
+        />
+        <StatCard
+          title="Youth at 80% Attendance"
+          value={dashboard.youthAt80Percent ?? 0}
+          subtitle="Met attendance threshold"
+          icon={Users}
         />
         <StatCard
           title="Case Notes"
